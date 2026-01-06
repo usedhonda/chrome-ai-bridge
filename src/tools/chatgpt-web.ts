@@ -337,11 +337,11 @@ export const askChatGPTWeb = defineTool({
         response.appendResponseLine('   2. メールアドレスまたはGoogleアカウントでログイン');
         response.appendResponseLine('');
 
-        // Auto-poll for login completion (max 2 minutes)
+        // Auto-poll for login completion (max 3 minutes)
         const finalStatus = await waitForLoginStatus(
           page,
           'chatgpt',
-          120000,
+          180000,
           (msg) => response.appendResponseLine(msg)
         );
 
@@ -609,7 +609,7 @@ export const askChatGPTWeb = defineTool({
           );
           return messages.length > 0;
         },
-        {timeout: 10000},
+        {timeout: 15000},
       );
 
       response.appendResponseLine('✅ 質問送信完了');
