@@ -31,7 +31,7 @@ async function navigateWithRetry(
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            await page.goto(url, { waitUntil, timeout: 30000 });
+            await page.goto(url, { waitUntil, timeout: 15000 });
             return; // Success
         } catch (error) {
             lastError = error instanceof Error ? error : new Error(String(error));
