@@ -12,6 +12,10 @@ class ConnectUI {
     this.mcpRelayUrl = null;
     this.sessionId = null;
     this.allowTabTakeover = false;
+    this.autoMode = false;
+    this.autoTabId = null;
+    this.autoTabUrl = null;
+    this.autoNewTab = false;
     this.debugPanelVisible = false;
     this.autoRefreshInterval = null;
 
@@ -49,6 +53,12 @@ class ConnectUI {
       this.mcpRelayUrl = params.get('mcpRelayUrl');
       this.sessionId = params.get('sessionId');
       this.allowTabTakeover = params.get('allowTabTakeover') === 'true';
+      this.autoMode = params.get('auto') === 'true';
+      this.autoTabUrl = params.get('tabUrl');
+      this.autoNewTab = params.get('newTab') === 'true';
+      const rawTabId = params.get('tabId');
+      this.autoTabId =
+        rawTabId && /^\d+$/.test(rawTabId) ? Number(rawTabId) : null;
 
       // Validate relay URL
       if (!this.mcpRelayUrl) {
@@ -58,6 +68,13 @@ class ConnectUI {
 
       if (!this.validateRelayUrl()) {
         return;
+      }
+
+      if (this.autoMode) {
+        const connected = await this.tryAutoConnect();
+        if (connected) {
+          return;
+        }
       }
 
       // Show tab selection UI
@@ -78,6 +95,55 @@ class ConnectUI {
       return true;
     } catch {
       this.showError('Invalid relay URL format');
+      return false;
+    }
+  }
+
+  async tryAutoConnect() {
+    if (!this.autoTabUrl && !this.autoTabId) {
+      return false;
+    }
+
+    try {
+      this.showStatus('Auto-connecting...', 'info', '⚡');
+
+      const relayResponse = await chrome.runtime.sendMessage({
+        type: 'connectToRelay',
+        mcpRelayUrl: this.mcpRelayUrl,
+        sessionId: this.sessionId,
+      });
+      if (!relayResponse || !relayResponse.success) {
+        throw new Error(relayResponse?.error || 'Relay connection failed');
+      }
+
+      const connectResponse = await chrome.runtime.sendMessage({
+        type: 'connectToTab',
+        mcpRelayUrl: this.mcpRelayUrl,
+        tabId: this.autoTabId,
+        tabUrl: this.autoTabUrl,
+        newTab: this.autoNewTab,
+        sessionId: this.sessionId,
+        allowTabTakeover: this.allowTabTakeover,
+      });
+      if (!connectResponse || !connectResponse.success) {
+        throw new Error(connectResponse?.error || 'Tab connection failed');
+      }
+
+      this.showStatus('Connected. Closing...', 'success', '✅');
+      setTimeout(() => {
+        window.close();
+      }, 300);
+      return true;
+    } catch (error) {
+      const message =
+        error && typeof error === 'object' && 'message' in error
+          ? error.message
+          : String(error);
+      this.showStatus(
+        `Auto-connect failed (${message}). Select tab manually.`,
+        'error',
+        '⚠️',
+      );
       return false;
     }
   }

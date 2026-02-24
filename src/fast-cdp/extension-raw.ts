@@ -6,6 +6,8 @@ import {logRelay, logExtension, logInfo, logError} from './mcp-logger.js';
 
 // Stable extension ID (from manifest.json key)
 const EXTENSION_ID = 'ibjplbopgmcacpmfpnaeoloepdhenlbm';
+const ENABLE_WAKE_CONNECT_PAGE =
+  process.env.CAI_ENABLE_WAKE_CONNECT_PAGE !== '0';
 
 export interface RawExtensionConnection {
   relay: RelayServer;
@@ -102,6 +104,26 @@ function spawnChromeWithConnectUrl(connectUrl: string): boolean {
   }
 }
 
+function buildConnectUrl(options: {
+  wsUrl: string;
+  sessionId: string;
+  tabUrl?: string;
+  tabId?: number;
+  newTab?: boolean;
+  allowTabTakeover?: boolean;
+  auto?: boolean;
+}): string {
+  const params = new URLSearchParams();
+  params.set('mcpRelayUrl', options.wsUrl);
+  params.set('sessionId', options.sessionId);
+  if (options.tabUrl) params.set('tabUrl', options.tabUrl);
+  if (typeof options.tabId === 'number') params.set('tabId', String(options.tabId));
+  if (options.newTab) params.set('newTab', 'true');
+  if (options.allowTabTakeover) params.set('allowTabTakeover', 'true');
+  if (options.auto) params.set('auto', 'true');
+  return `chrome-extension://${EXTENSION_ID}/ui/connect.html?${params.toString()}`;
+}
+
 export async function connectViaExtensionRaw(options: {
   tabId?: number;
   tabUrl?: string;
@@ -132,6 +154,15 @@ export async function connectViaExtensionRaw(options: {
   await relay.start();
   const wsUrl = relay.getConnectionURL();
   const sessionId = relay.getSessionId();
+  const connectUrl = buildConnectUrl({
+    wsUrl,
+    sessionId,
+    tabUrl: options.tabUrl,
+    tabId: options.tabId,
+    newTab: options.newTab,
+    allowTabTakeover: options.allowTabTakeover,
+    auto: true,
+  });
   logRelay('started', {wsUrl});
   console.error(`[fast-cdp] Relay URL: ${wsUrl} (session=${sessionId})`);
 
@@ -165,7 +196,6 @@ export async function connectViaExtensionRaw(options: {
     }
   } else {
     // Fallback: show manual URL
-    const connectUrl = `chrome-extension://${EXTENSION_ID}/ui/connect.html?mcpRelayUrl=${encodeURIComponent(wsUrl)}&sessionId=${encodeURIComponent(sessionId)}`;
     logError('extension-raw', 'Discovery server failed', {connectUrl});
     console.error(`[fast-cdp] Discovery server failed. Please open manually:`);
     console.error(`[fast-cdp]   ${connectUrl}`);
@@ -173,7 +203,11 @@ export async function connectViaExtensionRaw(options: {
 
   try {
     const actualTimeout = options.timeoutMs ?? 10000;
-    const softTimeout = Math.min(5000, Math.floor(actualTimeout * 0.5));
+    const softTimeout = Math.max(
+      1200,
+      Math.min(3000, Math.floor(actualTimeout * 0.3)),
+    );
+    let wakeAttempted = false;
     logExtension('waiting', {timeoutMs: actualTimeout});
 
     await new Promise<void>((resolve, reject) => {
@@ -184,6 +218,17 @@ export async function connectViaExtensionRaw(options: {
           waitedMs: softTimeout,
           timeoutMs: actualTimeout,
         });
+        if (ENABLE_WAKE_CONNECT_PAGE && !wakeAttempted) {
+          wakeAttempted = true;
+          const spawned = spawnChromeWithConnectUrl(connectUrl);
+          logInfo('extension-raw', 'Wake connect page attempt', {
+            attempted: true,
+            spawned,
+          });
+          if (spawned) {
+            console.error('[fast-cdp] Wake attempt: opened connect page in Chrome');
+          }
+        }
       }, softTimeout);
       softTimer.unref();
 

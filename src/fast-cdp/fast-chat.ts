@@ -65,11 +65,34 @@ function setClientForAgent(
 }
 
 const CONNECT_REUSE_TIMEOUT_MS = Number(
-  process.env.MCP_CONNECT_REUSE_TIMEOUT_MS || '7000',
+  process.env.MCP_CONNECT_REUSE_TIMEOUT_MS || '12000',
 );
 const CONNECT_NEWTAB_TIMEOUT_MS = Number(
-  process.env.MCP_CONNECT_NEWTAB_TIMEOUT_MS || '12000',
+  process.env.MCP_CONNECT_NEWTAB_TIMEOUT_MS || '20000',
 );
+const MCP_TOOL_BUDGET_MS = Number(
+  process.env.CAI_MCP_TOOL_BUDGET_MS || '50000',
+);
+const RESPONSE_WAIT_MAX_MS = Number(
+  process.env.CAI_RESPONSE_WAIT_MAX_MS || '40000',
+);
+const BUDGET_RESERVE_MS = Number(
+  process.env.CAI_MCP_BUDGET_RESERVE_MS || '3000',
+);
+
+function getRemainingBudgetMs(startMs: number): number {
+  return MCP_TOOL_BUDGET_MS - (nowMs() - startMs) - BUDGET_RESERVE_MS;
+}
+
+function getResponseWaitBudgetMs(startMs: number, ceilingMs: number, stage: string): number {
+  const remaining = getRemainingBudgetMs(startMs);
+  if (remaining <= 1000) {
+    throw new Error(
+      `MCP_TOOL_BUDGET_EXCEEDED: stage=${stage} budgetMs=${MCP_TOOL_BUDGET_MS} reserveMs=${BUDGET_RESERVE_MS}`,
+    );
+  }
+  return Math.max(1000, Math.min(ceilingMs, remaining));
+}
 
 /**
  * チャット結果の型（タイミング情報付き）
@@ -1180,9 +1203,12 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
     const tWaitResp = nowMs();
     console.error('[ChatGPT] Waiting for response (using stop button detection)...');
 
-    // 新方式: ポーリングで状態を監視（診断ログ付き）
-    // 長い応答に対応するため8分（480秒）に設定
-    const maxWaitMs = 480000;
+    // 60秒 caller deadline を超えないよう、残り予算内で待機する。
+    const maxWaitMs = getResponseWaitBudgetMs(
+      t0,
+      RESPONSE_WAIT_MAX_MS,
+      'chatgpt-response',
+    );
     const pollIntervalMs = 1000;
     const startWait = Date.now();
     let lastLoggedState = '';
@@ -1572,7 +1598,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
         })()
       `);
       console.error(`[ChatGPT] Timeout - final state: ${JSON.stringify(finalState)}`);
-      throw new Error(`Timed out waiting for ChatGPT response (8min). Final state: ${JSON.stringify(finalState)}`);
+      await resetConnection('chatgpt');
+      throw new Error(`Timed out waiting for ChatGPT response (${maxWaitMs}ms). Final state: ${JSON.stringify(finalState)}`);
     }
 
     // ChatGPT 5.2 Thinking モデル対応:
@@ -1612,7 +1639,11 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
     // 回答完了後、DOM安定化のための追加待機
     // ChatGPT Thinkingモードでは、停止ボタン消失後も最終回答がレンダリングされるまで遅延がある
     // 回答テキストが存在するまでポーリングで待機
-    const maxWaitForText = 120000;  // 最大120秒（Thinkingモード対応：長い思考の後の回答レンダリングを待機）
+    const maxWaitForText = getResponseWaitBudgetMs(
+      t0,
+      15000,
+      'chatgpt-finalize',
+    );
     const pollInterval = 200;
     const waitStart = Date.now();
     let hasResponseText = false;
@@ -2365,7 +2396,12 @@ async function askChatGPTViaDriver(question: string, debug?: boolean): Promise<C
 
   // 応答待機
   const tWaitResp = nowMs();
-  await driver.waitForResponse({maxWaitMs: 480000});
+  const driverWaitBudgetMs = getResponseWaitBudgetMs(
+    t0,
+    RESPONSE_WAIT_MAX_MS,
+    'chatgpt-driver-response',
+  );
+  await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
   timings.waitResponseMs = nowMs() - tWaitResp;
 
   // 応答抽出
@@ -2448,7 +2484,12 @@ async function askGeminiViaDriver(question: string, debug?: boolean): Promise<Ch
 
   // 応答待機
   const tWaitResp = nowMs();
-  await driver.waitForResponse({maxWaitMs: 480000});
+  const driverWaitBudgetMs = getResponseWaitBudgetMs(
+    t0,
+    RESPONSE_WAIT_MAX_MS,
+    'gemini-driver-response',
+  );
+  await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
   timings.waitResponseMs = nowMs() - tWaitResp;
 
   // 応答抽出
@@ -3038,8 +3079,11 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
   console.error('[Gemini] Waiting for response completion (polling with diagnostics)...');
 
   // ChatGPT側と同様のポーリングループで応答完了を検出
-  // 長い応答に対応するため8分（480秒）に設定
-  const maxWaitMs = 480000;
+  const maxWaitMs = getResponseWaitBudgetMs(
+    t0,
+    RESPONSE_WAIT_MAX_MS,
+    'gemini-response',
+  );
   const pollIntervalMs = 1000;
   const startWait = Date.now();
   let lastLoggedState = '';
@@ -3256,7 +3300,8 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
       })()
     `);
     console.error(`[Gemini] Timeout - final state: ${JSON.stringify(finalState)}`);
-    throw new Error(`Timed out waiting for Gemini response (8min). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`);
+    await resetConnection('gemini');
+    throw new Error(`Timed out waiting for Gemini response (${maxWaitMs}ms). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`);
   }
 
   // 重要: タブをフォアグラウンドに持ってくる（バックグラウンドタブ対策）

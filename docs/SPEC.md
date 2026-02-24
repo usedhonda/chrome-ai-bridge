@@ -1167,7 +1167,7 @@ Agent IDs are generated using a hybrid strategy:
 | `CAI_IPC_RESERVED_INIT_SLOTS` | 2 | `>= 0` or fallback to default | Number of queued initialize waiters allowed when capacity is full |
 | `CAI_IPC_MAX_QUEUE` | 64 | `> 0` or fallback to default | Maximum queued initialize requests |
 | `CAI_IPC_QUEUE_WAIT_TIMEOUT_MS` | 45000 | `> 0` or fallback to default | Queue wait timeout before `SERVER_BUSY_TIMEOUT` |
-| `CAI_IPC_SESSION_IDLE_MS` | 120000 | `> 0` or fallback to default | Idle session close timeout |
+| `CAI_IPC_SESSION_IDLE_MS` | 1800000 | `>= 0` or fallback to default | Idle session close timeout (`0` disables idle close) |
 | `CAI_STARTUP_PROCESS_THRESHOLD` | 8 | `> 0` or fallback to default | Startup process-count threshold that enables jitter |
 | `CAI_STARTUP_DELAY_JITTER_MS` | 1500 | `> 0` or fallback to default | Max startup jitter delay when threshold is exceeded |
 | `CAI_EXEC_MAX_CONCURRENCY` | 3 | `> 0` or fallback to default | Maximum concurrent tool executions in Primary |
@@ -1176,13 +1176,13 @@ Agent IDs are generated using a hybrid strategy:
 
 | Variable | Default | Validation | Description |
 |----------|---------|------------|-------------|
-| `CAI_PRIMARY_IDLE_MS` | 300000 | `> 0` or fallback to default | Primary process idle timeout (exits after this duration with no activity AND 0 active IPC sessions) |
+| `CAI_PRIMARY_IDLE_MS` | 0 | `>= 0` or fallback to default | Primary process idle timeout (`0` disables auto-exit) |
 
 **How idle auto-exit works:**
 
-- **Primary only**: Tracks last tool call and IPC request. If no activity for `primaryIdleMs` AND no active IPC sessions, calls `shutdown()` for graceful exit.
-- **Proxy**: No idle auto-exit. Proxy processes are lightweight (stdio-to-HTTP bridge) and exit naturally when Claude Code closes stdin.
-- This prevents resource exhaustion from the Primary holding Chrome extension connections when all sessions are idle.
+- **Primary only**: Tracks last tool call and IPC request. If `CAI_PRIMARY_IDLE_MS > 0`, no activity for `primaryIdleMs` AND no active IPC sessions triggers graceful `shutdown()`.
+- **Default behavior**: `CAI_PRIMARY_IDLE_MS=0`, so auto-exit is disabled to avoid surprise `Transport closed` on long-idle clients.
+- **Proxy**: No idle auto-exit. Proxy processes are lightweight (stdio-to-HTTP bridge) and exit naturally when stdin closes.
 
 ### 8.4 History Recording (history.jsonl)
 

@@ -95,13 +95,13 @@ export interface IpcGuardConfig {
   maxQueue: number;
   /** Maximum queue wait time in milliseconds. */
   queueWaitTimeoutMs: number;
-  /** Idle timeout for inactive IPC sessions in milliseconds. */
+  /** Idle timeout for inactive IPC sessions in milliseconds (0 disables cleanup). */
   sessionIdleMs: number;
   /** Start jitter when too many local instances are detected. */
   startupDelayJitterMs: number;
   /** Local instance count threshold that activates startup jitter. */
   startupProcessThreshold: number;
-  /** Idle timeout for Primary process in milliseconds (default: 300s). */
+  /** Idle timeout for Primary process in milliseconds (0 disables auto-exit). */
   primaryIdleMs: number;
   /** Maximum number of concurrent tool executions in the Primary process. */
   execMaxConcurrency: number;
@@ -130,7 +130,8 @@ export function getIpcGuardConfig(): IpcGuardConfig {
     maxQueue: raw.maxQueue > 0 ? Math.floor(raw.maxQueue) : 64,
     queueWaitTimeoutMs:
       raw.queueWaitTimeoutMs > 0 ? Math.floor(raw.queueWaitTimeoutMs) : 45_000,
-    sessionIdleMs: raw.sessionIdleMs > 0 ? Math.floor(raw.sessionIdleMs) : 120_000,
+    sessionIdleMs:
+      raw.sessionIdleMs >= 0 ? Math.floor(raw.sessionIdleMs) : 1_800_000,
     startupDelayJitterMs:
       raw.startupDelayJitterMs > 0 ? Math.floor(raw.startupDelayJitterMs) : 1_500,
     startupProcessThreshold:
@@ -138,7 +139,7 @@ export function getIpcGuardConfig(): IpcGuardConfig {
         ? Math.floor(raw.startupProcessThreshold)
         : 8,
     primaryIdleMs:
-      raw.primaryIdleMs > 0 ? Math.floor(raw.primaryIdleMs) : 300_000,
+      raw.primaryIdleMs >= 0 ? Math.floor(raw.primaryIdleMs) : 0,
     execMaxConcurrency:
       raw.execMaxConcurrency > 0 ? Math.floor(raw.execMaxConcurrency) : 3,
   };

@@ -11,8 +11,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {logger} from './logger.js';
+import {getRuntimeNamespace} from './runtime-scope.js';
 
-const LOCK_DIR = path.join(os.homedir(), '.cache', 'chrome-ai-bridge');
+const RUNTIME_NAMESPACE = getRuntimeNamespace();
+const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..');
+const LOCK_DIR = path.join(
+  os.homedir(),
+  '.cache',
+  'chrome-ai-bridge',
+  RUNTIME_NAMESPACE,
+);
 const LOCK_FILE = path.join(LOCK_DIR, 'mcp.lock');
 
 let lockFd: number | null = null;
@@ -25,9 +33,11 @@ export interface LockInfo {
 }
 
 export interface PrimaryStatus {
+  pid: number;
   alive: boolean;
   port: number;
   instanceId: string;
+  startedAt: string;
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -41,6 +51,32 @@ function isProcessAlive(pid: number): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+interface ProcessTreeRow {
+  pid: number;
+  ppid: number;
+}
+
+function collectDescendants(
+  rows: ProcessTreeRow[],
+  rootPid: number,
+): Set<number> {
+  const descendants = new Set<number>();
+  const stack = [rootPid];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current !== 'number') {
+      continue;
+    }
+    for (const row of rows) {
+      if (row.ppid === current && !descendants.has(row.pid)) {
+        descendants.add(row.pid);
+        stack.push(row.pid);
+      }
+    }
+  }
+  return descendants;
 }
 
 /**
@@ -89,7 +125,13 @@ export function checkExistingPrimary(): PrimaryStatus | null {
     return null;
   }
 
-  return {alive: true, port: info.port, instanceId: info.instanceId};
+  return {
+    pid: info.pid,
+    alive: true,
+    port: info.port,
+    instanceId: info.instanceId,
+    startedAt: info.startedAt,
+  };
 }
 
 /**
@@ -244,6 +286,159 @@ export function releaseLock(): void {
   }
   try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
   logger('[process-lock] Lock released.');
+}
+
+/**
+ * Best-effort termination of a potentially unhealthy primary.
+ * Returns true if the process no longer exists after termination attempts.
+ */
+export async function terminatePrimaryProcess(pid: number): Promise<boolean> {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  if (!isProcessAlive(pid)) return true;
+
+  logger(`[process-lock] Attempting self-heal termination for pid=${pid} (SIGTERM).`);
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Process may already be gone.
+  }
+
+  await sleep(1500);
+  if (!isProcessAlive(pid)) {
+    logger(`[process-lock] Self-heal termination succeeded for pid=${pid} after SIGTERM.`);
+    return true;
+  }
+
+  logger(`[process-lock] pid=${pid} still alive after SIGTERM. Sending SIGKILL.`);
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // ignore
+  }
+
+  await sleep(300);
+  const dead = !isProcessAlive(pid);
+  logger(
+    dead
+      ? `[process-lock] Self-heal termination succeeded for pid=${pid} after SIGKILL.`
+      : `[process-lock] Self-heal termination failed for pid=${pid}.`,
+  );
+  return dead;
+}
+
+export function getLockNamespace(): string {
+  return RUNTIME_NAMESPACE;
+}
+
+export function getLockFilePath(): string {
+  return LOCK_FILE;
+}
+
+interface ProcessRow extends ProcessTreeRow {
+  command: string;
+}
+
+function listProcessRows(): ProcessRow[] {
+  try {
+    const output = execFileSync('ps', ['-ax', '-o', 'pid=,ppid=,command='], {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    return output
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const match = line.match(/^(\d+)\s+(\d+)\s+(.*)$/);
+        if (!match) return null;
+        return {
+          pid: Number(match[1]),
+          ppid: Number(match[2]),
+          command: match[3],
+        };
+      })
+      .filter((row): row is ProcessRow =>
+        !!row && Number.isFinite(row.pid) && Number.isFinite(row.ppid),
+      );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Best-effort stale process sweep for this project path.
+ *
+ * Targets only orphaned bridge processes (ppid=1) for the same project root.
+ * The current process and lock-primary family are preserved.
+ *
+ * Returns number of terminated orphan processes.
+ */
+export async function cleanupOrphanBridgeProcesses(
+  projectRootHint: string = PROJECT_ROOT,
+): Promise<number> {
+  const rows = listProcessRows();
+  if (rows.length === 0) return 0;
+
+  const normalizedRoot = path.resolve(projectRootHint);
+  const bridgeRows = rows.filter(
+    row =>
+      row.command.includes(normalizedRoot) &&
+      (row.command.includes('/build/src/main.js') ||
+        row.command.includes('/scripts/cli.mjs')),
+  );
+  if (bridgeRows.length === 0) return 0;
+
+  const protectedPids = new Set<number>([process.pid, process.ppid]);
+  const lockInfo = readLockInfo();
+  if (lockInfo?.pid && isProcessAlive(lockInfo.pid)) {
+    protectedPids.add(lockInfo.pid);
+    for (const pid of collectDescendants(rows, lockInfo.pid)) {
+      protectedPids.add(pid);
+    }
+  } else if (lockInfo?.pid && !isProcessAlive(lockInfo.pid)) {
+    try {
+      fs.unlinkSync(LOCK_FILE);
+      logger(
+        `[process-lock] Removed stale lock during orphan sweep (pid=${lockInfo.pid}).`,
+      );
+    } catch {
+      // ignore lock unlink failures
+    }
+  }
+
+  const targets = bridgeRows
+    .filter(row => row.ppid === 1)
+    .map(row => row.pid)
+    .filter(pid => !protectedPids.has(pid));
+  if (targets.length === 0) return 0;
+
+  const dedupedTargets = Array.from(new Set(targets));
+  logger(
+    `[process-lock] Cleaning orphan bridge process(es): ${dedupedTargets.join(', ')}`,
+  );
+
+  for (const pid of dedupedTargets) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // already gone
+    }
+  }
+  await sleep(500);
+
+  for (const pid of dedupedTargets) {
+    if (!isProcessAlive(pid)) {
+      continue;
+    }
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // ignore
+    }
+  }
+
+  return dedupedTargets.length;
 }
 
 /**

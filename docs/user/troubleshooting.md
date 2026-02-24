@@ -57,9 +57,11 @@ cat ~/.claude.json | jq '.mcpServers'
    ```bash
    lsof -i :8766 | grep LISTEN
    ```
-4. **Stale processes** - Kill old MCP server processes:
+4. **Stale processes** - Cleanup old MCP server processes (namespace-safe by default):
    ```bash
-   pkill -f chrome-ai-bridge
+   npm run cleanup
+   # Use only when you intentionally want to kill every namespace:
+   npm run cleanup -- --all
    ```
 
 ## Extension Connection Issues
@@ -161,7 +163,7 @@ Check the output for:
 ### Memory usage
 - Close unused browser tabs
 - Restart MCP server periodically
-- Kill stale processes: `pkill -f chrome-ai-bridge`
+- Kill stale processes (namespace-safe): `npm run cleanup`
 
 ### Many panes / many MCP clients (OOM or timeout under load)
 
@@ -172,10 +174,11 @@ export CAI_IPC_MAX_SESSIONS=20
 export CAI_IPC_RESERVED_INIT_SLOTS=2
 export CAI_IPC_MAX_QUEUE=64
 export CAI_IPC_QUEUE_WAIT_TIMEOUT_MS=45000
-export CAI_IPC_SESSION_IDLE_MS=120000
+export CAI_IPC_SESSION_IDLE_MS=1800000
 export CAI_EXEC_MAX_CONCURRENCY=3
 export CAI_STARTUP_PROCESS_THRESHOLD=8
 export CAI_STARTUP_DELAY_JITTER_MS=1500
+export CAI_PRIMARY_IDLE_MS=0
 ```
 
 Expected overload errors:
@@ -188,6 +191,10 @@ Recommended startup sequence for large tmux workspaces:
 2. Scale to 4 panes -> verify health
 3. Scale to 8 panes -> verify no repeated reconnect loops
 4. Scale to 20 panes
+
+If you still see intermittent `Transport closed` after long idle time, verify:
+- `CAI_PRIMARY_IDLE_MS=0` (prevents Primary auto-exit while clients are still open)
+- `CAI_IPC_SESSION_IDLE_MS` is not too short for your usage pattern
 
 ## Debug Mode
 
@@ -210,3 +217,29 @@ ls .local/chrome-ai-bridge/debug/
    - Configuration used
    - Steps to reproduce
    - Output of `npm run test:network -- chatgpt` (if relevant)
+
+## Auto-Recovery Tuning (v2.3.x+)
+
+If you see frequent `tools/call` timeout around 60 seconds:
+
+```bash
+# Keep internal waits under client deadline (defaults shown)
+export CAI_MCP_TOOL_BUDGET_MS=50000
+export CAI_RESPONSE_WAIT_MAX_MS=40000
+export CAI_MCP_BUDGET_RESERVE_MS=3000
+```
+
+If startup gets stuck behind an unhealthy Primary:
+
+```bash
+# Auto-heal unhealthy primary older than this threshold (ms)
+export CAI_PRIMARY_SELF_HEAL_MIN_AGE_MS=20000
+```
+
+Cross-project isolation:
+- Lock namespace is now derived from project scope (git root/cwd) automatically.
+- You can force explicit isolation with:
+
+```bash
+export CAI_NAMESPACE=my-project-name
+```

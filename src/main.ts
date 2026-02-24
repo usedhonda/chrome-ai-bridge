@@ -46,7 +46,15 @@ import {cleanupAllConnections} from './fast-cdp/fast-chat.js';
 import {generateAgentId, setAgentId} from './fast-cdp/agent-context.js';
 import {cleanupStaleSessions} from './fast-cdp/session-manager.js';
 import {getIpcGuardConfig, getSessionConfig, IPC_CONFIG} from './config.js';
-import {releaseLock, tryAcquireLockSafe, checkExistingPrimary, updateLockPort} from './process-lock.js';
+import {
+  releaseLock,
+  tryAcquireLockSafe,
+  checkExistingPrimary,
+  updateLockPort,
+  terminatePrimaryProcess,
+  getLockNamespace,
+  cleanupOrphanBridgeProcesses,
+} from './process-lock.js';
 import {checkPrimaryHealth, startProxyMode} from './stdio-http-proxy.js';
 
 function readPackageJson(): {version?: string} {
@@ -71,6 +79,7 @@ export const args = parseArguments(version);
 const logFile = args.logFile ? saveLogsToFile(args.logFile) : undefined;
 
 logger(`Starting Chrome AI Bridge v${version} (Extension-only mode)`);
+logger(`[main] Runtime lock namespace: ${getLockNamespace()}`);
 
 // Initialize agent ID for Agent Teams support
 const agentId = generateAgentId();
@@ -85,10 +94,14 @@ const MAX_STARTUP_ATTEMPTS = 5;
 const BASE_DELAY_MS = 300;
 const HEALTH_CHECK_RETRIES = 3;
 const HEALTH_CHECK_INTERVAL_MS = 500;
+const PRIMARY_SELF_HEAL_MIN_AGE_MS = Number(
+  process.env.CAI_PRIMARY_SELF_HEAL_MIN_AGE_MS || '20000',
+);
 const ipcGuardConfig = getIpcGuardConfig();
 
 const instanceId = randomUUID();
 let becamePrimary = false;
+let attemptedPrimarySelfHeal = false;
 let stdinClosed = false;
 let getActiveIpcSessionCount = (): number => 0;
 
@@ -146,6 +159,40 @@ for (let attempt = 0; attempt < MAX_STARTUP_ATTEMPTS; attempt++) {
       }
     }
     logger(`[main] Primary (port=${existingPrimary.port}) not healthy after ${HEALTH_CHECK_RETRIES} retries.`);
+
+    const parsedStartedAt = existingPrimary.startedAt
+      ? Date.parse(existingPrimary.startedAt)
+      : NaN;
+    const primaryAgeMs = Number.isFinite(parsedStartedAt)
+      ? Math.max(0, Date.now() - parsedStartedAt)
+      : null;
+
+    if (
+      !attemptedPrimarySelfHeal &&
+      existingPrimary.pid > 0 &&
+      (primaryAgeMs === null || primaryAgeMs >= PRIMARY_SELF_HEAL_MIN_AGE_MS)
+    ) {
+      attemptedPrimarySelfHeal = true;
+      logger(
+        `[main] Attempting self-heal for unhealthy primary pid=${existingPrimary.pid} ageMs=${
+          primaryAgeMs ?? 'unknown'
+        }.`,
+      );
+      const terminated = await terminatePrimaryProcess(existingPrimary.pid);
+      if (terminated) {
+        logger('[main] Self-heal terminated unhealthy primary. Retrying startup immediately.');
+        continue;
+      }
+      logger('[main] Self-heal could not terminate unhealthy primary.');
+    } else if (
+      !attemptedPrimarySelfHeal &&
+      primaryAgeMs !== null &&
+      primaryAgeMs < PRIMARY_SELF_HEAL_MIN_AGE_MS
+    ) {
+      logger(
+        `[main] Primary is unhealthy but still young (ageMs=${primaryAgeMs} < ${PRIMARY_SELF_HEAL_MIN_AGE_MS}). Skipping self-heal this round.`,
+      );
+    }
   }
 
   // 3. Neither Primary nor Proxy — backoff with jitter and retry
@@ -216,6 +263,50 @@ Available tools: ask_chatgpt_web, ask_gemini_web, ask_chatgpt_gemini_web, take_c
 };
 
 const toolMutex = new Mutex(ipcGuardConfig.execMaxConcurrency);
+const TOOL_SELF_CLEANUP_ENABLED =
+  process.env.CAI_TOOL_SELF_CLEANUP_ENABLED !== '0';
+const TOOL_SELF_CLEANUP_INTERVAL_MS = Math.max(
+  5000,
+  Number(process.env.CAI_TOOL_SELF_CLEANUP_INTERVAL_MS || '60000'),
+);
+let lastToolSelfCleanupAt = 0;
+let toolSelfCleanupInFlight: Promise<void> | null = null;
+
+async function maybeRunToolSelfCleanup(): Promise<void> {
+  if (!TOOL_SELF_CLEANUP_ENABLED) {
+    return;
+  }
+
+  const now = Date.now();
+  if (now - lastToolSelfCleanupAt < TOOL_SELF_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  if (toolSelfCleanupInFlight) {
+    await toolSelfCleanupInFlight;
+    return;
+  }
+
+  lastToolSelfCleanupAt = now;
+  toolSelfCleanupInFlight = (async () => {
+    const cleaned = await cleanupOrphanBridgeProcesses();
+    if (cleaned > 0) {
+      logger(`[main] Tool-triggered orphan cleanup removed ${cleaned} process(es).`);
+    }
+  })()
+    .catch(error => {
+      logger(
+        `[main] Tool-triggered orphan cleanup failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    })
+    .finally(() => {
+      toolSelfCleanupInFlight = null;
+    });
+
+  await toolSelfCleanupInFlight;
+}
 
 function registerTool(tool: ToolDefinition): void {
   server.registerTool(
@@ -227,6 +318,7 @@ function registerTool(tool: ToolDefinition): void {
     },
     async (params): Promise<CallToolResult> => {
       touchPrimaryActivity();
+      await maybeRunToolSelfCleanup();
       const guard = await toolMutex.acquire();
       try {
         logger(`${tool.name} request: ${JSON.stringify(params, null, '  ')}`);
@@ -400,27 +492,31 @@ logDisclaimers();
     });
   }
 
-  const idleCleanupTimer = setInterval(async () => {
-    const now = Date.now();
-    const staleSessionIds = Array.from(ipcSessionLastActivity.entries())
-      .filter(([, lastActivity]) => now - lastActivity > ipcGuardConfig.sessionIdleMs)
-      .map(([sessionId]) => sessionId);
-    if (staleSessionIds.length === 0) {
-      return;
-    }
-    logger(
-      `[ipc] Closing ${staleSessionIds.length} idle session(s) older than ${ipcGuardConfig.sessionIdleMs}ms.`,
-    );
-    for (const staleSessionId of staleSessionIds) {
-      try {
-        await ipcTransports[staleSessionId]?.close();
-      } catch {
-        // Ignore transport close errors and continue cleanup.
+  if (ipcGuardConfig.sessionIdleMs > 0) {
+    const idleCleanupTimer = setInterval(async () => {
+      const now = Date.now();
+      const staleSessionIds = Array.from(ipcSessionLastActivity.entries())
+        .filter(([, lastActivity]) => now - lastActivity > ipcGuardConfig.sessionIdleMs)
+        .map(([sessionId]) => sessionId);
+      if (staleSessionIds.length === 0) {
+        return;
       }
-      cleanupIpcSession(staleSessionId);
-    }
-  }, Math.max(10_000, Math.min(60_000, Math.floor(ipcGuardConfig.sessionIdleMs / 2))));
-  idleCleanupTimer.unref();
+      logger(
+        `[ipc] Closing ${staleSessionIds.length} idle session(s) older than ${ipcGuardConfig.sessionIdleMs}ms.`,
+      );
+      for (const staleSessionId of staleSessionIds) {
+        try {
+          await ipcTransports[staleSessionId]?.close();
+        } catch {
+          // Ignore transport close errors and continue cleanup.
+        }
+        cleanupIpcSession(staleSessionId);
+      }
+    }, Math.max(10_000, Math.min(60_000, Math.floor(ipcGuardConfig.sessionIdleMs / 2))));
+    idleCleanupTimer.unref();
+  } else {
+    logger('[ipc] Idle session cleanup is disabled (CAI_IPC_SESSION_IDLE_MS=0).');
+  }
 
   const ipcServer = http.createServer(async (req, res) => {
     if (!req.url || !req.method) {
@@ -437,6 +533,7 @@ logDisclaimers();
           status: 'ok',
           pid: process.pid,
           version,
+          namespace: getLockNamespace(),
           instanceId,
           activeSessions: getActiveSessionCount(),
           queuedInitializations: initQueue.length,
@@ -610,19 +707,23 @@ logDisclaimers();
   ipcServer.listen(IPC_CONFIG.port, IPC_CONFIG.host, onListening);
 
   // Primary idle auto-exit: exit when no activity and no active IPC sessions
-  const primaryIdleCheckTimer = setInterval(() => {
-    const activeSessionCount = getActiveSessionCount();
-    if (
-      Date.now() - primaryLastActivityAt > ipcGuardConfig.primaryIdleMs &&
-      activeSessionCount === 0
-    ) {
-      logger(
-        `[main] Primary idle for ${Math.round((Date.now() - primaryLastActivityAt) / 1000)}s with 0 active sessions. Auto-exiting.`,
-      );
-      shutdown('idle timeout');
-    }
-  }, 30_000);
-  primaryIdleCheckTimer.unref();
+  if (ipcGuardConfig.primaryIdleMs > 0) {
+    const primaryIdleCheckTimer = setInterval(() => {
+      const activeSessionCount = getActiveSessionCount();
+      if (
+        Date.now() - primaryLastActivityAt > ipcGuardConfig.primaryIdleMs &&
+        activeSessionCount === 0
+      ) {
+        logger(
+          `[main] Primary idle for ${Math.round((Date.now() - primaryLastActivityAt) / 1000)}s with 0 active sessions. Auto-exiting.`,
+        );
+        shutdown('idle timeout');
+      }
+    }, 30_000);
+    primaryIdleCheckTimer.unref();
+  } else {
+    logger('[main] Primary idle auto-exit is disabled (CAI_PRIMARY_IDLE_MS=0).');
+  }
 }
 
 // Graceful shutdown handler with timeout
