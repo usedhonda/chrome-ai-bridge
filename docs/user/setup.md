@@ -49,6 +49,33 @@ Add to the **root level** of your MCP client configuration file:
 - **VS Code Copilot**: `.vscode/settings.json` or global settings
 - **Cline**: Follow Cline's MCP setup guide
 
+### For Codex (Gemini-first ask-ai skill)
+
+1. Add MCP server in Codex:
+
+```bash
+codex mcp add chrome-ai-bridge -- npx chrome-ai-bridge@latest
+```
+
+2. Verify MCP registration:
+
+```bash
+codex mcp list
+```
+
+3. Install this repository's `ask-ai` skill into your Codex skills directory:
+
+```bash
+mkdir -p ~/.codex/skills/ask-ai
+cp -R skills/ask-ai/* ~/.codex/skills/ask-ai/
+```
+
+4. Restart Codex session.
+
+5. Use the skill behavior:
+   - Default is Gemini-first.
+   - Cross-discussion requests should use ChatGPT+Gemini parallel query.
+
 #### Project-Specific Configuration (Not Recommended)
 
 For Claude Code, you can also add project-specific configuration, but it's generally not needed:
@@ -130,6 +157,10 @@ Once configured, you can use these tools:
 - `ask_chatgpt_web` - Ask ChatGPT via browser
 - `ask_gemini_web` - Ask Gemini via browser
 - `ask_chatgpt_gemini_web` - Ask both AIs in parallel (recommended)
+
+> Codex `ask-ai` skill policy in this repository:
+> - Default routing: `ask_gemini_web`
+> - Cross-discussion mode: `ask_chatgpt_gemini_web`
 
 ### Debug Tools
 

@@ -241,3 +241,9 @@ docs/.docusaurus/
 *.pid.lock
 *.seed
 .playwright-mcp/
+
+# CC persona (auto-generated)
+.persona.md
+
+# Cdx persona (auto-generated)
+.codex/config.toml

@@ -333,7 +333,7 @@ export class RelayServer extends EventEmitter {
     newTab?: boolean;
     allowTabTakeover?: boolean;
   } = {}): Promise<number | null> {
-    const ports = [8765, 8766, 8767, 8768, 8769, 8770, 8771, 8772, 8773, 8774, 8775];
+    const ports = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
     const wsUrl = this.getConnectionURL();
 
     for (const port of ports) {

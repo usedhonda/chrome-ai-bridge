@@ -53,6 +53,24 @@
 - Use `createNewChat: true` only when explicitly starting a new topic
 - Provide detailed context for better answers
 
+## Codex ask-ai Skill Workflow (Gemini-first)
+
+```
+1. "ask-ai: explain this API design briefly"
+2. "ask-ai: compare option A and B with tradeoffs"
+3. "ask-ai: give a final recommendation with risk notes"
+```
+
+**Routing behavior:**
+- Default: Gemini-only (`ask_gemini_web`)
+- Cross-discussion trigger: comparison / tradeoff / decision / "both" / "クロス議論"
+- Cross-discussion tool: `ask_chatgpt_gemini_web`
+
+**Output expectation:**
+- Mode
+- Answer
+- Cross-check (Agreement / Differences / Decision hint) when in cross-discussion mode
+
 ## Performance Analysis
 
 ```

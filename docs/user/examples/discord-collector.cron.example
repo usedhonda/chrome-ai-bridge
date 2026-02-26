@@ -1,0 +1,4 @@
+# Every 5 minutes
+# Replace PROJECT_DIR and env values
+
+*/5 * * * * cd /path/to/PROJECT_DIR && /usr/bin/env DISCORD_BOT_TOKEN=YOUR_TOKEN DISCORD_CHANNEL_IDS=123456789012345678,234567890123456789 npm run --silent discord:collect >> /tmp/discord-collector.log 2>&1
