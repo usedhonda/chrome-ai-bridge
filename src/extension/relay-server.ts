@@ -55,6 +55,12 @@ export class RelayServer extends EventEmitter {
   private discoveryServer: http.Server | null = null;
   private discoveryPort: number | null = null;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  private _lastDiscoveryOptions: {
+    tabUrl?: string;
+    tabId?: number;
+    newTab?: boolean;
+    allowTabTakeover?: boolean;
+  } = {};
 
   constructor(options: RelayServerOptions = {}) {
     super();
@@ -219,6 +225,9 @@ export class RelayServer extends EventEmitter {
           this.ready = true;
           debugLog(`[RelayServer] Connection ready for tab ${this.tabId}`);
           this.emit('ready', this.tabId);
+          // Release discovery port after WebSocket is established.
+          // 1-second grace period lets Extension finish processing the response.
+          setTimeout(() => this.stopDiscoveryServer(), 1000);
           break;
         case 'pong':
           debugLog('[RelayServer] Received keep-alive pong');
@@ -333,6 +342,7 @@ export class RelayServer extends EventEmitter {
     newTab?: boolean;
     allowTabTakeover?: boolean;
   } = {}): Promise<number | null> {
+    this._lastDiscoveryOptions = options;
     const ports = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
     const wsUrl = this.getConnectionURL();
 
@@ -405,6 +415,34 @@ export class RelayServer extends EventEmitter {
   }
 
   /**
+   * Release the discovery HTTP server (port).
+   * Called automatically after the Extension WebSocket connects (ready event).
+   * The port becomes available for other sessions.
+   */
+  stopDiscoveryServer(): void {
+    if (this.discoveryServer) {
+      this.discoveryServer.close();
+      debugLog(`[RelayServer] Discovery server released (port ${this.discoveryPort})`);
+      this.discoveryServer = null;
+      this.discoveryPort = null;
+    }
+  }
+
+  /**
+   * Re-acquire a discovery port (e.g. after WebSocket disconnect for reconnection).
+   * Uses the same options as the last startDiscoveryServer() call.
+   */
+  async restartDiscoveryServer(options?: {
+    tabUrl?: string;
+    tabId?: number;
+    newTab?: boolean;
+    allowTabTakeover?: boolean;
+  }): Promise<number | null> {
+    this.stopDiscoveryServer();
+    return this.startDiscoveryServer(options || this._lastDiscoveryOptions);
+  }
+
+  /**
    * Stop server
    */
   async stop(): Promise<void> {
@@ -425,11 +463,7 @@ export class RelayServer extends EventEmitter {
       new Error('RELAY_STOPPED: Relay stopped before request completion'),
     );
 
-    if (this.discoveryServer) {
-      this.discoveryServer.close();
-      this.discoveryServer = null;
-      this.discoveryPort = null;
-    }
+    this.stopDiscoveryServer();
 
     if (this.wss) {
       return new Promise((resolve) => {

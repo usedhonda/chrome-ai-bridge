@@ -179,8 +179,14 @@ export class NetworkInterceptor {
 
       if (isResponseUrl(url) || isSSE) {
         this.pendingBodies.add(requestId);
-        this.fetchResponseBody(requestId, url).catch(() => {
-          // Best-effort; failures are expected for some responses
+        this.fetchResponseBody(requestId, url).catch((err) => {
+          console.error(`[NetworkInterceptor] fetchResponseBody error for ${url.slice(0, 80)}: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      } else if (!url) {
+        // Speculative capture: requestWillBeSent was missed (tab reuse scenario)
+        // Try fetching body and check if it looks like ChatGPT SSE or Gemini response
+        this.speculativeFetchBody(requestId).catch(() => {
+          // Best-effort; silent failure expected
         });
       }
     });
@@ -198,37 +204,89 @@ export class NetworkInterceptor {
   }
 
   private async fetchResponseBody(requestId: string, url: string): Promise<void> {
-    try {
-      const result = await this.client.send('Network.getResponseBody', {requestId});
-      if (result?.body) {
-        let data: string;
-        if (result.base64Encoded) {
-          try {
-            data = Buffer.from(result.body, 'base64').toString('utf-8');
-          } catch (decodeErr) {
-            console.error(`[NetworkInterceptor] Base64 decode failed for ${url.slice(0, 80)}: ${decodeErr instanceof Error ? decodeErr.message : String(decodeErr)}`);
-            return;
+    const maxRetries = 2;
+    const retryDelayMs = 500;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.client.send('Network.getResponseBody', {requestId});
+        if (result?.body) {
+          let data: string;
+          if (result.base64Encoded) {
+            try {
+              data = Buffer.from(result.body, 'base64').toString('utf-8');
+            } catch (decodeErr) {
+              console.error(`[NetworkInterceptor] Base64 decode failed for ${url.slice(0, 80)}: ${decodeErr instanceof Error ? decodeErr.message : String(decodeErr)}`);
+              this.pendingBodies.delete(requestId);
+              return;
+            }
+          } else {
+            data = result.body;
           }
-        } else {
-          data = result.body;
+
+          this.frames.push({
+            timestamp: Date.now() / 1000,
+            type: 'fetch-body',
+            requestId,
+            url,
+            data,
+          });
+          console.error(`[NetworkInterceptor] Body captured: ${url.slice(0, 80)} (${data.length} bytes)`);
+        }
+        this.pendingBodies.delete(requestId);
+        return;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isRetryable = msg.includes('No resource') || msg.includes('No data found');
+
+        if (isRetryable && attempt < maxRetries) {
+          console.error(`[NetworkInterceptor] getResponseBody retry ${attempt + 1}/${maxRetries} for ${url.slice(0, 80)}`);
+          await new Promise(r => setTimeout(r, retryDelayMs));
+          continue;
         }
 
+        if (!isRetryable) {
+          console.error(`[NetworkInterceptor] getResponseBody failed for ${url.slice(0, 80)}: ${msg}`);
+        } else {
+          console.error(`[NetworkInterceptor] getResponseBody failed after ${maxRetries} retries for ${url.slice(0, 80)}: ${msg}`);
+        }
+        this.pendingBodies.delete(requestId);
+        return;
+      }
+    }
+    this.pendingBodies.delete(requestId);
+  }
+
+  /**
+   * Speculative body fetch for requests where requestWillBeSent was missed
+   * (e.g., tab reuse). Checks if the body looks like a ChatGPT or Gemini response.
+   */
+  private async speculativeFetchBody(requestId: string): Promise<void> {
+    try {
+      const result = await this.client.send('Network.getResponseBody', {requestId});
+      if (!result?.body) return;
+
+      const data = result.base64Encoded
+        ? Buffer.from(result.body, 'base64').toString('utf-8')
+        : result.body;
+
+      // Check if body looks like ChatGPT SSE (contains "data: " lines and [DONE])
+      const isChatGPTSSE = data.includes('data: ') && data.includes('[DONE]');
+      // Check if body looks like Gemini response (starts with )]}')
+      const isGemini = data.startsWith(")]}'");
+
+      if (isChatGPTSSE || isGemini) {
         this.frames.push({
           timestamp: Date.now() / 1000,
           type: 'fetch-body',
           requestId,
-          url,
+          url: '<speculative>',
           data,
         });
+        console.error(`[NetworkInterceptor] Speculative capture hit: ${isChatGPTSSE ? 'ChatGPT SSE' : 'Gemini'} (${data.length} bytes)`);
       }
-    } catch (err) {
-      // Common: "No resource with given identifier" for redirects/cancelled requests
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes('No resource') && !msg.includes('No data found')) {
-        console.error(`[NetworkInterceptor] getResponseBody failed for ${url.slice(0, 80)}: ${msg}`);
-      }
-    } finally {
-      this.pendingBodies.delete(requestId);
+    } catch {
+      // Silent: speculative capture is best-effort
     }
   }
 
@@ -247,15 +305,32 @@ export class NetworkInterceptor {
 
   /**
    * Wait for all pending response body fetches, then stop capture.
+   * IMPORTANT: capturing remains true during the wait so that late-arriving
+   * loadingFinished events are still processed (this was the root cause of
+   * textLength=0 — setting capturing=false first dropped those events).
    */
-  async stopCaptureAndWait(timeoutMs = 3000): Promise<void> {
-    this.capturing = false; // Stop receiving new events
-
-    // Wait for pending body fetches
+  async stopCaptureAndWait(timeoutMs = 15000): Promise<void> {
+    // Phase 1: Wait for pending body fetches (capturing stays true)
     const deadline = Date.now() + timeoutMs;
     while (this.pendingBodies.size > 0 && Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 100));
     }
+
+    // Phase 2: Grace period — if no frames captured yet, wait for late loadingFinished
+    if (this.frames.length === 0) {
+      const graceDeadline = Math.min(Date.now() + 3000, deadline);
+      console.error('[NetworkInterceptor] No frames yet, waiting grace period for late events...');
+      while (this.frames.length === 0 && Date.now() < graceDeadline) {
+        await new Promise(r => setTimeout(r, 100));
+        // Also wait for any new pending bodies that appeared during grace
+        while (this.pendingBodies.size > 0 && Date.now() < graceDeadline) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+      }
+    }
+
+    // Phase 3: Now stop capturing
+    this.capturing = false;
 
     // Warn if pending bodies remain after timeout
     if (this.pendingBodies.size > 0) {

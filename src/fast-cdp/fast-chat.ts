@@ -2339,16 +2339,20 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
     });
 
     // Hybrid: prefer network text (primary), DOM as fallback
+    // Use network if it captured anything and is at least 50% of DOM length
+    // (avoids using truncated network text when DOM has the full answer)
     let hybridAnswer = finalAnswer;
     let answerSource = 'dom';
-    if (networkResult.text.length > 50) {
+    const netLen = networkResult.text.length;
+    const domLen = finalAnswer.length;
+    if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
       hybridAnswer = networkResult.text;
       answerSource = 'network';
     }
     logInfo('chatgpt', 'Answer source selected', {
       source: answerSource,
-      networkLen: networkResult.text.length,
-      domLen: finalAnswer.length,
+      networkLen: netLen,
+      domLen,
     });
 
     return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};
@@ -3476,17 +3480,20 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
 
   // Hybrid: prefer network text (primary), DOM as fallback
   // Normalize network text with same Gemini-specific cleanup as DOM text
+  // Use network if it captured anything and is at least 50% of DOM length
   const networkNormalized = normalizeGeminiResponse(networkResult.text, question);
   let hybridAnswer = normalized;
   let answerSource = 'dom';
-  if (networkNormalized.length > 50) {
+  const netLen = networkNormalized.length;
+  const domLen = normalized.length;
+  if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
     hybridAnswer = networkNormalized;
     answerSource = 'network';
   }
   logInfo('gemini', 'Answer source selected', {
     source: answerSource,
-    networkLen: networkNormalized.length,
-    domLen: normalized.length,
+    networkLen: netLen,
+    domLen,
   });
 
   return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};

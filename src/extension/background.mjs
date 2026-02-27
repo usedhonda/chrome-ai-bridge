@@ -170,6 +170,8 @@ class RelayConnection {
     }
     if (message.method === 'reloadExtension') {
       logInfo('reload', 'reloadExtension command received');
+      // Set flag so the reloaded service worker skips cooldown
+      chrome.storage.local.set({ _reloadTriggered: Date.now() }).catch(() => {});
       // Delay reload to allow response to be sent first
       setTimeout(() => {
         logInfo('reload', 'Calling chrome.runtime.reload()');
@@ -731,7 +733,7 @@ const DISCOVERY_INTERVAL_MS = {
 };
 const FAST_TO_NORMAL_EMPTY_STREAK = 5;
 const NORMAL_TO_IDLE_EMPTY_STREAK = 20;
-const ACTIVE_TO_IDLE_EMPTY_STREAK = 3;
+const ACTIVE_TO_IDLE_EMPTY_STREAK = 10;
 let lastSuccessfulPort = null;
 const lastRelayByPort = new Map();
 
@@ -745,8 +747,23 @@ let emptyDiscoveryStreak = 0;
 let keepAliveActive = false;
 
 // リロード時クールダウン: 5秒間は「新しいrelay」検出をスキップ
+// ただし reloadExtension コマンド経由のリロード時はスキップしない
 const extensionStartTime = Date.now();
 const COOLDOWN_MS = 5000;
+let cooldownDisabled = false;
+
+// Check if this is a reload triggered by reloadExtension command
+chrome.storage.local.get('_reloadTriggered').then(result => {
+  if (result._reloadTriggered) {
+    const age = Date.now() - result._reloadTriggered;
+    if (age < 10000) {  // Within 10 seconds of reload trigger
+      cooldownDisabled = true;
+      logInfo('discovery', 'Cooldown disabled (reloadExtension triggered)', {age});
+    }
+    // Clear the flag
+    chrome.storage.local.remove('_reloadTriggered').catch(() => {});
+  }
+}).catch(() => {});
 
 // ユーザー操作によるDiscoveryかどうかのフラグ
 // Chrome起動時やService Worker再起動時はfalse、アイコンクリック時のみtrue
@@ -937,15 +954,15 @@ async function autoConnectRelay(best) {
 
   // tabUrl があれば、connect.html を開かずに直接接続
   // preferredTabId があれば優先的に使用
+  const requestedNewTab = Boolean(best?.data?.newTab);
   let targetTabId;
   try {
     // autoConnectRelay経由の場合はフォーカスしない（active: false）
-    // リロード時に勝手にタブがフォーカスされる問題を防ぐ
-    // newTab: false に固定 - 自動接続では既存タブを優先してタブスパムを防止
+    // newTab: relay の要求を尊重する（MCP サーバーが newTab: true を指定した場合は新規タブ作成を許可）
     targetTabId = await tabShareExtension._resolveTabId(
       tabUrl,
       preferredTabId,
-      false,  // newTab: false - always prefer existing tabs in auto-connect
+      requestedNewTab,
       false,  // active: false - 自動接続時はタブをフォーカスしない
     );
   } catch (error) {
@@ -957,8 +974,23 @@ async function autoConnectRelay(best) {
     return false;
   }
   if (tabShareExtension._activeConnections?.has(targetTabId)) {
-    logInfo('auto-connect', 'Tab already connected', {targetTabId});
-    return true; // 既に接続済み
+    const existingSessionId = tabShareExtension._tabSessionOwners?.get(targetTabId);
+    const newSessionId = best?.data?.sessionId;
+    if (existingSessionId && newSessionId && existingSessionId !== newSessionId) {
+      // Different session wants the same tab — replace the old connection
+      logInfo('auto-connect', 'Replacing stale connection with newer session', {
+        targetTabId, oldSession: existingSessionId, newSession: newSessionId,
+      });
+      const oldConn = tabShareExtension._activeConnections.get(targetTabId);
+      if (oldConn) {
+        oldConn.close('Replaced by newer session');
+        tabShareExtension._activeConnections.delete(targetTabId);
+        tabShareExtension._tabSessionOwners.delete(targetTabId);
+      }
+    } else {
+      logInfo('auto-connect', 'Tab already connected', {targetTabId});
+      return true; // 同じセッションで接続済み
+    }
   }
 
   const targetTab = await chrome.tabs.get(targetTabId).catch(() => null);
@@ -1009,8 +1041,9 @@ async function autoOpenConnectUi() {
   };
 
   // リロード直後はタブを開かない（既存MCPサーバーとの再接続を防ぐ）
+  // ただし reloadExtension コマンド経由の場合はスキップしない
   const elapsed = Date.now() - extensionStartTime;
-  if (elapsed < COOLDOWN_MS) {
+  if (elapsed < COOLDOWN_MS && !cooldownDisabled) {
     logDebug('discovery', `Cooldown active (${elapsed}ms < ${COOLDOWN_MS}ms), skipping`);
     result.skippedCooldown = true;
     return result;
@@ -1038,7 +1071,7 @@ async function autoOpenConnectUi() {
       continue;
     }
 
-    logInfo('discovery', 'New relay detected', {port, tabUrl: data.tabUrl, wsUrl: data.wsUrl});
+    logInfo('discovery', 'New relay detected', {port, tabUrl: data.tabUrl, wsUrl: data.wsUrl, startedAt});
     lastRelayByPort.set(port, {
       wsUrl: data.wsUrl,
       startedAt,
@@ -1047,14 +1080,34 @@ async function autoOpenConnectUi() {
     newRelays.push({port, data});
   }
 
-  result.newRelayCount = newRelays.length;
+  // Deduplicate: when multiple relays serve the same tabUrl, prefer the newest (by startedAt)
+  // This prevents stale MCP servers from stealing connections from active ones
+  const bestByTabUrl = new Map();
+  for (const relay of newRelays) {
+    const tabUrl = relay.data?.tabUrl || '';
+    const existing = bestByTabUrl.get(tabUrl);
+    const relayStartedAt = relay.data?.startedAt || 0;
+    if (!existing || relayStartedAt > (existing.data?.startedAt || 0)) {
+      bestByTabUrl.set(tabUrl, relay);
+    }
+  }
+  const dedupedRelays = [...bestByTabUrl.values()];
+  if (dedupedRelays.length < newRelays.length) {
+    logInfo('discovery', 'Deduped relays by tabUrl (preferring newest)', {
+      before: newRelays.length,
+      after: dedupedRelays.length,
+      dropped: newRelays.filter(r => !dedupedRelays.includes(r)).map(r => ({port: r.port, tabUrl: r.data?.tabUrl, startedAt: r.data?.startedAt})),
+    });
+  }
 
-  if (newRelays.length > 0) {
-    logInfo('discovery', `Processing ${newRelays.length} new relay(s)`);
+  result.newRelayCount = dedupedRelays.length;
+
+  if (dedupedRelays.length > 0) {
+    logInfo('discovery', `Processing ${dedupedRelays.length} new relay(s)`);
   }
 
   // 全ての新しい relay を処理（並列ではなく順次）
-  for (const relay of newRelays) {
+  for (const relay of dedupedRelays) {
     logInfo('discovery', 'Processing relay', {port: relay.port, tabUrl: relay.data.tabUrl});
     debugLog('Processing new relay:', relay.port, relay.data.tabUrl);
     let ok = false;
@@ -1259,5 +1312,7 @@ chrome.runtime.onStartup.addListener(() => {
   scheduleDiscovery();
 });
 scheduleDiscovery();  // Start immediately
+// Ensure keepAlive is active from the start to prevent SW termination during discovery
+ensureKeepAliveAlarm('startup');
 
 logInfo('background', 'Extension loaded (discovery active)');

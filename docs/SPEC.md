@@ -306,6 +306,26 @@ chrome-ai-bridge is a tool that uses MCP (Model Context Protocol) to automate Ch
 | NetworkInterceptor | `src/fast-cdp/network-interceptor.ts` | Network response capture and protocol parsing |
 | Chrome Extension | `src/extension/background.mjs` | Executes CDP commands in browser |
 
+### Multi-Session Design Constraints
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Max connected sessions | 12 | Typical team setup (multiple Claude Code instances) |
+| Max concurrent queries | 3 | Actual simultaneous usage pattern |
+| Discovery ports | 38765-38775 (11 ports) | Sufficient for concurrent connection phase only |
+
+**Design Rule**: Discovery ports are a **transient resource** — needed only during the WebSocket handshake phase (~2 seconds). After WebSocket connection is established, the discovery port MUST be released immediately. This ensures 12+ sessions can coexist with only 11 ports.
+
+**Implementation**: `RelayServer.stopDiscoveryServer()` is called automatically after the `ready` event fires. If reconnection is needed, `restartDiscoveryServer()` re-acquires a port.
+
+**Port lifecycle**:
+```
+Session starts → startDiscoveryServer() → port acquired
+Extension polls → WebSocket handshake → ready event
+1 second grace → stopDiscoveryServer() → port released
+CDP traffic continues over WebSocket (no port needed)
+```
+
 ---
 
 ## 2. Connection Flow

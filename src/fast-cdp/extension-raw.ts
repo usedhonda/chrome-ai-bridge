@@ -6,8 +6,11 @@ import {logRelay, logExtension, logInfo, logError} from './mcp-logger.js';
 
 // Stable extension ID (from manifest.json key)
 const EXTENSION_ID = 'ibjplbopgmcacpmfpnaeoloepdhenlbm';
+// Wake connect page disabled by default — it opens a chrome-extension:// URL
+// that gets ERR_BLOCKED_BY_CLIENT and annoys users. Discovery polling is the
+// primary mechanism; wake is only useful in rare edge cases.
 const ENABLE_WAKE_CONNECT_PAGE =
-  process.env.CAI_ENABLE_WAKE_CONNECT_PAGE !== '0';
+  process.env.CAI_ENABLE_WAKE_CONNECT_PAGE === '1';
 
 export interface RawExtensionConnection {
   relay: RelayServer;
