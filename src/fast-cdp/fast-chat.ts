@@ -80,15 +80,16 @@ const BUDGET_RESERVE_MS = Number(
   process.env.CAI_MCP_BUDGET_RESERVE_MS || '3000',
 );
 
-function getRemainingBudgetMs(startMs: number): number {
-  return MCP_TOOL_BUDGET_MS - (nowMs() - startMs) - BUDGET_RESERVE_MS;
+function getRemainingBudgetMs(startMs: number, overrideBudgetMs?: number): number {
+  return (overrideBudgetMs ?? MCP_TOOL_BUDGET_MS) - (nowMs() - startMs) - BUDGET_RESERVE_MS;
 }
 
-function getResponseWaitBudgetMs(startMs: number, ceilingMs: number, stage: string): number {
-  const remaining = getRemainingBudgetMs(startMs);
+function getResponseWaitBudgetMs(startMs: number, ceilingMs: number, stage: string, overrideBudgetMs?: number): number {
+  const effectiveBudget = overrideBudgetMs ?? MCP_TOOL_BUDGET_MS;
+  const remaining = getRemainingBudgetMs(startMs, overrideBudgetMs);
   if (remaining <= 1000) {
     throw new Error(
-      `MCP_TOOL_BUDGET_EXCEEDED: stage=${stage} budgetMs=${MCP_TOOL_BUDGET_MS} reserveMs=${BUDGET_RESERVE_MS}`,
+      `MCP_TOOL_BUDGET_EXCEEDED: stage=${stage} budgetMs=${effectiveBudget} reserveMs=${BUDGET_RESERVE_MS}`,
     );
   }
   return Math.max(1000, Math.min(ceilingMs, remaining));
@@ -155,6 +156,15 @@ function nowMs(): number {
  * 軽量なevaluateコマンドで接続が生きているかチェック
  */
 async function isConnectionHealthy(client: CdpClient, kind?: 'chatgpt' | 'gemini'): Promise<boolean> {
+  // Fast-path: if relay is already disconnected, skip the expensive evaluate call
+  if (kind) {
+    const relay = getRelayFromAgent(kind);
+    if (relay && !relay.isReady()) {
+      logConnectionState(kind, 'unhealthy', {elapsed: 0, error: 'relay not ready (fast-path)'});
+      return false;
+    }
+  }
+
   const startTime = Date.now();
   try {
     // 4秒タイムアウトで簡単なコマンドを実行（2秒では不十分な場合があった）
@@ -652,7 +662,7 @@ async function navigate(client: CdpClient, url: string) {
   await client.waitForFunction(`document.readyState === 'complete'`, 30000);
 }
 
-async function askChatGPTFastInternal(question: string, debug?: boolean): Promise<ChatResult> {
+async function askChatGPTFastInternal(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
   logInfo('chatgpt', 'askChatGPTFast started', {questionLength: question.length});
@@ -676,18 +686,14 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
   await new Promise(r => setTimeout(r, 500));
   console.error('[ChatGPT] Waited 500ms for SPA rendering');
 
-  // 既存チャット（/c/を含むURL）の場合、メッセージが描画されるまで待機
+  // 既存チャット（/c/を含むURL）の場合、新規チャットへ遷移
+  // 同じ会話に質問を投入すると前回のコンテキストが応答に影響するため
   const currentUrl = await client.evaluate<string>('location.href');
   if (currentUrl.includes('/c/')) {
-    try {
-      await client.waitForFunction(
-        `document.querySelectorAll('[data-message-author-role="assistant"]').length > 0`,
-        5000
-      );
-      console.error('[ChatGPT] Existing chat messages loaded');
-    } catch {
-      console.error('[ChatGPT] No existing messages found, continuing as new chat');
-    }
+    console.error('[ChatGPT] Existing conversation detected, navigating to new chat...');
+    await navigate(client, 'https://chatgpt.com/');
+    await new Promise(r => setTimeout(r, 500));
+    console.error('[ChatGPT] New chat page loaded');
   }
 
   // 入力欄が表示されるまで待機してから取得
@@ -1208,12 +1214,15 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
       t0,
       RESPONSE_WAIT_MAX_MS,
       'chatgpt-response',
+      budgetMs,
     );
     const pollIntervalMs = 1000;
     const startWait = Date.now();
     let lastLoggedState = '';
     let sawStopButton = false;  // 生成中状態を検出したかどうか
     let streamingText = '';     // ストリーミング中に取得したテキスト（完了後に折りたたまれる対策）
+    let textStableCount = 0;    // テキスト長が安定した回数（2-poll confirmation）
+    let lastTextLength = -1;    // 前回のテキスト長
 
     while (Date.now() - startWait < maxWaitMs) {
       const state = await client.evaluate<{
@@ -1520,31 +1529,44 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
       // 2. AND 入力欄が空
       // 3. AND 新しいアシスタントメッセージが増えた
       // 注: hasResponseText は CDP でテキスト取得できない場合があるため必須条件から外す
+      // テキスト安定性チェック（全完了条件で共通使用）
+      const currentTextLen = state.debug_lastAssistantInnerTextLen;
+      if (currentTextLen === lastTextLength && currentTextLen > 0) {
+        textStableCount++;
+      } else {
+        textStableCount = 0;
+        lastTextLength = currentTextLen;
+      }
+
       if (sawStopButton && !state.hasStopButton && !state.inputBoxHasText &&
           state.assistantMsgCount > initialAssistantCount) {
-        console.error(`[ChatGPT] Response complete - stop button disappeared, input empty, assistant count increased (${initialAssistantCount} -> ${state.assistantMsgCount})`);
-        // ChatGPT 5.2 Thinking: 完了直後にストリーミング中のテキストをキャプチャ
-        // （完了後は折りたたまれてしまうため、この時点で取得）
-        streamingText = await client.evaluate<string>(`
-          (() => {
-            const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
-            if (msgs.length === 0) return '';
-            const last = msgs[msgs.length - 1];
-            // .markdown, .result-thinking, または直接テキストを試す
-            const md = last.querySelector('.markdown');
-            if (md) {
-              const t = (md.innerText || md.textContent || '').trim();
-              if (t.length > 0) return t;
-            }
-            const rt = last.querySelector('.result-thinking');
-            if (rt) {
-              const t = (rt.innerText || rt.textContent || '').trim();
-              if (t.length > 0) return t;
-            }
-            return (last.innerText || last.textContent || '').trim();
-          })()
-        `);
-        break;
+        // 2-poll confirmation: テキスト長が2回連続安定してから完了とする
+        if (textStableCount >= 2) {
+          console.error(`[ChatGPT] Response complete - stop gone, text stable for ${textStableCount} polls (len=${currentTextLen})`);
+          streamingText = await client.evaluate<string>(`
+            (() => {
+              const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+              if (msgs.length === 0) return '';
+              const last = msgs[msgs.length - 1];
+              const md = last.querySelector('.markdown');
+              if (md) {
+                const t = (md.innerText || md.textContent || '').trim();
+                if (t.length > 0) return t;
+              }
+              const rt = last.querySelector('.result-thinking');
+              if (rt) {
+                const t = (rt.innerText || rt.textContent || '').trim();
+                if (t.length > 0) return t;
+              }
+              return (last.innerText || last.textContent || '').trim();
+            })()
+          `);
+          break;
+        }
+        // まだ安定していない — 次のポールまで待機
+        console.error(`[ChatGPT] Stop button gone but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
+        await new Promise(r => setTimeout(r, pollIntervalMs));
+        continue;
       }
 
       // フォールバック: 5秒以上待って、stopボタンなし、入力欄空、新しいアシスタントメッセージが増えた
@@ -1552,16 +1574,22 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
       const elapsed = Date.now() - startWait;
       if (elapsed > 5000 && !state.hasStopButton && !state.inputBoxHasText &&
           state.assistantMsgCount > initialAssistantCount && !state.isStillGenerating) {
-        console.error(`[ChatGPT] Response complete - fallback after 5s (no stop button, input empty, assistant count increased ${initialAssistantCount} -> ${state.assistantMsgCount})`);
-        break;
+        if (textStableCount >= 2) {
+          console.error(`[ChatGPT] Response complete - fallback after 5s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`);
+          break;
+        }
+        console.error(`[ChatGPT] Fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
       }
 
       // Thinkingモード専用フォールバック: stopボタンなしでも、生成完了していれば完了
       // 重要: 「今すぐ回答」ボタンがある間は、まだThinking中なので待機を継続
       if (elapsed > 10000 && !state.isStillGenerating && !state.hasSkipThinkingButton &&
           state.assistantMsgCount > initialAssistantCount && !state.inputBoxHasText) {
-        console.error(`[ChatGPT] Response complete - Thinking mode fallback after 10s (generating complete, no skip button)`);
-        break;
+        if (textStableCount >= 2) {
+          console.error(`[ChatGPT] Response complete - Thinking mode fallback after 10s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`);
+          break;
+        }
+        console.error(`[ChatGPT] Thinking fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
       }
 
       await new Promise(r => setTimeout(r, pollIntervalMs));
@@ -1643,6 +1671,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
       t0,
       15000,
       'chatgpt-finalize',
+      budgetMs,
     );
     const pollInterval = 200;
     const waitStart = Date.now();
@@ -2362,7 +2391,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean): Promis
  * Driver経由でChatGPTに質問（実験的）
  * 環境変数 CAI_USE_DRIVERS=1 で有効化
  */
-async function askChatGPTViaDriver(question: string, debug?: boolean): Promise<ChatResult> {
+async function askChatGPTViaDriver(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
 
@@ -2404,6 +2433,7 @@ async function askChatGPTViaDriver(question: string, debug?: boolean): Promise<C
     t0,
     RESPONSE_WAIT_MAX_MS,
     'chatgpt-driver-response',
+    budgetMs,
   );
   await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
   timings.waitResponseMs = nowMs() - tWaitResp;
@@ -2449,7 +2479,7 @@ async function askChatGPTViaDriver(question: string, debug?: boolean): Promise<C
 /**
  * Driver経由でGeminiに質問（実験的）
  */
-async function askGeminiViaDriver(question: string, debug?: boolean): Promise<ChatResult> {
+async function askGeminiViaDriver(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
 
@@ -2492,6 +2522,7 @@ async function askGeminiViaDriver(question: string, debug?: boolean): Promise<Ch
     t0,
     RESPONSE_WAIT_MAX_MS,
     'gemini-driver-response',
+    budgetMs,
   );
   await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
   timings.waitResponseMs = nowMs() - tWaitResp;
@@ -2540,26 +2571,26 @@ const USE_DRIVERS = process.env.CAI_USE_DRIVERS === '1';
 /**
  * ChatGPTに質問して回答を取得（後方互換用）
  */
-export async function askChatGPTFast(question: string, debug?: boolean): Promise<string> {
+export async function askChatGPTFast(question: string, debug?: boolean, budgetMs?: number): Promise<string> {
   if (USE_DRIVERS) {
-    const result = await askChatGPTViaDriver(question, debug);
+    const result = await askChatGPTViaDriver(question, debug, budgetMs);
     return result.answer;
   }
-  const result = await askChatGPTFastInternal(question, debug);
+  const result = await askChatGPTFastInternal(question, debug, budgetMs);
   return result.answer;
 }
 
 /**
  * ChatGPTに質問して回答とタイミング情報を取得
  */
-export async function askChatGPTFastWithTimings(question: string, debug?: boolean): Promise<ChatResult> {
+export async function askChatGPTFastWithTimings(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   if (USE_DRIVERS) {
-    return askChatGPTViaDriver(question, debug);
+    return askChatGPTViaDriver(question, debug, budgetMs);
   }
-  return askChatGPTFastInternal(question, debug);
+  return askChatGPTFastInternal(question, debug, budgetMs);
 }
 
-async function askGeminiFastInternal(question: string, debug?: boolean): Promise<ChatResult> {
+async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
   const client = await getClient('gemini');
@@ -2590,36 +2621,15 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
   await new Promise(r => setTimeout(r, 500));
   console.error('[Gemini] Waited 500ms for SPA rendering');
 
-  // 既存チャット（URLにチャットIDが含まれる）の場合、メッセージが描画されるまで待機
+  // 既存チャット（URLにチャットIDが含まれる）の場合、新規チャットへ遷移
+  // 同じ会話に質問を投入すると前回のコンテキストが応答に影響するため
   const geminiCurrentUrl = await client.evaluate<string>('location.href');
-  // 既存チャットのURLパターン: /app/xxxxx (チャットID)
   const isExistingGeminiChat = /\/app\/[a-zA-Z0-9]+/.test(geminiCurrentUrl);
   if (isExistingGeminiChat) {
-    try {
-      await client.waitForFunction(
-        `document.querySelectorAll('model-response, .model-response').length > 0`,
-        5000
-      );
-      console.error('[Gemini] Existing chat messages loaded');
-
-      // 既存チャットの状態をチェック（停止ボタンがスタックしていないか）
-      const stuckCheckResult = await checkGeminiStuckState(client);
-      if (stuckCheckResult.isStuck) {
-        console.error(`[Gemini] Existing chat appears stuck (stop button detected for ${stuckCheckResult.waitedMs}ms). Clearing session and retrying.`);
-
-        // 協調クリーンアップ（RelayServer + Client + Session を一括リセット）
-        await resetConnection('gemini');
-
-        // エラーを投げて、呼び出し元でリトライを促す
-        throw new Error('GEMINI_STUCK_EXISTING_CHAT: Previous chat appears stuck (stop button visible). Session cleared, please retry.');
-      }
-    } catch (error) {
-      // GEMINI_STUCK_* エラーは再スロー（リトライ用）
-      if (error instanceof Error && error.message.includes('GEMINI_STUCK_')) {
-        throw error;
-      }
-      console.error('[Gemini] No existing messages found, continuing as new chat');
-    }
+    console.error('[Gemini] Existing conversation detected, navigating to new chat...');
+    await navigate(client, 'https://gemini.google.com/');
+    await new Promise(r => setTimeout(r, 500));
+    console.error('[Gemini] New chat page loaded');
   }
 
   const tWaitInput = nowMs();
@@ -3087,6 +3097,7 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
     t0,
     RESPONSE_WAIT_MAX_MS,
     'gemini-response',
+    budgetMs,
   );
   const pollIntervalMs = 1000;
   const startWait = Date.now();
@@ -3502,23 +3513,23 @@ async function askGeminiFastInternal(question: string, debug?: boolean): Promise
 /**
  * Geminiに質問して回答を取得（後方互換用）
  */
-export async function askGeminiFast(question: string, debug?: boolean): Promise<string> {
+export async function askGeminiFast(question: string, debug?: boolean, budgetMs?: number): Promise<string> {
   if (USE_DRIVERS) {
-    const result = await askGeminiViaDriver(question, debug);
+    const result = await askGeminiViaDriver(question, debug, budgetMs);
     return result.answer;
   }
-  const result = await askGeminiFastInternal(question, debug);
+  const result = await askGeminiFastInternal(question, debug, budgetMs);
   return result.answer;
 }
 
 /**
  * Geminiに質問して回答とタイミング情報を取得
  */
-export async function askGeminiFastWithTimings(question: string, debug?: boolean): Promise<ChatResult> {
+export async function askGeminiFastWithTimings(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   if (USE_DRIVERS) {
-    return askGeminiViaDriver(question, debug);
+    return askGeminiViaDriver(question, debug, budgetMs);
   }
-  return askGeminiFastInternal(question, debug);
+  return askGeminiFastInternal(question, debug, budgetMs);
 }
 
 /**

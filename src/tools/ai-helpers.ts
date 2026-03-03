@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {askChatGPTFastWithTimings, askGeminiFastWithTimings, getClient, ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {askChatGPTFastWithTimings, askGeminiFastWithTimings, getClient, resetConnection, ChatDebugInfo} from '../fast-cdp/fast-chat.js';
 
 export type AIKind = 'chatgpt' | 'gemini';
 
@@ -32,20 +32,50 @@ function isGeminiStuckError(error: unknown): boolean {
 }
 
 /**
+ * 接続系エラー（リトライ対象）かどうかを判定。
+ * これらのエラーは resetConnection → 再接続で回復する可能性がある。
+ */
+function isRetryableConnectionError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  const patterns = [
+    'RELAY_DISCONNECTED',
+    'RELAY_STOPPED',
+    'RELAY_REQUEST_TIMEOUT',
+    'EXT_READY_TIMEOUT',
+    'EXT_DISCONNECTED',
+    'Extension not connected',
+    'WebSocket not open',
+  ];
+  return patterns.some(p => msg.includes(p));
+}
+
+/**
+ * リトライすべきでないエラーかどうかを判定。
+ * 質問送信済みの場合やバジェット超過は再試行しても無意味または有害。
+ */
+function isNonRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message;
+  return msg.includes('MCP_TOOL_BUDGET_EXCEEDED') ||
+         msg.includes('Timed out waiting for function');
+}
+
+/**
  * AIに質問を送信し、結果を返す
  * 接続確立からクエリ送信までを一括で行う
- * Geminiのスタックエラーの場合は自動リトライ
+ * 接続エラー・Geminiスタックエラーの場合は自動リトライ（resetConnection → 再接続）
  */
-export async function askAI(kind: AIKind, question: string, debug?: boolean): Promise<AIResult> {
+export async function askAI(kind: AIKind, question: string, debug?: boolean, budgetMs?: number): Promise<AIResult> {
   const askFn = kind === 'chatgpt' ? askChatGPTFastWithTimings : askGeminiFastWithTimings;
   const label = kind === 'chatgpt' ? 'ChatGPT' : 'Gemini';
 
-  const maxRetries = kind === 'gemini' ? 2 : 1;
+  const maxRetries = 2;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const result = await askFn(question, debug);
+      const result = await askFn(question, debug, budgetMs);
       return {
         provider: label,
         success: true,
@@ -55,13 +85,27 @@ export async function askAI(kind: AIKind, question: string, debug?: boolean): Pr
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Geminiのスタックエラーの場合はリトライ
-      if (kind === 'gemini' && isGeminiStuckError(error) && attempt < maxRetries) {
-        console.error(`[askAI] Gemini stuck error on attempt ${attempt}, retrying...`);
-        // セッションは既にクリアされているのでそのままリトライ
+      if (isNonRetryableError(error) || attempt >= maxRetries) {
+        return {
+          provider: label,
+          success: false,
+          answer: '',
+          error: lastError.message,
+        };
+      }
+
+      // 接続系エラーまたは Gemini stuck → resetConnection してリトライ
+      if (isRetryableConnectionError(error) || isGeminiStuckError(error)) {
+        console.error(`[askAI] ${label} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`);
+        try {
+          await resetConnection(kind);
+        } catch {
+          // resetConnection failure is not fatal — retry anyway
+        }
         continue;
       }
 
+      // Unknown error — don't retry
       return {
         provider: label,
         success: false,
@@ -71,7 +115,7 @@ export async function askAI(kind: AIKind, question: string, debug?: boolean): Pr
     }
   }
 
-  // ここには到達しないはずだが、型安全のため
+  // Unreachable, but satisfies type checker
   return {
     provider: label,
     success: false,
@@ -82,10 +126,10 @@ export async function askAI(kind: AIKind, question: string, debug?: boolean): Pr
 
 /**
  * AIへの接続を確立する（並列接続用）
- * Geminiのスタックエラーの場合は自動リトライ
+ * 接続エラー・Geminiスタックエラーの場合は自動リトライ（resetConnection → 再接続）
  */
 export async function connectAI(kind: AIKind): Promise<ConnectionResult> {
-  const maxRetries = kind === 'gemini' ? 2 : 1;
+  const maxRetries = 2;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -95,13 +139,24 @@ export async function connectAI(kind: AIKind): Promise<ConnectionResult> {
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Geminiのスタックエラーの場合はリトライ
-      if (kind === 'gemini' && isGeminiStuckError(error) && attempt < maxRetries) {
-        console.error(`[connectAI] Gemini stuck error on attempt ${attempt}, retrying...`);
-        // セッションは既にクリアされているのでそのままリトライ
+      if (isNonRetryableError(error) || attempt >= maxRetries) {
+        return {
+          success: false,
+          error: lastError.message,
+        };
+      }
+
+      if (isRetryableConnectionError(error) || isGeminiStuckError(error)) {
+        console.error(`[connectAI] ${kind} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`);
+        try {
+          await resetConnection(kind);
+        } catch {
+          // resetConnection failure is not fatal — retry anyway
+        }
         continue;
       }
 
+      // Unknown error — don't retry
       return {
         success: false,
         error: lastError.message,
@@ -109,7 +164,7 @@ export async function connectAI(kind: AIKind): Promise<ConnectionResult> {
     }
   }
 
-  // ここには到達しないはずだが、型安全のため
+  // Unreachable, but satisfies type checker
   return {
     success: false,
     error: lastError?.message || 'Unknown error',

@@ -43,6 +43,8 @@ import type {ToolDefinition} from './tools/ToolDefinition.js';
 import type {Context} from './tools/ToolDefinition.js';
 import {getFastContext} from './fast-cdp/fast-context.js';
 import {cleanupAllConnections} from './fast-cdp/fast-chat.js';
+import {askAI} from './tools/ai-helpers.js';
+import type {AIKind} from './tools/ai-helpers.js';
 import {generateAgentId, setAgentId} from './fast-cdp/agent-context.js';
 import {cleanupStaleSessions} from './fast-cdp/session-manager.js';
 import {getIpcGuardConfig, getSessionConfig, IPC_CONFIG} from './config.js';
@@ -404,9 +406,13 @@ for (const tool of toolRegistry.getAll()) {
 }
 logger(`[tools] Total registered: ${toolRegistry.size} tools`);
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-logger('Chrome AI Bridge MCP Server connected');
+if (args.daemon) {
+  logger('Chrome AI Bridge starting in daemon mode (HTTP-only, no stdio MCP)');
+} else {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  logger('Chrome AI Bridge MCP Server connected');
+}
 logDisclaimers();
 
 // ─── IPC HTTP server (for proxy clients) ───
@@ -542,6 +548,71 @@ logDisclaimers();
           execMaxConcurrency: ipcGuardConfig.execMaxConcurrency,
         }),
       );
+      return;
+    }
+
+    // REST API endpoint — bypass MCP protocol, call askAI() directly
+    if (url.pathname === '/api/ask' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk: Buffer | string) => {
+        body += chunk;
+      });
+      req.on('end', async () => {
+        touchPrimaryActivity();
+        let parsed: {target?: string; question?: string; debug?: boolean; budgetMs?: number};
+        try {
+          parsed = body ? JSON.parse(body) : {};
+        } catch {
+          res.writeHead(400, {'Content-Type': 'application/json'}).end(
+            JSON.stringify({success: false, error: 'Invalid JSON'}),
+          );
+          return;
+        }
+
+        const {target, question, debug: debugFlag, budgetMs: requestBudgetMs} = parsed;
+        const effectiveBudgetMs = requestBudgetMs ?? 120000;  // REST API default: 120s
+        if (!target || !question) {
+          res.writeHead(400, {'Content-Type': 'application/json'}).end(
+            JSON.stringify({success: false, error: 'Missing required fields: target, question'}),
+          );
+          return;
+        }
+
+        const validTargets = ['chatgpt', 'gemini', 'both'];
+        if (!validTargets.includes(target)) {
+          res.writeHead(400, {'Content-Type': 'application/json'}).end(
+            JSON.stringify({success: false, error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`}),
+          );
+          return;
+        }
+
+        const guard = await toolMutex.acquire();
+        try {
+          if (target === 'both') {
+            const [chatgptResult, geminiResult] = await Promise.all([
+              askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
+              askAI('gemini', question, debugFlag, effectiveBudgetMs),
+            ]);
+            res.writeHead(200, {'Content-Type': 'application/json'}).end(
+              JSON.stringify({success: true, results: [chatgptResult, geminiResult]}),
+            );
+          } else {
+            const result = await askAI(target as AIKind, question, debugFlag, effectiveBudgetMs);
+            res.writeHead(200, {'Content-Type': 'application/json'}).end(
+              JSON.stringify({success: result.success, results: [result]}),
+            );
+          }
+        } catch (error) {
+          const errorText = error instanceof Error ? error.message : String(error);
+          if (!res.headersSent) {
+            res.writeHead(500, {'Content-Type': 'application/json'}).end(
+              JSON.stringify({success: false, error: errorText}),
+            );
+          }
+        } finally {
+          guard.dispose();
+        }
+      });
       return;
     }
 
@@ -806,8 +877,11 @@ function handleStdinClosed(reason: string): void {
 }
 
 // stdin close = Claude Code disconnected (most reliable on Windows too)
-process.stdin.on('end', () => handleStdinClosed('stdin ended'));
-process.stdin.on('close', () => handleStdinClosed('stdin closed'));
+// In daemon mode, stdin is not connected — ignore close events
+if (!args.daemon) {
+  process.stdin.on('end', () => handleStdinClosed('stdin ended'));
+  process.stdin.on('close', () => handleStdinClosed('stdin closed'));
+}
 
 // Signal handlers
 process.on('SIGTERM', () => shutdown('SIGTERM'));
