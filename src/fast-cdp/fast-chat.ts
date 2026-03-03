@@ -662,6 +662,17 @@ async function navigate(client: CdpClient, url: string) {
   await client.waitForFunction(`document.readyState === 'complete'`, 30000);
 }
 
+/** Strip conversation-specific paths (/c/<id>, /app/<id>) to prevent chat pollution on reuse */
+function getBaseUrl(kind: 'chatgpt' | 'gemini', url: string): string {
+  if (kind === 'chatgpt') {
+    return url.replace(/\/c\/[a-zA-Z0-9_-]+.*$/, '/');
+  }
+  if (kind === 'gemini') {
+    return url.replace(/\/app\/[a-zA-Z0-9_-]+.*$/, '/');
+  }
+  return url;
+}
+
 async function askChatGPTFastInternal(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
@@ -2261,7 +2272,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
 
     const finalUrl = await client.evaluate<string>('location.href');
     if (finalUrl && finalUrl.includes('chatgpt.com')) {
-      await saveAgentSession('chatgpt', finalUrl);
+      await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
     }
     timings.waitResponseMs = nowMs() - tWaitResp;
     timings.totalMs = nowMs() - t0;
@@ -2450,7 +2461,7 @@ async function askChatGPTViaDriver(question: string, debug?: boolean, budgetMs?:
   // セッション保存
   const finalUrl = await driver.getCurrentUrl();
   if (finalUrl.includes('chatgpt.com')) {
-    await saveAgentSession('chatgpt', finalUrl);
+    await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
   }
 
   timings.totalMs = nowMs() - t0;
@@ -2539,7 +2550,7 @@ async function askGeminiViaDriver(question: string, debug?: boolean, budgetMs?: 
   // セッション保存
   const finalUrl = await driver.getCurrentUrl();
   if (finalUrl.includes('gemini.google.com')) {
-    await saveAgentSession('gemini', finalUrl);
+    await saveAgentSession('gemini', getBaseUrl('gemini', finalUrl));
   }
 
   timings.totalMs = nowMs() - t0;
@@ -3394,7 +3405,7 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 
   const finalUrl = await client.evaluate<string>('location.href');
   if (finalUrl && finalUrl.includes('gemini.google.com')) {
-    await saveAgentSession('gemini', finalUrl);
+    await saveAgentSession('gemini', getBaseUrl('gemini', finalUrl));
   }
   timings.waitResponseMs = nowMs() - tWaitResp;
   timings.totalMs = nowMs() - t0;
