@@ -1,6 +1,6 @@
 {
   "name": "chrome-ai-bridge",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "CLI tool for querying ChatGPT and Gemini via Chrome extension. No Puppeteer required.",
   "type": "module",
   "bin": {
@@ -75,7 +75,8 @@
     "debug": "4.4.3",
     "playwright": "^1.58.1",
     "ws": "^8.19.0",
-    "yargs": "18.0.0"
+    "yargs": "18.0.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
