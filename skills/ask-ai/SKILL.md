@@ -6,7 +6,7 @@ description: |
   モード2: クロス議論（「クロス議論」）
   略語: C=ChatGPT, G=Gemini, D=議論
 argument-hint: <質問内容>
-allowed-tools: [Bash]
+allowed-tools: [Bash, ask_chatgpt_web, ask_gemini_web, ask_chatgpt_gemini_web]
 compression-anchors:
   - "ask-ai CLIでChatGPT/Geminiに質問"
   - "クロス議論プロトコルで設計判断"
@@ -17,25 +17,44 @@ compression-anchors:
 
 2つのモードがある。発動キーワードで自動判定。
 
----
+## 実行方法（CC / Cdx で異なる）
 
-## モード1: 単純質問
+| 環境 | 実行方法 |
+|------|----------|
+| **CC (Claude Code)** | `scripts/ask-ai` CLI（Bash経由） |
+| **Cdx (Codex)** | MCP ツール直接呼び出し（下記参照） |
 
-### コマンド選択
-
-| トリガー | コマンド | 動作 |
-|----------|---------|------|
-| 「AIに聞いて」 | `ask-ai both "質問"` | 両方に並列で質問 |
-| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"` | ChatGPTのみ |
-| 「Geminiに聞いて」「G」 | `ask-ai gemini "質問"` | Geminiのみ |
-
-### CLI パス
+### CC: CLI パス
 
 ```
 skills/ask-ai/scripts/ask-ai
 ```
 
 （プロジェクトルートからの相対パス。シンボリックリンク経由の場合は実体パスを使用）
+
+### Cdx: MCP ツール選択
+
+| トリガー | ツール |
+|----------|--------|
+| 「AIに聞いて」/ デフォルト | `ask_gemini_web` |
+| 「ChatGPTに聞いて」「C」 | `ask_chatgpt_web` |
+| 「Geminiに聞いて」「G」 | `ask_gemini_web` |
+| 「クロス議論」「D」/ 比較・トレードオフ | `ask_chatgpt_gemini_web` |
+
+**ルーティング詳細:** `references/routing-rules.md` を参照。
+**質問の正規化:** ツール呼び出し前に `assets/prompt-template.md` で整理。
+
+---
+
+## モード1: 単純質問
+
+### CC: コマンド選択
+
+| トリガー | コマンド | 動作 |
+|----------|---------|------|
+| 「AIに聞いて」 | `ask-ai both "質問"` | 両方に並列で質問 |
+| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"` | ChatGPTのみ |
+| 「Geminiに聞いて」「G」 | `ask-ai gemini "質問"` | Geminiのみ |
 
 ### AI特性（明示的指定時の参考）
 
@@ -198,3 +217,22 @@ Claudeの役割が変化:
 - 最低2ラウンド（一方通行禁止）
 - 矛盾が解消されるまで継続
 - 回答を鵜呑みにしない（Claudeが批判的に評価）
+
+---
+
+## Cdx: 出力フォーマット
+
+Cdx（MCP ツール経由）の場合、以下の構造で返す:
+
+1. `Mode`: `gemini-only` / `chatgpt-only` / `cross-discussion`
+2. `Answer`: 回答本文
+3. `Cross-check`（cross-discussion 時のみ）:
+   - `Agreement`: 一致点
+   - `Differences`: 相違点
+   - `Decision hint`: 判断の示唆
+
+### Cdx: エラーハンドリング
+
+- 単一AI: 接続タイムアウト → リカバリ手順を報告して停止
+- クロス議論: 片方が失敗 → 成功側の回答 + 失敗理由を返す
+- プロバイダの暗黙切り替え禁止（必ず明示）
