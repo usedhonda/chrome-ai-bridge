@@ -1,47 +1,200 @@
-# ask-ai skill (Codex)
+---
+name: ask-ai
+description: |
+  CLI経由でChatGPT/Geminiに質問する議論スキル。
+  モード1: 単純質問（「AIに聞いて」「ChatGPTに聞いて」「Geminiに聞いて」）
+  モード2: クロス議論（「クロス議論」）
+  略語: C=ChatGPT, G=Gemini, D=議論
+argument-hint: <質問内容>
+allowed-tools: [Bash]
+compression-anchors:
+  - "ask-ai CLIでChatGPT/Geminiに質問"
+  - "クロス議論プロトコルで設計判断"
+  - "クロス検証で回答の信頼性向上"
+---
 
-## Purpose
+# AI質問・議論スキル
 
-Provide a simple "ask-ai" style workflow in Codex using `chrome-ai-bridge` MCP tools.
+2つのモードがある。発動キーワードで自動判定。
 
-This skill defaults to **Gemini-first** and upgrades to **cross-discussion** (Gemini + ChatGPT in parallel) when the request is comparative, decision-oriented, or explicitly asks for multiple perspectives.
+---
 
-## Prerequisites
+## モード1: 単純質問
 
-1. `chrome-ai-bridge` MCP is configured in Codex.
-2. Chrome extension is installed and enabled (`build/extension` for local development).
-3. ChatGPT / Gemini tabs are open and logged in.
+### コマンド選択
 
-## Routing Rules
+| トリガー | コマンド | 動作 |
+|----------|---------|------|
+| 「AIに聞いて」 | `ask-ai both "質問"` | 両方に並列で質問 |
+| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"` | ChatGPTのみ |
+| 「Geminiに聞いて」「G」 | `ask-ai gemini "質問"` | Geminiのみ |
 
-Read `references/routing-rules.md` and apply it strictly.
+### CLI パス
 
-## Input Normalization
+```
+skills/ask-ai/scripts/ask-ai
+```
 
-Before calling tools, normalize the user request using `assets/prompt-template.md`.
+（プロジェクトルートからの相対パス。シンボリックリンク経由の場合は実体パスを使用）
 
-## Tool Selection
+### AI特性（明示的指定時の参考）
 
-1. Default: `ask_gemini_web`
-2. Explicit ChatGPT request: `ask_chatgpt_web`
-3. Cross-discussion mode: `ask_chatgpt_gemini_web`
+| 内容 | 推奨 AI |
+|------|---------|
+| コーディング | Gemini |
+| 一般常識、最新情報 | ChatGPT |
 
-## Output Contract
+### フォローアップ
 
-Always return in this structure:
+```
+1. 初回質問 → 回答取得
+2. 回答を評価（十分か？）
+   - 十分 → 終了
+   - 不十分 → フォローアップ質問
+3. 収束するまで繰り返し
+```
 
-1. `Mode`: `gemini-only` or `cross-discussion`
-2. `Answer`: main answer
-3. `Cross-check`: include only in cross-discussion mode
-   - `Agreement`
-   - `Differences`
-   - `Decision hint`
+### 質問テンプレート（技術的質問用）
 
-## Failure Handling
+```
+【環境】[言語/フレームワーク/バージョン]
+【現象】[何が起きているか]
+【再現条件】[いつ発生するか]
+【確認した事実】
+- [調査結果1]
+- [調査結果2]
+【わからないこと】
+- [具体的な質問]
+```
 
-1. Gemini-only mode:
-   - If extension/connection timeout occurs, report recovery steps and stop.
-2. Cross-discussion mode:
-   - If one side fails, return successful side + failure reason for the other.
-3. Do not silently switch providers without stating it.
+### 実行例
 
+```
+ユーザー: 「AIに聞いて useEffectの使い方」
+→ ask-ai both "useEffectの使い方" で両方に質問
+→ 回答を評価、不十分なら追加質問
+
+ユーザー: 「Geminiに聞いて このエラーの原因」
+→ ask-ai gemini "このエラーの原因..." でGeminiのみに質問
+
+ユーザー: 「ChatGPTに聞いて 最新のReact動向」
+→ ask-ai chatgpt "最新のReact動向" でChatGPTのみに質問
+```
+
+---
+
+## モード2: クロス議論
+
+**発動:** 「クロス議論」「クロスで」「D」
+
+### サブモード
+
+| トリガー | モード | Claudeの役割 | 終了条件 |
+|----------|--------|--------------|----------|
+| `D` `クロス議論` `クロスで` | 通常 | モデレーター | 十分と判断したら終了 |
+| `D` + 修飾語 | 徹底 | Devil's Advocate | 完全収束まで |
+
+**徹底モード発動キーワード:** 「徹底的に」「深掘りして」「とことん」「ディベート」
+
+### プロトコル
+
+```
+Round 1: 問題提起
+├── Claude: 質問を設計
+├── ChatGPT: 初期回答（ask-ai chatgpt "..."）
+└── Claude: 回答を評価、論点を抽出
+
+Round 2: クロス検証
+├── Claude: ChatGPTの回答をGeminiに提示
+├── Gemini: 同意/反論/補足（ask-ai gemini "..."）
+└── Claude: 矛盾点・新しい視点を整理
+
+Round N: 深掘り（必要に応じて）
+├── 矛盾点を再質問
+└── 収束判定を行う
+
+Final: 統合判断
+└── Claude: 両者の意見を統合し、最終決定
+```
+
+### クロス検証テンプレート
+
+```
+前回のAI（ChatGPT/Gemini）は以下のように回答しました：
+---
+[前回の回答を要約]
+---
+
+これについて、あなたの意見を聞かせてください：
+1. 同意できる点は？
+2. 異なる見解や補足はある？
+3. 見落としている観点は？
+```
+
+### 評価の観点（各ラウンドで確認）
+
+| 観点 | チェック内容 |
+|------|-------------|
+| **論理一貫性** | 回答内の矛盾、前提と結論の整合性 |
+| **根拠の有無** | 主張に対する具体的な根拠・事例があるか |
+| **実現可能性** | 提案された解決策が実際に実行可能か |
+| **リスク考慮** | 副作用、エッジケース、セキュリティが考慮されているか |
+| **質問への回答** | 元の質問に直接答えているか、論点がずれていないか |
+
+### 通常モード: 収束条件
+
+Claudeが以下のいずれかを満たすと判断したら終了:
+- 質問への明確な回答が得られた
+- 両AIの見解が一致、または差異が明確になった
+- 実行可能な結論に到達した
+
+**継続すべき条件:**
+- 重要な矛盾が未解決
+- 質問に対する直接の回答がまだない
+- リスクの評価が不十分
+
+### 徹底モード: Devil's Advocate
+
+Claudeの役割が変化:
+- あえて反論を投げかける
+- 見落としを指摘する
+- エッジケースを突く
+- 両AIの弱点を突く質問を設計
+
+**終了条件:**
+- 全ての反論に対して納得できる回答が得られた
+- これ以上の深掘りで新しい情報が出ない
+- ユーザーが「十分」と判断
+
+### 実行例
+
+```
+ユーザー: 「D この設計でいいか」
+→ 通常モードで発動
+→ Round 1-2 で十分な回答が得られれば終了
+→ Final: 統合判断をユーザーに伝える
+
+ユーザー: 「D 徹底的に この設計でいいか」
+→ 徹底モードで発動
+→ Claude が Devil's Advocate として反論を設計
+→ 完全収束まで継続
+→ Final: 全ての観点を網羅した統合判断
+```
+
+---
+
+## 共通ルール
+
+### 質問の文字数目安
+
+| シーン | 目安 | 内容 |
+|--------|------|------|
+| 単純な質問 | 100-300字 | 質問のみ |
+| 技術的な相談 | 1500-3000字 | コード、エラー全文、環境、試したこと |
+| クロス検証 | 500-1000字 | 前回の要約 + 論点 + 質問 |
+
+### 議論のルール
+
+- 最低2ラウンド（一方通行禁止）
+- 矛盾が解消されるまで継続
+- 回答を鵜呑みにしない（Claudeが批判的に評価）

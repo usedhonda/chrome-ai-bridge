@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# ask-ai: Thin wrapper around cab (Chrome AI Bridge CLI)
+# Usage: ask-ai <chatgpt|gemini|both> "question"
+#        ask-ai health    Check daemon status
+#        ask-ai --help    Show help
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CAB="$SCRIPT_DIR/../../../scripts/cab"
+
+if [ ! -x "$CAB" ]; then
+  echo "ERROR: cab not found at $CAB" >&2
+  exit 1
+fi
+
+case "${1:-}" in
+  health|--health) exec "$CAB" health ;;
+  --help|-h|"")    exec "$CAB" --help ;;
+  *)               exec "$CAB" "$@" ;;
+esac

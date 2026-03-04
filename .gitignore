@@ -1,9 +1,11 @@
 # Claude Code
 CLAUDE.md
+!skills/**/CLAUDE.md
 .claude/
 
 # Codex
 AGENTS.md
+!skills/**/AGENTS.md
 .codex/
 
 .local/
