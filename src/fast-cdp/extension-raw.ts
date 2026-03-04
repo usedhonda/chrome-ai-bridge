@@ -1,16 +1,68 @@
 import {spawn} from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {RelayServer} from '../extension/relay-server.js';
 import {logRelay, logExtension, logInfo, logError} from './mcp-logger.js';
 
-// Stable extension ID (from manifest.json key)
-const EXTENSION_ID = 'ibjplbopgmcacpmfpnaeoloepdhenlbm';
 // Wake connect page disabled by default — it opens a chrome-extension:// URL
 // that gets ERR_BLOCKED_BY_CLIENT and annoys users. Discovery polling is the
 // primary mechanism; wake is only useful in rare edge cases.
 const ENABLE_WAKE_CONNECT_PAGE =
   process.env.CAI_ENABLE_WAKE_CONNECT_PAGE === '1';
+const EXTENSION_ID_ALPHABET = 'abcdefghijklmnop';
+const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
+const MANIFEST_FILE_URL = new URL('../../extension/manifest.json', import.meta.url);
+let cachedExtensionId: string | null = null;
+
+function deriveExtensionIdFromManifestKey(manifestKey: string): string {
+  const derKey = Buffer.from(manifestKey, 'base64');
+  if (derKey.length === 0) {
+    throw new Error('EXT_CONFIG_ERROR: manifest key is empty or invalid base64');
+  }
+  const hash = crypto.createHash('sha256').update(derKey).digest();
+  let extensionId = '';
+  for (const byte of hash.subarray(0, 16)) {
+    extensionId += EXTENSION_ID_ALPHABET[byte >> 4];
+    extensionId += EXTENSION_ID_ALPHABET[byte & 0x0f];
+  }
+  return extensionId;
+}
+
+function resolveExtensionId(): string {
+  if (cachedExtensionId) {
+    return cachedExtensionId;
+  }
+
+  const envId = process.env.CAI_EXTENSION_ID?.trim();
+  if (envId) {
+    if (!EXTENSION_ID_PATTERN.test(envId)) {
+      throw new Error(
+        `EXT_CONFIG_ERROR: CAI_EXTENSION_ID must match ${EXTENSION_ID_PATTERN.source}, got "${envId}"`,
+      );
+    }
+    cachedExtensionId = envId;
+    return cachedExtensionId;
+  }
+
+  const manifestPath = fileURLToPath(MANIFEST_FILE_URL);
+  try {
+    const manifestRaw = fs.readFileSync(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestRaw) as {key?: string};
+    if (!manifest.key) {
+      throw new Error('manifest key is missing');
+    }
+    cachedExtensionId = deriveExtensionIdFromManifestKey(manifest.key);
+    return cachedExtensionId;
+  } catch (error) {
+    const relativePath = path.relative(process.cwd(), manifestPath);
+    throw new Error(
+      `EXT_CONFIG_ERROR: failed to resolve extension ID from ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
 
 export interface RawExtensionConnection {
   relay: RelayServer;
@@ -116,6 +168,7 @@ function buildConnectUrl(options: {
   allowTabTakeover?: boolean;
   auto?: boolean;
 }): string {
+  const extensionId = resolveExtensionId();
   const params = new URLSearchParams();
   params.set('mcpRelayUrl', options.wsUrl);
   params.set('sessionId', options.sessionId);
@@ -124,7 +177,7 @@ function buildConnectUrl(options: {
   if (options.newTab) params.set('newTab', 'true');
   if (options.allowTabTakeover) params.set('allowTabTakeover', 'true');
   if (options.auto) params.set('auto', 'true');
-  return `chrome-extension://${EXTENSION_ID}/ui/connect.html?${params.toString()}`;
+  return `chrome-extension://${extensionId}/ui/connect.html?${params.toString()}`;
 }
 
 export async function connectViaExtensionRaw(options: {

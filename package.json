@@ -3,7 +3,10 @@
   "version": "2.4.0",
   "description": "MCP server bridging Chrome extension and AI assistants (ChatGPT, Gemini). Extension-only mode - no Puppeteer.",
   "type": "module",
-  "bin": "./scripts/cli.mjs",
+  "bin": {
+    "chrome-ai-bridge": "./scripts/cli.mjs",
+    "cab": "./scripts/cab"
+  },
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -37,6 +40,7 @@
     "test:mcp:parallel": "npm run build && node scripts/test-mcp.mjs --parallel",
     "test:network": "npm run build && node scripts/test-network-intercept.mjs",
     "test": "npm run build:noext && node scripts/test-mcp.mjs --tools-only",
+    "check:extension-discovery": "node scripts/check-extension-discovery.mjs",
     "discord:collect": "node scripts/discord-readonly-collector.mjs",
     "discord:preflight": "node scripts/discord-readonly-preflight.mjs",
     "discord:status": "node scripts/discord-readonly-status.mjs",
@@ -48,6 +52,7 @@
     "build/src",
     "build/extension",
     "scripts/cli.mjs",
+    "scripts/cab",
     "scripts/browser-globals-mock.mjs",
     "README.md",
     "LICENSE",

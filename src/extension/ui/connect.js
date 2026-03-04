@@ -340,6 +340,18 @@ class ConnectUI {
     return div.innerHTML;
   }
 
+  formatDiscoverySummary(summary) {
+    if (!summary || typeof summary !== 'object') {
+      return 'n/a';
+    }
+    return [
+      `new=${summary.newRelayCount ?? 0}`,
+      `ok=${summary.successCount ?? 0}`,
+      `fail=${summary.failureCount ?? 0}`,
+      `cooldown=${Boolean(summary.skippedCooldown)}`,
+    ].join(', ');
+  }
+
   // ========== Debug Panel Methods ==========
 
   initDebugPanel() {
@@ -398,10 +410,34 @@ class ConnectUI {
       // Update stats
       const stats = response.stats;
       const state = response.state;
+      const discovery = state.discovery || {};
       this.debugStatsEl.innerHTML = `
         <strong>Total Logs:</strong> ${stats.total} |
         <strong>Active Connections:</strong> ${state.activeConnections?.length || 0} |
         <strong>Pending:</strong> ${state.pendingTabSelection?.length || 0}
+        <br>
+        <strong>Discovery:</strong>
+        mode=${discovery.mode || 'n/a'},
+        running=${Boolean(discovery.isRunning)},
+        scheduled=${Boolean(discovery.hasScheduledTick)},
+        interval=${discovery.intervalMs ?? 'n/a'}ms,
+        streak=${discovery.emptyDiscoveryStreak ?? 'n/a'},
+        lastPort=${discovery.lastSuccessfulPort ?? 'n/a'}
+        <br>
+        <strong>Last Tick:</strong>
+        started=${discovery.lastTickStartedAt || 'n/a'},
+        done=${discovery.lastTickFinishedAt || 'n/a'},
+        dur=${discovery.lastTickDurationMs ?? 'n/a'}ms,
+        result=${this.formatDiscoverySummary(discovery.lastSummary)},
+        error=${discovery.lastError || 'none'}
+        <br>
+        <strong>Last Probe:</strong>
+        at=${discovery.lastRelayProbeAt || 'n/a'},
+        port=${discovery.lastRelayProbePort ?? 'n/a'},
+        status=${discovery.lastRelayProbeStatus || 'n/a'},
+        error=${discovery.lastRelayProbeError || 'none'},
+        keepAlive=${Boolean(discovery.keepAliveActive)},
+        alarm=${discovery.lastKeepAliveAlarmAt || 'n/a'}
         <br>
         <strong>By Category:</strong>
         ${Object.entries(stats.byCategory || {}).map(([cat, count]) => `${cat}: ${count}`).join(', ') || 'none'}

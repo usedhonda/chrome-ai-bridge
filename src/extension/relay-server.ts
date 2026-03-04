@@ -466,9 +466,23 @@ export class RelayServer extends EventEmitter {
     this.stopDiscoveryServer();
 
     if (this.wss) {
+      // Capture ref before nulling so isReady() returns false immediately
+      const wss = this.wss;
+      this.wss = null;
+
       return new Promise((resolve) => {
-        this.wss!.close(() => {
-          this.wss = null;
+        const timeout = setTimeout(() => {
+          debugLog('[RelayServer] stop() timed out after 5s — force-terminating remaining clients');
+          for (const client of wss.clients) {
+            try { client.terminate(); } catch { /* ignore */ }
+          }
+          try { wss.close(); } catch { /* ignore */ }
+          debugLog('[RelayServer] Server stopped (forced)');
+          resolve();
+        }, 5000);
+
+        wss.close(() => {
+          clearTimeout(timeout);
           debugLog('[RelayServer] Server stopped');
           resolve();
         });

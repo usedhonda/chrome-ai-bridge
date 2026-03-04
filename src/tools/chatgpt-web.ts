@@ -6,7 +6,8 @@
 
 import z from 'zod';
 
-import {askChatGPTFastWithTimings, ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {askAI} from './ai-helpers.js';
 import {ToolCategories} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
 
@@ -78,15 +79,15 @@ export const askChatGPTWeb = defineTool({
   },
   handler: async (request, response) => {
     const {question, debug} = request.params;
-    try {
-      const result = await askChatGPTFastWithTimings(question, debug);
-      response.appendResponseLine(result.answer || '（空の応答）');
+    const result = await askAI('chatgpt', question, debug);
+    if (result.success) {
+      response.appendResponseLine(result.answer);
       if (debug && result.debug) {
         response.appendResponseLine(formatDebugInfo(result.debug));
       }
-    } catch (error) {
+    } else {
       response.appendResponseLine(
-        `❌ ChatGPT接続に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+        `❌ ChatGPT接続に失敗しました: ${result.error}`,
       );
     }
   },

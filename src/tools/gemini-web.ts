@@ -6,7 +6,8 @@
 
 import z from 'zod';
 
-import {askGeminiFastWithTimings, ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {askAI} from './ai-helpers.js';
 import {ToolCategories} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
 
@@ -79,31 +80,16 @@ export const askGeminiWeb = defineTool({
   },
   handler: async (request, response) => {
     const {question, debug} = request.params;
-    const maxRetries = 2;
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await askGeminiFastWithTimings(question, debug);
-        response.appendResponseLine(result.answer || '（空の応答）');
-        if (debug && result.debug) {
-          response.appendResponseLine(formatDebugInfo(result.debug));
-        }
-        return;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // GEMINI_STUCK_* エラーの場合はリトライ
-        if (lastError.message.includes('GEMINI_STUCK_') && attempt < maxRetries) {
-          console.error(`[ask_gemini_web] Gemini stuck error on attempt ${attempt}, retrying...`);
-          continue;
-        }
-
-        response.appendResponseLine(
-          `❌ Gemini接続に失敗しました: ${lastError.message}`,
-        );
-        return;
+    const result = await askAI('gemini', question, debug);
+    if (result.success) {
+      response.appendResponseLine(result.answer);
+      if (debug && result.debug) {
+        response.appendResponseLine(formatDebugInfo(result.debug));
       }
+    } else {
+      response.appendResponseLine(
+        `❌ Gemini接続に失敗しました: ${result.error}`,
+      );
     }
   },
 });

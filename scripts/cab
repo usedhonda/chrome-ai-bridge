@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# cab - Chrome AI Bridge CLI
+# Usage: cab <chatgpt|gemini|both> "question"
+#        cab serve   - Start daemon directly
+#        cab health  - Check daemon health
+#        cab stop    - Stop the daemon
+#        cab --help  - Show help
+
+set -euo pipefail
+
+CAB_PORT="${CAI_IPC_PORT:-9321}"
+CAB_HOST="127.0.0.1"
+CAB_BASE="http://${CAB_HOST}:${CAB_PORT}"
+CAB_DIR="$(cd "$(dirname "$0")" && pwd)"
+CAB_LOG_DIR="${HOME}/.cache/chrome-ai-bridge"
+CAB_LOG="${CAB_LOG_DIR}/cab-daemon.log"
+CAB_STARTUP_TIMEOUT=30
+
+usage() {
+  cat <<'HELP'
+cab - Chrome AI Bridge CLI
+
+Usage:
+  cab chatgpt "question"   Ask ChatGPT
+  cab gemini  "question"   Ask Gemini
+  cab both    "question"   Ask both in parallel
+
+  cab serve                Start daemon (foreground)
+  cab health               Check daemon status
+  cab stop                 Stop the daemon
+  cab --help               Show this help
+
+Environment:
+  CAI_IPC_PORT             Daemon port (default: 9321)
+
+Examples:
+  cab chatgpt "How to deep copy in JS?"
+  cab both "Explain async/await"
+HELP
+}
+
+# Check if daemon is healthy
+check_health() {
+  curl -sf "${CAB_BASE}/health" 2>/dev/null
+}
+
+# Start daemon in background, wait for health
+ensure_daemon() {
+  if check_health >/dev/null 2>&1; then
+    return 0
+  fi
+
+  mkdir -p "${CAB_LOG_DIR}"
+  echo "Starting cab daemon..." >&2
+
+  nohup node \
+    --import "${CAB_DIR}/browser-globals-mock.mjs" \
+    "${CAB_DIR}/../build/src/main.js" \
+    --daemon \
+    >> "${CAB_LOG}" 2>&1 &
+  local daemon_pid=$!
+  disown "$daemon_pid" 2>/dev/null || true
+
+  local waited=0
+  while [ "$waited" -lt "$CAB_STARTUP_TIMEOUT" ]; do
+    if check_health >/dev/null 2>&1; then
+      echo "Daemon ready (pid=${daemon_pid}, port=${CAB_PORT})" >&2
+      return 0
+    fi
+    # Check if process is still alive
+    if ! kill -0 "$daemon_pid" 2>/dev/null; then
+      echo "Error: daemon process exited unexpectedly. Check ${CAB_LOG}" >&2
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  echo "Error: daemon did not become healthy within ${CAB_STARTUP_TIMEOUT}s" >&2
+  return 1
+}
+
+# Send question via REST API
+ask_ai() {
+  local target="$1"
+  local question="$2"
+  local debug="${3:-false}"
+
+  ensure_daemon || exit 1
+
+  local payload
+  payload=$(printf '{"target":"%s","question":"%s","debug":%s}' \
+    "$target" \
+    "$(echo "$question" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | tr '\n' ' ')" \
+    "$debug")
+
+  local response
+  response=$(curl -sf -X POST "${CAB_BASE}/api/ask" \
+    -H 'Content-Type: application/json' \
+    -d "$payload" \
+    --max-time 300) || {
+    echo "Error: failed to connect to daemon at ${CAB_BASE}" >&2
+    exit 1
+  }
+
+  # Parse and output results
+  local success
+  success=$(echo "$response" | node -e "
+    let d='';
+    process.stdin.on('data',c=>d+=c);
+    process.stdin.on('end',()=>{
+      try {
+        const r=JSON.parse(d);
+        if(!r.success && r.error){
+          console.error('Error: '+r.error);
+          process.exit(1);
+        }
+        for(const res of r.results||[]){
+          if(r.results.length>1) console.log('--- '+res.provider+' ---');
+          if(res.success){
+            console.log(res.answer);
+          } else {
+            console.error('['+res.provider+' error] '+(res.error||'Unknown error'));
+          }
+          if(r.results.length>1) console.log('');
+        }
+      } catch(e){
+        console.error('Error parsing response: '+e.message);
+        process.exit(1);
+      }
+    });
+  " 2>&1) || exit 1
+
+  echo "$success"
+}
+
+# --- Main ---
+
+if [ $# -eq 0 ]; then
+  usage
+  exit 1
+fi
+
+case "$1" in
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  health)
+    if result=$(check_health 2>/dev/null); then
+      echo "$result" | node -e "
+        let d='';
+        process.stdin.on('data',c=>d+=c);
+        process.stdin.on('end',()=>{
+          const r=JSON.parse(d);
+          console.log('Status: '+r.status);
+          console.log('PID: '+r.pid);
+          console.log('Version: '+r.version);
+          console.log('Sessions: '+r.activeSessions+'/'+r.sessionCapacity);
+        });
+      "
+    else
+      echo "Daemon is not running" >&2
+      exit 1
+    fi
+    ;;
+  serve)
+    exec node \
+      --import "${CAB_DIR}/browser-globals-mock.mjs" \
+      "${CAB_DIR}/../build/src/main.js" \
+      --daemon \
+      "${@:2}"
+    ;;
+  stop)
+    if result=$(check_health 2>/dev/null); then
+      pid=$(echo "$result" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>console.log(JSON.parse(d).pid));")
+      if [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null; then
+        echo "Stopped daemon (pid=${pid})" >&2
+      else
+        echo "Failed to stop daemon" >&2
+        exit 1
+      fi
+    else
+      echo "Daemon is not running" >&2
+    fi
+    ;;
+  chatgpt|gemini|both)
+    if [ $# -lt 2 ]; then
+      echo "Error: missing question argument" >&2
+      echo "Usage: cab $1 \"your question here\"" >&2
+      exit 1
+    fi
+    ask_ai "$1" "$2" "${3:-false}"
+    ;;
+  *)
+    echo "Error: unknown command '$1'" >&2
+    usage
+    exit 1
+    ;;
+esac

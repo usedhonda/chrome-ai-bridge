@@ -601,6 +601,9 @@ class TabShareExtension {
   async _getDebugLogs(filter, limit) {
     const result = await chrome.storage.local.get('logs');
     const rawLogs = Array.isArray(result.logs) ? result.logs : [];
+    const toIso = value => (typeof value === 'number' && value > 0
+      ? new Date(value).toISOString()
+      : null);
     const normalized = rawLogs.map(logEntry => ({
       ts: logEntry.timestamp || logEntry.ts || new Date().toISOString(),
       category: logEntry.category || 'unknown',
@@ -628,6 +631,25 @@ class TabShareExtension {
         activeConnections: Array.from(this._activeConnections.keys()),
         pendingTabSelection: Array.from(this._pendingTabSelection.keys()),
         tabSessionOwners: Object.fromEntries(this._tabSessionOwners.entries()),
+        discovery: {
+          mode: discoveryMode,
+          intervalMs: getDiscoveryIntervalMs(),
+          isRunning: isDiscoveryRunning,
+          hasScheduledTick: discoveryIntervalId !== null,
+          emptyDiscoveryStreak,
+          lastSuccessfulPort,
+          lastTickStartedAt: toIso(lastDiscoveryTickStartedAt),
+          lastTickFinishedAt: toIso(lastDiscoveryTickFinishedAt),
+          lastTickDurationMs: lastDiscoveryTickDurationMs,
+          lastSummary: lastDiscoverySummary,
+          lastError: lastDiscoveryError,
+          lastRelayProbeAt: toIso(lastRelayProbeAt),
+          lastRelayProbePort,
+          lastRelayProbeStatus,
+          lastRelayProbeError,
+          keepAliveActive,
+          lastKeepAliveAlarmAt: toIso(lastKeepAliveAlarmAt),
+        },
       },
     };
   }
@@ -745,6 +767,16 @@ let isDiscoveryRunning = false;
 let discoveryMode = DISCOVERY_MODE.FAST;
 let emptyDiscoveryStreak = 0;
 let keepAliveActive = false;
+let lastDiscoveryTickStartedAt = 0;
+let lastDiscoveryTickFinishedAt = 0;
+let lastDiscoveryTickDurationMs = null;
+let lastDiscoverySummary = null;
+let lastDiscoveryError = null;
+let lastRelayProbeAt = 0;
+let lastRelayProbePort = null;
+let lastRelayProbeStatus = null;
+let lastRelayProbeError = null;
+let lastKeepAliveAlarmAt = 0;
 
 // リロード時クールダウン: 5秒間は「新しいrelay」検出をスキップ
 // ただし reloadExtension コマンド経由のリロード時はスキップしない
@@ -915,16 +947,34 @@ async function ensureConnectUiTab(
 async function fetchRelayInfo(port, timeoutMs = 800) {
   const discoveryUrl = `http://127.0.0.1:${port}/relay-info`;
   let timer = null;
+  lastRelayProbeAt = Date.now();
+  lastRelayProbePort = port;
   try {
     const controller = new AbortController();
     timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(discoveryUrl, {signal: controller.signal});
-    if (!res.ok) return null;
+    if (!res.ok) {
+      lastRelayProbeStatus = `http-${res.status}`;
+      lastRelayProbeError = null;
+      return null;
+    }
     const data = await res.json();
-    if (!data?.wsUrl) return null;
+    if (!data?.wsUrl) {
+      lastRelayProbeStatus = 'invalid-payload';
+      lastRelayProbeError = null;
+      return null;
+    }
+    lastRelayProbeStatus = 'ok';
+    lastRelayProbeError = null;
     lastSuccessfulPort = port;
     return data;
-  } catch {
+  } catch (error) {
+    const message =
+      error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : String(error);
+    lastRelayProbeStatus = 'fetch-error';
+    lastRelayProbeError = message;
     return null;
   } finally {
     if (timer) {
@@ -1223,21 +1273,38 @@ function scheduleDiscoveryTick(delayMs) {
     }
 
     isDiscoveryRunning = true;
+    lastDiscoveryTickStartedAt = Date.now();
+    lastDiscoveryError = null;
+    lastDiscoverySummary = null;
     try {
       const result = await autoOpenConnectUi();
+      lastDiscoverySummary = {
+        ...result,
+        mode: discoveryMode,
+        intervalMs: getDiscoveryIntervalMs(),
+      };
       updateDiscoveryMode(result);
     } catch (error) {
+      lastDiscoveryError =
+        error && typeof error === 'object' && 'message' in error
+          ? String(error.message)
+          : String(error);
       logWarn('discovery', 'Discovery cycle failed', {
-        error: error?.message || String(error),
+        error: lastDiscoveryError,
       });
       emptyDiscoveryStreak = 0;
       setDiscoveryMode(DISCOVERY_MODE.FAST, 'cycle-error');
     } finally {
+      lastDiscoveryTickFinishedAt = Date.now();
+      lastDiscoveryTickDurationMs =
+        lastDiscoveryTickFinishedAt - lastDiscoveryTickStartedAt;
       isDiscoveryRunning = false;
-      ensureKeepAliveAlarm('discovery-cycle');
     }
 
     scheduleDiscoveryTick(getDiscoveryIntervalMs());
+    // Must run AFTER scheduleDiscoveryTick so discoveryIntervalId is set,
+    // otherwise shouldKeepAlive() returns false and clears the alarm.
+    ensureKeepAliveAlarm('discovery-cycle');
   }, Math.max(0, delayMs));
 }
 
@@ -1270,6 +1337,7 @@ function kickDiscovery(reason) {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === KEEPALIVE_ALARM) {
+    lastKeepAliveAlarmAt = Date.now();
     const {activeCount, pendingCount} = getConnectionCounts();
     if (activeCount > 0 || pendingCount > 0) {
       logDebug('keepalive', 'Alarm triggered', {activeCount, pendingCount});

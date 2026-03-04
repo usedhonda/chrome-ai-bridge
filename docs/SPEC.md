@@ -1449,9 +1449,12 @@ function isSuspiciousAnswer(answer: string, question: string): boolean {
 
 ### 11.1 Extension ID
 
-**Fixed value**: `ibjplbopgmcacpmfpnaeoloepdhenlbm`
+`connect.html` URL generation resolves extension ID in this order:
 
-Fixed ID generated from `key` in `manifest.json`.
+1. `CAI_EXTENSION_ID` environment variable (must match `/^[a-p]{32}$/`)
+2. Derived from `src/extension/manifest.json` `key` (SHA-256 based Chrome ID rule)
+
+Current `manifest.json` key resolves to: `bipjblpomgacpcfmnpealoeodpehlnmb`
 
 ### 11.2 Discovery Polling
 

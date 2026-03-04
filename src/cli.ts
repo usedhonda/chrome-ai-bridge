@@ -26,6 +26,12 @@ export const cliOptions = {
       'Port for Extension Bridge WebSocket relay server. Default: 0 (auto-assign).',
     default: 0,
   },
+  daemon: {
+    type: 'boolean' as const,
+    description:
+      'Run as HTTP-only daemon (no stdio MCP transport). Used by cab CLI.',
+    default: false,
+  },
 };
 
 export function parseArguments(version: string, argv = process.argv) {
