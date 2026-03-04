@@ -7,19 +7,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';
-import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-import type {Tool} from '@modelcontextprotocol/sdk/types.js';
-
 import {cliOptions} from '../build/src/cli.js';
 import {ToolCategories} from '../build/src/tools/categories.js';
 
-const MCP_SERVER_PATH = 'build/src/index.js';
+const SERVER_PATH = 'build/src/index.js';
 const OUTPUT_PATH = './docs/tool-reference.md';
 const README_PATH = './README.md';
 
-// Extend the MCP Tool type to include our annotations
-interface ToolWithAnnotations extends Tool {
+// Tool type matching the server's tool definition schema
+interface ToolWithAnnotations {
+  name: string;
+  description?: string;
+  inputSchema?: {
+    properties?: Record<string, any>;
+    required?: string[];
+  };
   annotations?: {
     title?: string;
     category?: ToolCategories;
@@ -72,7 +74,7 @@ function generateToolsTOC(
     toc += `- **${categoryName}** (${categoryTools.length} tools)\n`;
 
     // Sort tools within category for TOC
-    categoryTools.sort((a: Tool, b: Tool) => a.name.localeCompare(b.name));
+    categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
     for (const tool of categoryTools) {
       const anchorLink = tool.name.toLowerCase();
       toc += `  - [\`${tool.name}\`](docs/tool-reference.md#${anchorLink})\n`;
@@ -163,39 +165,99 @@ function updateReadmeWithOptionsMarkdown(optionsMarkdown: string): void {
   console.log('Updated README.md with options markdown');
 }
 
-async function generateToolDocumentation(): Promise<void> {
-  console.log('Starting MCP server to query tool definitions...');
+/**
+ * Spawn the server and exchange JSON-RPC messages over stdio to list tools.
+ * This replaces the previous MCP SDK client dependency.
+ */
+async function queryToolsViaJsonRpc(): Promise<ToolWithAnnotations[]> {
+  const {spawn} = await import('node:child_process');
 
-  // Create MCP client with stdio transport pointing to the built server
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [MCP_SERVER_PATH, '--channel', 'canary'],
-  });
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [SERVER_PATH, '--channel', 'canary'], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
 
-  const client = new Client(
-    {
-      name: 'docs-generator',
-      version: '1.0.0',
-    },
-    {
+    let buffer = '';
+    let msgId = 0;
+
+    function send(method: string, params: Record<string, unknown> = {}) {
+      const id = ++msgId;
+      const msg = JSON.stringify({jsonrpc: '2.0', id, method, params});
+      child.stdin!.write(`Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`);
+      return id;
+    }
+
+    child.stdout!.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+
+      // Parse JSON-RPC responses from the Content-Length framed stream
+      while (true) {
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd === -1) break;
+
+        const header = buffer.slice(0, headerEnd);
+        const match = header.match(/Content-Length:\s*(\d+)/i);
+        if (!match) break;
+
+        const contentLength = parseInt(match[1], 10);
+        const bodyStart = headerEnd + 4;
+        if (buffer.length < bodyStart + contentLength) break;
+
+        const body = buffer.slice(bodyStart, bodyStart + contentLength);
+        buffer = buffer.slice(bodyStart + contentLength);
+
+        try {
+          const msg = JSON.parse(body);
+          if (msg.result?.tools) {
+            child.kill('SIGTERM');
+            resolve(msg.result.tools as ToolWithAnnotations[]);
+          }
+        } catch {
+          // skip malformed messages
+        }
+      }
+    });
+
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code !== null && code !== 0) {
+        reject(new Error(`Server exited with code ${code}`));
+      }
+    });
+
+    // Send initialize, then list tools
+    send('initialize', {
+      protocolVersion: '2024-11-05',
       capabilities: {},
-    },
-  );
+      clientInfo: {name: 'docs-generator', version: '1.0.0'},
+    });
+
+    // Small delay to let initialization complete before listing tools
+    setTimeout(() => {
+      send('notifications/initialized');
+      send('tools/list');
+    }, 500);
+
+    // Timeout after 30s
+    setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error('Timed out waiting for tools/list response'));
+    }, 30_000);
+  });
+}
+
+async function generateToolDocumentation(): Promise<void> {
+  console.log('Starting server to query tool definitions...');
 
   try {
-    // Connect to the server
-    await client.connect(transport);
-    console.log('Connected to MCP server');
-
-    // List all available tools
-    const {tools} = await client.listTools();
-    const toolsWithAnnotations = tools as ToolWithAnnotations[];
+    const tools = await queryToolsViaJsonRpc();
+    const toolsWithAnnotations = tools;
     console.log(`Found ${tools.length} tools`);
 
     // Generate markdown documentation
     let markdown = `<!-- AUTO GENERATED DO NOT EDIT - run 'npm run docs' to update-->
 
-# Chrome DevTools MCP Tool Reference
+# Chrome AI Bridge Tool Reference
 
 `;
 
@@ -229,7 +291,7 @@ async function generateToolDocumentation(): Promise<void> {
       markdown += `- **[${categoryName}](#${anchorName})** (${categoryTools.length} tools)\n`;
 
       // Sort tools within category for TOC
-      categoryTools.sort((a: Tool, b: Tool) => a.name.localeCompare(b.name));
+      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
       for (const tool of categoryTools) {
         // Generate proper markdown anchor link: backticks are removed, keep underscores, lowercase
         const anchorLink = tool.name.toLowerCase();
@@ -244,7 +306,7 @@ async function generateToolDocumentation(): Promise<void> {
       markdown += `## ${category}\n\n`;
 
       // Sort tools within category
-      categoryTools.sort((a: Tool, b: Tool) => a.name.localeCompare(b.name));
+      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
 
       for (const tool of categoryTools) {
         markdown += `### \`${tool.name}\`\n\n`;
@@ -325,8 +387,7 @@ async function generateToolDocumentation(): Promise<void> {
     // Generate and update configuration options
     const optionsMarkdown = generateConfigOptionsMarkdown();
     updateReadmeWithOptionsMarkdown(optionsMarkdown);
-    // Clean up
-    await client.close();
+
     process.exit(0);
   } catch (error) {
     console.error('Error generating documentation:', error);

@@ -1,7 +1,7 @@
 {
   "name": "chrome-ai-bridge",
   "version": "2.4.0",
-  "description": "MCP server bridging Chrome extension and AI assistants (ChatGPT, Gemini). Extension-only mode - no Puppeteer.",
+  "description": "CLI tool for querying ChatGPT and Gemini via Chrome extension. No Puppeteer required.",
   "type": "module",
   "bin": {
     "chrome-ai-bridge": "./scripts/cli.mjs",
@@ -16,14 +16,14 @@
     "build": "tsc && cp -R src/extension build/ && node scripts/reload-extension.mjs",
     "build:noext": "tsc && cp -R src/extension build/",
     "reload-ext": "node scripts/reload-extension.mjs",
-    "dev": "MCP_ENV=development node scripts/mcp-wrapper.mjs",
+    "dev": "CAI_ENV=development node scripts/daemon-wrapper.mjs",
     "typecheck": "tsc --noEmit",
     "format": "eslint --cache --fix . && prettier --write --cache .",
     "check-format": "eslint --cache . && prettier --check --cache .;",
     "start": "npm run build && node build/src/index.js",
-    "start-debug": "DEBUG=mcp:* DEBUG_COLORS=false npm run build && node build/src/index.js",
+    "start-debug": "DEBUG=cab:* DEBUG_COLORS=false npm run build && node build/src/index.js",
     "cleanup": "node scripts/cleanup.mjs",
-    "restart-mcp": "node scripts/cleanup.mjs",
+    "restart": "node scripts/cleanup.mjs",
     "test:chatgpt": "npm run build && node scripts/test-fast-chat.mjs chatgpt",
     "test:gemini": "npm run build && node scripts/test-fast-chat.mjs gemini",
     "test:both": "npm run build && node scripts/test-fast-chat.mjs both",
@@ -34,19 +34,14 @@
     "cdp:gemini": "npm run build && node scripts/cdp-snapshot.mjs gemini",
     "measure:chatgpt": "npm run build && node scripts/measure-timings.mjs chatgpt",
     "measure:gemini": "npm run build && node scripts/measure-timings.mjs gemini",
-    "test:mcp": "npm run build && node scripts/test-mcp.mjs",
-    "test:mcp:chatgpt": "npm run build && node scripts/test-mcp.mjs --chatgpt",
-    "test:mcp:gemini": "npm run build && node scripts/test-mcp.mjs --gemini",
-    "test:mcp:parallel": "npm run build && node scripts/test-mcp.mjs --parallel",
     "test:network": "npm run build && node scripts/test-network-intercept.mjs",
-    "test": "npm run build:noext && node scripts/test-mcp.mjs --tools-only",
+    "test": "npm run build:noext && npm run typecheck",
     "check:extension-discovery": "node scripts/check-extension-discovery.mjs",
     "discord:collect": "node scripts/discord-readonly-collector.mjs",
     "discord:preflight": "node scripts/discord-readonly-preflight.mjs",
     "discord:status": "node scripts/discord-readonly-status.mjs",
     "docs": "npm run build:noext && node --experimental-strip-types scripts/generate-docs.ts",
-    "generate-docs": "npm run docs",
-    "sync-server-json-version": "node --experimental-strip-types scripts/sync-server-json-version.ts"
+    "generate-docs": "npm run docs"
   },
   "files": [
     "build/src",
@@ -68,17 +63,15 @@
     "url": "https://github.com/usedhonda/chrome-ai-bridge/issues"
   },
   "homepage": "https://github.com/usedhonda/chrome-ai-bridge#readme",
-  "mcpName": "chrome-ai-bridge",
   "keywords": [
-    "mcp",
     "chrome",
     "chrome-extension",
     "chatgpt",
     "gemini",
-    "ai-bridge"
+    "ai-bridge",
+    "cli"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.18.1",
     "debug": "4.4.3",
     "playwright": "^1.58.1",
     "ws": "^8.19.0",

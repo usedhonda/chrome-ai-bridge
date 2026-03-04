@@ -66,7 +66,7 @@ export const askGeminiWeb = defineTool({
     question: z
       .string()
       .describe(
-        'Question to ask. Do not include secrets/PII. No mention of MCP/AI.',
+        'Question to ask. Do not include secrets/PII. No mention of AI bridging.',
       ),
     debug: z
       .boolean()

@@ -8,7 +8,7 @@
  * Plugin API for chrome-ai-bridge
  *
  * This module provides the interfaces for creating plugins that extend
- * the MCP server with additional tools. Plugins can register tools
+ * the server with additional tools. Plugins can register tools
  * without modifying core functionality.
  *
  * v0.26.0: Initial plugin architecture
@@ -26,7 +26,7 @@ import type {
 type AnyToolDefinition = ToolDefinition<any>;
 
 /**
- * Registry for managing MCP tools.
+ * Registry for managing tools.
  * Allows dynamic registration and querying of tools.
  */
 export class ToolRegistry {
@@ -167,7 +167,7 @@ export interface PluginConfig {
 /**
  * Interface that all plugins must implement.
  */
-export interface McpPlugin {
+export interface CabPlugin {
   /**
    * Unique identifier for the plugin.
    */
@@ -205,7 +205,7 @@ export interface McpPlugin {
  * Plugin loader for dynamically loading plugins.
  */
 export class PluginLoader {
-  private plugins = new Map<string, McpPlugin>();
+  private plugins = new Map<string, CabPlugin>();
   private registry: ToolRegistry;
   private log: (message: string) => void;
   private config: PluginConfig;
@@ -230,7 +230,7 @@ export class PluginLoader {
 
       // Dynamic import
       const module = await import(moduleId);
-      const plugin: McpPlugin = module.default || module.plugin || module;
+      const plugin: CabPlugin = module.default || module.plugin || module;
 
       if (!plugin.id || !plugin.register) {
         this.log(
@@ -319,7 +319,7 @@ export class PluginLoader {
   /**
    * Get list of loaded plugins.
    */
-  getLoaded(): McpPlugin[] {
+  getLoaded(): CabPlugin[] {
     return Array.from(this.plugins.values());
   }
 }

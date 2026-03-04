@@ -19,7 +19,7 @@
  *
  * These tools are marked as "experimental" and "best-effort".
  * They are loaded by default but can be disabled via:
- * - MCP_DISABLE_WEB_LLM=true environment variable
+ * - CAI_DISABLE_WEB_LLM=true environment variable
  */
 
 import type {ToolRegistry} from '../plugin-api.js';
@@ -41,20 +41,23 @@ export const optionalTools = [
 
 /**
  * Check if web-llm tools should be loaded.
- * Returns false if MCP_DISABLE_WEB_LLM is set to 'true'.
+ * Returns false if CAI_DISABLE_WEB_LLM is set to 'true'.
  */
 export function shouldLoadWebLlmTools(): boolean {
-  const disable = process.env.MCP_DISABLE_WEB_LLM;
+  const disable = process.env.CAI_DISABLE_WEB_LLM || process.env.MCP_DISABLE_WEB_LLM;
+  if (process.env.MCP_DISABLE_WEB_LLM && !process.env.CAI_DISABLE_WEB_LLM) {
+    console.error('[deprecation] MCP_DISABLE_WEB_LLM is deprecated, use CAI_DISABLE_WEB_LLM instead');
+  }
   return disable !== 'true' && disable !== '1';
 }
 
 /**
  * Register optional tools with a ToolRegistry.
- * Respects MCP_DISABLE_WEB_LLM environment variable.
+ * Respects CAI_DISABLE_WEB_LLM environment variable.
  */
 export function registerOptionalTools(registry: ToolRegistry): number {
   if (!shouldLoadWebLlmTools()) {
-    console.error('[tools] Web-LLM tools disabled via MCP_DISABLE_WEB_LLM');
+    console.error('[tools] Web-LLM tools disabled via CAI_DISABLE_WEB_LLM');
     return 0;
   }
 
@@ -106,7 +109,7 @@ export const WEB_LLM_TOOLS_INFO = {
     'Web-LLM tools (ask_chatgpt_web, ask_gemini_web, ask_chatgpt_gemini_web, take_cdp_snapshot, get_page_dom) are experimental and best-effort. ' +
     'They depend on specific website UIs and may break when those UIs change. ' +
     'For production use, consider using official APIs instead.',
-  disableEnvVar: 'MCP_DISABLE_WEB_LLM',
+  disableEnvVar: 'CAI_DISABLE_WEB_LLM',
   tools: [
     'ask_chatgpt_web',
     'ask_gemini_web',

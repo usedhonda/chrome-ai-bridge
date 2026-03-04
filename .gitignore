@@ -183,7 +183,7 @@ Desktop.ini
 chrome-profile-*/
 user-data-dir/
 
-# MCP specific
+# Cache and logs
 .mcp-cache/
 mcp-logs/
 *.heapsnapshot

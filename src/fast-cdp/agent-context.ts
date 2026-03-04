@@ -7,7 +7,7 @@
 /**
  * Agent Context Management for Agent Teams support.
  *
- * Each MCP client (process) gets a unique agent ID, enabling:
+ * Each client (process) gets a unique agent ID, enabling:
  * - Isolated browser sessions per agent
  * - Tab management per agent
  * - TTL-based cleanup of stale sessions
@@ -44,7 +44,7 @@ let currentAgentId: string | null = null;
  * 1. If CAI_AGENT_ID environment variable is set, use it + PID
  * 2. Otherwise, generate from PID + timestamp
  *
- * @param clientName Optional client name from MCP initialize (e.g., "claude-code")
+ * @param clientName Optional client name (e.g., "claude-code")
  * @returns Unique agent ID
  */
 export function generateAgentId(clientName?: string): string {
@@ -56,7 +56,7 @@ export function generateAgentId(clientName?: string): string {
   }
 
   if (clientName) {
-    // Use client name if available (from MCP initialize)
+    // Use client name if available
     return `${clientName}-${process.pid}`;
   }
 

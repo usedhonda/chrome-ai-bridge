@@ -74,7 +74,7 @@ async function main() {
     }
   }
 
-  console.log('[reload-ext] No active MCP server found on any discovery port (skipping)');
+  console.log('[reload-ext] No active Chrome AI Bridge server found on any discovery port (skipping)');
 }
 
 main();

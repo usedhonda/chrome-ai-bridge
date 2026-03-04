@@ -2,7 +2,7 @@
 /**
  * CLI Entry Point for chrome-ai-bridge
  *
- * Launches the MCP server with browser-globals mock in a child process.
+ * Launches Chrome AI Bridge daemon with browser-globals mock in a child process.
  *
  * Why child process:
  * - main.js may intentionally enter a never-returning proxy path.

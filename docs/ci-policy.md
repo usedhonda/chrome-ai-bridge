@@ -18,7 +18,6 @@ The workflows depend on these scripts in `package.json`:
 - `test`
 - `docs`
 - `generate-docs`
-- `sync-server-json-version`
 
 If any workflow references a new script name, add the script in `package.json` first.
 

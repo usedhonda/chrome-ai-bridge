@@ -269,7 +269,7 @@ class TabShareExtension {
       case 'connectToRelay':
         this._connectToRelay(
           sender.tab?.id,
-          message.mcpRelayUrl,
+          message.relayUrl,
           message.sessionId,
         ).then(
           () => sendResponse({success: true}),
@@ -292,7 +292,7 @@ class TabShareExtension {
           sender.tab?.id,
           message.tabId || sender.tab?.id,
           message.windowId || sender.tab?.windowId,
-          message.mcpRelayUrl,
+          message.relayUrl,
           message.tabUrl,
           message.newTab,
           message.sessionId,
@@ -331,8 +331,8 @@ class TabShareExtension {
     return `selector:${selectorTabId}`;
   }
 
-  async _connectToRelay(selectorTabId, mcpRelayUrl, sessionId) {
-    if (!mcpRelayUrl) {
+  async _connectToRelay(selectorTabId, relayUrl, sessionId) {
+    if (!relayUrl) {
       logError('relay', 'Missing relay URL');
       throw new Error('Missing relay URL');
     }
@@ -344,10 +344,10 @@ class TabShareExtension {
       this._pendingTabSelection.delete(pendingKey);
       ensureKeepAliveAlarm('replace-stale-pending');
     }
-    logInfo('relay', 'Connecting to relay', {mcpRelayUrl, selectorTabId, sessionId, pendingKey});
+    logInfo('relay', 'Connecting to relay', {relayUrl, selectorTabId, sessionId, pendingKey});
 
     const openSocket = async attempt => {
-      const socket = new WebSocket(mcpRelayUrl);
+      const socket = new WebSocket(relayUrl);
       await new Promise((resolve, reject) => {
         let settled = false;
         const finish = (handler) => {
@@ -393,7 +393,7 @@ class TabShareExtension {
     let lastError;
     const maxAttempts = 5;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      logDebug('relay', `WebSocket attempt ${attempt + 1}/${maxAttempts}`, {mcpRelayUrl});
+      logDebug('relay', `WebSocket attempt ${attempt + 1}/${maxAttempts}`, {relayUrl});
       try {
         socket = await openSocket(attempt);
         logInfo('relay', 'WebSocket connected', {attempt: attempt + 1});
@@ -428,7 +428,7 @@ class TabShareExtension {
     selectorTabId,
     tabId,
     windowId,
-    mcpRelayUrl,
+    relayUrl,
     tabUrl,
     newTab,
     sessionId,
@@ -482,14 +482,14 @@ class TabShareExtension {
 
     const pending = this._pendingTabSelection.get(pendingKey);
     if (!pending) {
-      logDebug('connect', 'No pending connection, creating relay', {selectorTabId, sessionId, mcpRelayUrl});
+      logDebug('connect', 'No pending connection, creating relay', {selectorTabId, sessionId, relayUrl});
       // If no pending connection, create one now.
-      await this._connectToRelay(selectorTabId, mcpRelayUrl, sessionId);
+      await this._connectToRelay(selectorTabId, relayUrl, sessionId);
     }
     const newPending = this._pendingTabSelection.get(pendingKey);
     if (!newPending) {
-      logError('connect', 'No active MCP relay connection');
-      throw new Error('No active MCP relay connection');
+      logError('connect', 'No active relay connection');
+      throw new Error('No active relay connection');
     }
 
     if (
@@ -521,7 +521,7 @@ class TabShareExtension {
     this._tabSessionOwners.set(tabId, sessionId || `selector:${selectorTabId}`);
     logInfo('connect', 'Tab connected successfully', {tabId, windowId, sessionId});
     ensureKeepAliveAlarm('tab-connected');
-    // バッジのみ設定（フォーカスはMCPサーバー側が必要に応じて制御）
+    // バッジのみ設定（フォーカスはサーバー側が必要に応じて制御）
     await this._setConnectedTab(tabId, true);
   }
 
@@ -739,7 +739,7 @@ class TabShareExtension {
 
 const tabShareExtension = new TabShareExtension();
 
-const DISCOVERY_ALARM = 'mcp-relay-discovery';
+const DISCOVERY_ALARM = 'cab-relay-discovery';
 const KEEPALIVE_ALARM = 'keepAlive';
 const KEEPALIVE_PERIOD_MINUTES = 0.5;
 const DISCOVERY_PORTS = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
@@ -887,7 +887,7 @@ function buildConnectUrl(
   sessionId,
   allowTabTakeover = false,
 ) {
-  const params = new URLSearchParams({mcpRelayUrl: wsUrl});
+  const params = new URLSearchParams({relayUrl: wsUrl});
   if (tabUrl) params.set('tabUrl', tabUrl);
   if (newTab) params.set('newTab', 'true');
   if (autoMode) params.set('auto', 'true');
@@ -1008,7 +1008,7 @@ async function autoConnectRelay(best) {
   let targetTabId;
   try {
     // autoConnectRelay経由の場合はフォーカスしない（active: false）
-    // newTab: relay の要求を尊重する（MCP サーバーが newTab: true を指定した場合は新規タブ作成を許可）
+    // newTab: relay の要求を尊重する（サーバーが newTab: true を指定した場合は新規タブ作成を許可）
     targetTabId = await tabShareExtension._resolveTabId(
       tabUrl,
       preferredTabId,
@@ -1090,7 +1090,7 @@ async function autoOpenConnectUi() {
     failureCount: 0,
   };
 
-  // リロード直後はタブを開かない（既存MCPサーバーとの再接続を防ぐ）
+  // リロード直後はタブを開かない（既存サーバーとの再接続を防ぐ）
   // ただし reloadExtension コマンド経由の場合はスキップしない
   const elapsed = Date.now() - extensionStartTime;
   if (elapsed < COOLDOWN_MS && !cooldownDisabled) {
@@ -1131,7 +1131,7 @@ async function autoOpenConnectUi() {
   }
 
   // Deduplicate: when multiple relays serve the same tabUrl, prefer the newest (by startedAt)
-  // This prevents stale MCP servers from stealing connections from active ones
+  // This prevents stale servers from stealing connections from active ones
   const bestByTabUrl = new Map();
   for (const relay of newRelays) {
     const tabUrl = relay.data?.tabUrl || '';
@@ -1207,9 +1207,9 @@ async function autoOpenConnectUi() {
   return result;
 }
 
-// Discovery is now passive - only triggered by MCP server requests
+// Discovery is now passive - only triggered by Chrome AI Bridge requests
 // The extension no longer auto-opens tabs on install/startup
-// MCPサーバーからの明示的な接続要求時のみ動作する
+// サーバーからの明示的な接続要求時のみ動作する
 
 // Clear any existing discovery alarms from previous sessions
 // This prevents leftover alarms from auto-opening tabs
@@ -1356,7 +1356,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // Note: We no longer register an onAlarm listener for DISCOVERY_ALARM
-// The scheduleDiscovery function is only called on explicit MCP requests
+// The scheduleDiscovery function is only called on explicit server requests
 
 // Discovery auto-starts on Chrome startup
 // connect.html only opens when user clicks the extension icon

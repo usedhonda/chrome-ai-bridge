@@ -7,10 +7,10 @@ import fs from 'node:fs';
 
 import debug from 'debug';
 
-const mcpDebugNamespace = 'mcp:log';
+const cabDebugNamespace = 'cab:log';
 
 const namespacesToEnable = [
-  mcpDebugNamespace,
+  cabDebugNamespace,
   ...(process.env['DEBUG'] ? [process.env['DEBUG']] : []),
 ];
 
@@ -30,4 +30,4 @@ export function saveLogsToFile(fileName: string): fs.WriteStream {
   return logFile;
 }
 
-export const logger = debug(mcpDebugNamespace);
+export const logger = debug(cabDebugNamespace);

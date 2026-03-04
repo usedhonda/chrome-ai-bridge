@@ -1,17 +1,17 @@
 # chrome-ai-bridge Extension
 
-このChrome拡張機能は、chrome-ai-bridge MCPサーバーとChromeブラウザのタブを接続します。
+このChrome拡張機能は、chrome-ai-bridge サーバーとChromeブラウザのタブを接続します。
 
 ## アーキテクチャ
 
 ```
-chrome-ai-bridge MCPサーバー (プロセス1)
+chrome-ai-bridge サーバー (プロセス1)
   ↓ WebSocket
 Extension (TabShareExtension)
   ↓ chrome.debugger API
 Chrome Tab #101 (ChatGPT)
 
-chrome-ai-bridge MCPサーバー (プロセス2)
+chrome-ai-bridge サーバー (プロセス2)
   ↓ WebSocket
 Extension (TabShareExtension)
   ↓ chrome.debugger API
@@ -66,10 +66,10 @@ npm run build
 }
 ```
 
-### MCPサーバー起動
+### サーバー起動
 
 1. Claude Codeを起動
-2. MCPサーバーが自動的に起動し、WebSocket Relayサーバーが立ち上がります
+2. サーバーが自動的に起動し、WebSocket Relayサーバーが立ち上がります
 3. ログに以下のようなメッセージが表示されます:
 
 ```
@@ -112,7 +112,7 @@ chrome-extension://[EXTENSION_ID]/ui/connect.html?mcpRelayUrl=ws://127.0.0.1:123
 
 ### 接続確認
 
-MCPサーバーのログに以下のメッセージが表示されれば成功:
+サーバーのログに以下のメッセージが表示されれば成功:
 
 ```
 [Extension Bridge] Extension connected to tab 101
@@ -128,8 +128,8 @@ src/extension/
 ├── ui/
 │   ├── connect.html       # タブ選択UI
 │   └── connect.js         # UIロジック
-├── relay-server.ts        # WebSocketサーバー (MCPサーバー側)
-└── extension-transport.ts # Puppeteer Transport実装 (MCPサーバー側)
+├── relay-server.ts        # WebSocketサーバー (サーバー側)
+└── extension-transport.ts # Puppeteer Transport実装 (サーバー側)
 ```
 
 ## トラブルシューティング
@@ -144,10 +144,10 @@ src/extension/
 
 ### Invalid token
 
-**原因**: MCPサーバーのトークンが一致しない
+**原因**: サーバーのトークンが一致しない
 
 **解決策**:
-1. MCPサーバーのログからトークンを確認
+1. サーバーのログからトークンを確認
 2. URLパラメータに正しいトークンを含める
 
 ### Tab not found

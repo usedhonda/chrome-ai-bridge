@@ -3,7 +3,7 @@
  *
  * By default, scope is derived from the current git root (or cwd fallback),
  * then hashed into a stable namespace.
- * This isolates lock files between different projects using the same MCP.
+ * This isolates lock files between different projects using the same chrome-ai-bridge instance.
  */
 
 import crypto from 'node:crypto';

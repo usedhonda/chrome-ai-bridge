@@ -44,7 +44,7 @@ npm run test:smoke # 3. Basic operation check (recommended)
 
 ## Project Overview
 
-**chrome-ai-bridge** is an MCP server for controlling ChatGPT / Gemini Web UI from AI coding assistants like Claude Code.
+**chrome-ai-bridge** is a CLI tool / daemon for controlling ChatGPT / Gemini Web UI from AI coding assistants like Claude Code.
 
 ### Package Information
 
@@ -93,13 +93,13 @@ npx chrome-ai-bridge
 **Setup steps:**
 1. Build and load the extension from `build/extension/` in Chrome
 2. Open ChatGPT/Gemini tabs and log in
-3. Configure MCP client (see README.md)
+3. Configure your AI assistant (see README.md)
 
 ---
 
 ## Security Considerations
 
-- Browser instance contents are exposed to MCP client
+- Browser instance contents are exposed to the API client
 - Handle personal/confidential information with care
 - **Session files**: Stored in `.local/chrome-ai-bridge/`
 - **Extension communication**: Via localhost WebSocket (port 8766)
@@ -108,7 +108,7 @@ npx chrome-ai-bridge
 
 - Requires manual Chrome extension installation
 - ChatGPT/Gemini must be logged in via browser
-- Extension must be running for MCP tools to work
+- Extension must be running for tools to work
 
 ---
 
@@ -136,7 +136,7 @@ npx chrome-ai-bridge
 - **Runtime**: Node.js 22.12.0+
 - **Build Tool**: TypeScript Compiler (tsc)
 - **Key Dependencies**:
-  - `@modelcontextprotocol/sdk`: MCP SDK
+  - `express`: HTTP REST API server
 
 ### Distribution vs Development Entry Points
 
@@ -154,7 +154,7 @@ scripts/cli.mjs
   ↓
 node --import browser-globals-mock.mjs build/src/main.js
   ↓
-MCP server starts (single process)
+Daemon starts (single process)
 ```
 
 **Features:**
@@ -170,7 +170,7 @@ npm run dev
 
 **Internal flow:**
 ```
-scripts/mcp-wrapper.mjs (MCP_ENV=development)
+scripts/daemon-wrapper.mjs (CAI_ENV=development)
   ↓
 tsc -w (TypeScript auto-compile)
   ↓
@@ -192,7 +192,7 @@ npm run dev          # Development mode (hot-reload)
 npm run typecheck    # Type check
 npm run format       # Format
 npm test            # Run tests
-npm run restart-mcp  # Restart MCP server
+npm run restart      # Restart daemon
 ```
 
 ### browser-globals-mock Explained
@@ -217,7 +217,7 @@ globalThis.localStorage = { getItem: () => null, ... };
 
 **Integration:**
 - Distribution: `scripts/cli.mjs` auto-invokes with `--import`
-- Development: `scripts/mcp-wrapper.mjs` not needed (fallback built into build/src/main.js)
+- Development: `scripts/daemon-wrapper.mjs` not needed (fallback built into build/src/main.js)
 - Transparent to users
 
 ### Code Style
@@ -260,14 +260,14 @@ globalThis.localStorage = { getItem: () => null, ... };
 
 ## 1. Architecture Overview
 
-chrome-ai-bridge is a tool that uses MCP (Model Context Protocol) to automate ChatGPT / Gemini Web UI from AI coding assistants (Claude Code, etc.).
+chrome-ai-bridge is a CLI tool / daemon that automates ChatGPT / Gemini Web UI from AI coding assistants (Claude Code, etc.) via a REST API.
 
 ### Component Structure
 
 ```
-┌─────────────────┐         MCP         ┌──────────────────┐
-│  Claude Code    │ ◀──────────────────▶│   MCP Server     │
-│  (MCP Client)   │                     │  (Node.js)       │
+┌─────────────────┐       REST API      ┌──────────────────┐
+│  Claude Code    │ ◀──────────────────▶│  Chrome AI Bridge│
+│  (cab CLI)      │                     │  (Node.js)       │
 └─────────────────┘                     └────────┬─────────┘
                                                  │
                         ┌────────────────────────┼────────────────────────┐
@@ -298,7 +298,7 @@ chrome-ai-bridge is a tool that uses MCP (Model Context Protocol) to automate Ch
 
 | Component | File | Role |
 |-----------|------|------|
-| MCP Server | `src/main.ts` | Implements MCP protocol, handles tool calls |
+| Daemon / REST API | `src/main.ts` | Implements HTTP REST API, handles tool calls |
 | Discovery Server | `src/extension/relay-server.ts` | Notifies extension of connection info (port 8766) |
 | Relay Server | `src/extension/relay-server.ts` | Mediates WebSocket communication with extension |
 | CDP Client | `src/fast-cdp/cdp-client.ts` | Sends Chrome DevTools Protocol commands |
@@ -336,7 +336,7 @@ CDP traffic continues over WebSocket (no port needed)
 
 Connection is established in the following flow:
 
-1. MCP server starts Discovery Server (port 8766)
+1. Chrome AI Bridge daemon starts Discovery Server (port 8766)
 2. Chrome extension detects Discovery Server via polling
 3. Extension establishes WebSocket connection to Relay Server
 4. CDP session is established, enabling tab operations
@@ -1166,7 +1166,7 @@ Agent IDs are generated using a hybrid strategy:
 | Source | Example | Priority |
 |--------|---------|----------|
 | `CAI_AGENT_ID` environment variable | `my-agent-12345` | 1 (highest) |
-| MCP client name | `claude-code-12345` | 2 |
+| API client name | `claude-code-12345` | 2 |
 | Auto-generated | `agent-12345-1707123456789` | 3 (fallback) |
 
 ### 8.3 Session Configuration
@@ -1280,7 +1280,7 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 - Enter key fallback (when mouse click fails)
 
 **Gemini Stuck State retry**:
-- Max 2 retries in MCP tools (`src/tools/gemini-web.ts`, `src/tools/chatgpt-gemini-web.ts`)
+- Max 2 retries in tool handlers (`src/tools/gemini-web.ts`, `src/tools/chatgpt-gemini-web.ts`)
 - Auto retry on `GEMINI_STUCK_*` error detection
 - Cache cleared via `clearGeminiClient()` inside `fast-chat.ts`
 
@@ -1303,7 +1303,7 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 1. Detect stuck state in `askGeminiFast()`
 2. Clear connection cache with `clearGeminiClient()` (in `fast-chat.ts`)
 3. Throw `GEMINI_STUCK_*` error
-4. Catch in MCP tools (`gemini-web.ts`, `chatgpt-gemini-web.ts`)
+4. Catch in tool handlers (`gemini-web.ts`, `chatgpt-gemini-web.ts`)
 5. Call `askGeminiFast()` again (max 2x)
 
 ### 9.4 Debug Files
@@ -1477,8 +1477,8 @@ Controls when connect.html (connection UI) opens to prevent tab spam.
 | Condition | connect.html |
 |-----------|--------------|
 | User clicks extension icon | Opens |
-| **New** MCP server detected (`startedAt >= extensionStartTime`) | Opens |
-| **Existing** MCP server on Chrome startup | Doesn't open |
+| **New** daemon detected (`startedAt >= extensionStartTime`) | Opens |
+| **Existing** daemon on Chrome startup | Doesn't open |
 
 #### Implementation
 
@@ -1504,7 +1504,7 @@ if (!ok) {
 
 #### Background
 
-When multiple MCP servers were detected on Chrome restart, connect.html tabs would open for each. By comparing `startedAt` (MCP server start time) with `extensionStartTime` (extension load time), we distinguish existing servers from new ones.
+When multiple daemon instances were detected on Chrome restart, connect.html tabs would open for each. By comparing `startedAt` (daemon start time) with `extensionStartTime` (extension load time), we distinguish existing daemons from new ones.
 
 ### 11.4 Service Worker Keep-Alive
 
@@ -1543,7 +1543,7 @@ The extension supports a `getVersion` command via WebSocket relay.
 ```
 
 **Auto-logging on connection**:
-When CDP connection is established, the MCP server automatically queries and logs the extension version:
+When CDP connection is established, the daemon automatically queries and logs the extension version:
 ```
 [fast-cdp] Extension version: 2.0.15
 ```
@@ -1552,9 +1552,9 @@ When CDP connection is established, the MCP server automatically queries and log
 
 ---
 
-## 12. MCP Tools
+## 12. API Tools
 
-### 12.1 Provided Tools (MCP)
+### 12.1 Provided Tools (REST API)
 
 | Tool Name | Description |
 |-----------|-------------|
@@ -1777,7 +1777,7 @@ src/
 │       ├── connect.html  # Connection UI
 │       └── connect.js    # Connection UI logic
 ├── main.ts              # Entry point
-└── index.ts             # MCP server
+└── index.ts             # Main exports
 
 scripts/
 ├── test-network-intercept.mjs  # Network extraction test
@@ -1789,7 +1789,7 @@ scripts/
 
 ### 14.1 Graceful Shutdown (added in v2.0.10)
 
-**Problem**: MCP server processes remained as zombies after Claude Code sessions ended.
+**Problem**: Daemon processes remained as zombies after Claude Code sessions ended.
 
 **Cause**: Missing cleanup for:
 - stdin close/end events (most reliable on Windows)
@@ -2084,7 +2084,7 @@ npm run test:smoke
 
 **Step 1: Enable debug mode**
 ```typescript
-// In MCP tool call
+// In tool call
 { "question": "...", "debug": true }
 ```
 

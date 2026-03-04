@@ -57,7 +57,7 @@ function isRetryableConnectionError(error: unknown): boolean {
 function isNonRetryableError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const msg = error.message;
-  return msg.includes('MCP_TOOL_BUDGET_EXCEEDED') ||
+  return msg.includes('TOOL_BUDGET_EXCEEDED') ||
          msg.includes('Timed out waiting for function');
 }
 

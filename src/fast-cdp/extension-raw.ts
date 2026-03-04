@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {RelayServer} from '../extension/relay-server.js';
-import {logRelay, logExtension, logInfo, logError} from './mcp-logger.js';
+import {logRelay, logExtension, logInfo, logError} from './debug-logger.js';
 
 // Wake connect page disabled by default — it opens a chrome-extension:// URL
 // that gets ERR_BLOCKED_BY_CLIENT and annoys users. Discovery polling is the
@@ -170,7 +170,7 @@ function buildConnectUrl(options: {
 }): string {
   const extensionId = resolveExtensionId();
   const params = new URLSearchParams();
-  params.set('mcpRelayUrl', options.wsUrl);
+  params.set('relayUrl', options.wsUrl);
   params.set('sessionId', options.sessionId);
   if (options.tabUrl) params.set('tabUrl', options.tabUrl);
   if (typeof options.tabId === 'number') params.set('tabId', String(options.tabId));

@@ -1,6 +1,6 @@
 /**
- * MCP Debug Logger
- * Outputs logs to stderr and appends to .local/mcp-debug.log
+ * Debug Logger
+ * Outputs logs to stderr and appends to .local/debug.log
  */
 
 import fs from 'node:fs';
@@ -25,7 +25,7 @@ let currentLogLevel: LogLevel = LogLevel.DEBUG;
 
 // Log file path
 function getLogFilePath(): string {
-  return path.join(process.cwd(), '.local', 'mcp-debug.log');
+  return path.join(process.cwd(), '.local', 'debug.log');
 }
 
 // Max log file size (5MB)
@@ -59,7 +59,7 @@ function rotateLogIfNeeded(logPath: string): void {
 /**
  * Main logging function
  */
-export function mcpLog(
+export function debugLog(
   level: LogLevel,
   category: string,
   message: string,
@@ -92,19 +92,19 @@ export function mcpLog(
 
 // Convenience methods
 export function logDebug(category: string, message: string, data?: Record<string, unknown>): void {
-  mcpLog(LogLevel.DEBUG, category, message, data);
+  debugLog(LogLevel.DEBUG, category, message, data);
 }
 
 export function logInfo(category: string, message: string, data?: Record<string, unknown>): void {
-  mcpLog(LogLevel.INFO, category, message, data);
+  debugLog(LogLevel.INFO, category, message, data);
 }
 
 export function logWarn(category: string, message: string, data?: Record<string, unknown>): void {
-  mcpLog(LogLevel.WARN, category, message, data);
+  debugLog(LogLevel.WARN, category, message, data);
 }
 
 export function logError(category: string, message: string, data?: Record<string, unknown>): void {
-  mcpLog(LogLevel.ERROR, category, message, data);
+  debugLog(LogLevel.ERROR, category, message, data);
 }
 
 /**
@@ -116,7 +116,7 @@ export function logConnectionState(
   details?: Record<string, unknown>,
 ): void {
   const level = state === 'disconnected' || state === 'unhealthy' ? LogLevel.WARN : LogLevel.INFO;
-  mcpLog(level, 'connection', `${kind} ${state}`, details);
+  debugLog(level, 'connection', `${kind} ${state}`, details);
 }
 
 /**
@@ -127,7 +127,7 @@ export function logRelay(
   details?: Record<string, unknown>,
 ): void {
   const level = event === 'error' || event === 'timeout' ? LogLevel.ERROR : LogLevel.INFO;
-  mcpLog(level, 'relay', event, details);
+  debugLog(level, 'relay', event, details);
 }
 
 /**
@@ -138,5 +138,5 @@ export function logExtension(
   details?: Record<string, unknown>,
 ): void {
   const level = event === 'timeout' ? LogLevel.ERROR : LogLevel.INFO;
-  mcpLog(level, 'extension', event, details);
+  debugLog(level, 'extension', event, details);
 }

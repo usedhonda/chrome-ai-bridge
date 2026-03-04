@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/chrome-ai-bridge.svg)](https://npmjs.org/package/chrome-ai-bridge)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-> **⚠️ Requires Chrome Extension** — This MCP server controls ChatGPT/Gemini tabs via a browser extension.
+> **Requires Chrome Extension** — This CLI tool controls ChatGPT/Gemini tabs via a browser extension.
 
 Let your AI assistant (Claude Code, Cursor, etc.) consult ChatGPT and Gemini for second opinions.
 
@@ -12,20 +12,20 @@ Let your AI assistant (Claude Code, Cursor, etc.) consult ChatGPT and Gemini for
 ## How it works
 
 ```
-Your AI Assistant → MCP Server → Chrome Extension → ChatGPT/Gemini tabs
+Your AI Assistant → cab CLI / daemon → Chrome Extension → ChatGPT/Gemini tabs
 ```
 
-1. **Chrome Extension** (you install) bridges MCP server and browser
-2. **MCP Server** (npm package) receives requests from your AI assistant
+1. **Chrome Extension** (you install) bridges the daemon and browser
+2. **`cab` CLI / daemon** (npm package) receives requests from your AI assistant via REST API
 3. **Extension** controls ChatGPT/Gemini tabs via CDP (Chrome DevTools Protocol)
 
-**Why an extension?** ChatGPT and Gemini don't have public APIs. The extension automates the web UI while you stay logged in.
+**Why an extension?** ChatGPT and Gemini don't have free public APIs. The extension automates the web UI while you stay logged in.
 
 ---
 
 ## What is this?
 
-chrome-ai-bridge is a [Model Context Protocol](https://modelcontextprotocol.io/) server that gives AI assistants the ability to:
+chrome-ai-bridge is a CLI tool and daemon that gives AI assistants the ability to:
 
 - **Consult other AIs**: Ask ChatGPT and Gemini questions via browser
 - **Get multiple perspectives**: Query both AIs in parallel for second opinions
@@ -71,7 +71,7 @@ Network extraction is the primary path. DOM extraction remains as an automatic f
 
 ## Quick Start
 
-> **⚠️ Both steps are required** — The extension and MCP server work together.
+> **Both steps are required** — The extension and daemon work together.
 
 ### Step 1: Install Chrome Extension
 
@@ -95,30 +95,23 @@ Then load the extension in Chrome:
 
 You should see "Chrome AI Bridge" appear in your extensions list.
 
-### Step 2: Configure your MCP client
+### Step 2: Install the `cab` CLI
 
-**For Claude Code** (`~/.claude.json`):
-
-```json
-{
-  "mcpServers": {
-    "chrome-ai-bridge": {
-      "command": "npx",
-      "args": ["chrome-ai-bridge@latest"]
-    }
-  }
-}
+```bash
+npm install -g chrome-ai-bridge
 ```
 
 ### Step 3: Connect the Extension
 
 1. Open ChatGPT (https://chatgpt.com) or Gemini (https://gemini.google.com) in Chrome
 2. Log in to both services
-3. The extension will automatically connect when the MCP server starts
+3. The extension will automatically connect when the daemon starts
 
 ### Step 4: Verify it works
 
-Restart your AI client and try: `"Ask ChatGPT how to implement OAuth in Node.js"`
+```bash
+cab ask chatgpt "How do I implement OAuth in Node.js?"
+```
 
 ---
 
@@ -187,7 +180,7 @@ User: "Ask ChatGPT specifically about this"
 
 | Variable | Description |
 |----------|-------------|
-| `MCP_DISABLE_WEB_LLM` | Set `true` to disable ChatGPT/Gemini tools |
+| `CAI_DISABLE_WEB_LLM` | Set `true` to disable ChatGPT/Gemini tools |
 
 ---
 
@@ -201,17 +194,10 @@ cd chrome-ai-bridge
 npm install && npm run build
 ```
 
-Configure `~/.claude.json` to use local build:
+For local development, run the daemon directly:
 
-```json
-{
-  "mcpServers": {
-    "chrome-ai-bridge": {
-      "command": "node",
-      "args": ["/path/to/chrome-ai-bridge/scripts/cli.mjs"]
-    }
-  }
-}
+```bash
+node /path/to/chrome-ai-bridge/scripts/cli.mjs
 ```
 
 ### Commands
@@ -230,7 +216,7 @@ chrome-ai-bridge/
 ├── src/
 │   ├── fast-cdp/        # CDP client and AI chat logic
 │   ├── extension/       # Chrome extension source
-│   ├── main.ts          # MCP server entry point
+│   ├── main.ts          # Daemon entry point
 │   └── index.ts         # Main exports
 ├── scripts/
 │   └── cli.mjs          # CLI entry point
@@ -261,7 +247,7 @@ npm run cdp:gemini
 | Guide | Description |
 |-------|-------------|
 | [Technical Spec](docs/SPEC.md) | Detailed architecture and implementation |
-| [Setup Guide](docs/user/setup.md) | Detailed MCP configuration |
+| [Setup Guide](docs/user/setup.md) | Detailed setup and configuration |
 | [Troubleshooting](docs/user/troubleshooting.md) | Problem solving |
 | [CI Policy](docs/ci-policy.md) | Required checks and browser E2E lane policy |
 | [Technical Spec - Architecture](docs/SPEC.md#1-architecture-overview) | Extension architecture |
@@ -276,10 +262,12 @@ npm run cdp:gemini
 2. Verify ChatGPT/Gemini tabs are open and logged in
 3. Check the extension popup for connection status
 
-### MCP server not responding
+### Daemon not responding
 
 ```bash
-npx clear-npx-cache && npx chrome-ai-bridge@latest
+cab status
+# or restart:
+cab daemon restart
 ```
 
 ### ChatGPT/Gemini not responding
@@ -295,9 +283,9 @@ npx clear-npx-cache && npx chrome-ai-bridge@latest
 ## Architecture (v2.0.0)
 
 ```
-┌─────────────────┐         MCP         ┌──────────────────┐
-│  Claude Code    │ ◀──────────────────▶│   MCP Server     │
-│  (MCP Client)   │                     │  (Node.js)       │
+┌─────────────────┐       REST API      ┌──────────────────┐
+│  Claude Code    │ ◀──────────────────▶│  Chrome AI Bridge│
+│  (cab CLI)      │                     │  (Node.js)       │
 └─────────────────┘                     └────────┬─────────┘
                                                  │
                                                  ▼

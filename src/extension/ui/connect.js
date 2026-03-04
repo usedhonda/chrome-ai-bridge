@@ -1,7 +1,7 @@
 /**
  * chrome-ai-bridge Connect UI
  * Extension2-style simple flow:
- * 1. MCP server opens connect.html?mcpRelayUrl=ws://...
+ * 1. Chrome AI Bridge opens connect.html?relayUrl=ws://...
  * 2. Tab list is displayed
  * 3. User selects tab -> Click "Connect"
  * 4. Done
@@ -9,7 +9,7 @@
 
 class ConnectUI {
   constructor() {
-    this.mcpRelayUrl = null;
+    this.relayUrl = null;
     this.sessionId = null;
     this.allowTabTakeover = false;
     this.autoMode = false;
@@ -50,7 +50,7 @@ class ConnectUI {
     try {
       // Parse URL parameters (Extension2 style: parameters are always provided)
       const params = new URLSearchParams(window.location.search);
-      this.mcpRelayUrl = params.get('mcpRelayUrl');
+      this.relayUrl = params.get('relayUrl');
       this.sessionId = params.get('sessionId');
       this.allowTabTakeover = params.get('allowTabTakeover') === 'true';
       this.autoMode = params.get('auto') === 'true';
@@ -61,8 +61,8 @@ class ConnectUI {
         rawTabId && /^\d+$/.test(rawTabId) ? Number(rawTabId) : null;
 
       // Validate relay URL
-      if (!this.mcpRelayUrl) {
-        this.showError('Missing mcpRelayUrl parameter. Make sure the MCP server is running.');
+      if (!this.relayUrl) {
+        this.showError('Missing relayUrl parameter. Make sure Chrome AI Bridge is running.');
         return;
       }
 
@@ -87,7 +87,7 @@ class ConnectUI {
 
   validateRelayUrl() {
     try {
-      const url = new URL(this.mcpRelayUrl);
+      const url = new URL(this.relayUrl);
       if (!['127.0.0.1', 'localhost', '::1'].includes(url.hostname)) {
         this.showError('Invalid relay URL: must be loopback address (127.0.0.1)');
         return false;
@@ -109,7 +109,7 @@ class ConnectUI {
 
       const relayResponse = await chrome.runtime.sendMessage({
         type: 'connectToRelay',
-        mcpRelayUrl: this.mcpRelayUrl,
+        relayUrl: this.relayUrl,
         sessionId: this.sessionId,
       });
       if (!relayResponse || !relayResponse.success) {
@@ -118,7 +118,7 @@ class ConnectUI {
 
       const connectResponse = await chrome.runtime.sendMessage({
         type: 'connectToTab',
-        mcpRelayUrl: this.mcpRelayUrl,
+        relayUrl: this.relayUrl,
         tabId: this.autoTabId,
         tabUrl: this.autoTabUrl,
         newTab: this.autoNewTab,
@@ -263,7 +263,7 @@ class ConnectUI {
       // Step 1: Connect to relay
       const relayResponse = await chrome.runtime.sendMessage({
         type: 'connectToRelay',
-        mcpRelayUrl: this.mcpRelayUrl,
+        relayUrl: this.relayUrl,
         sessionId: this.sessionId,
       });
 
@@ -274,7 +274,7 @@ class ConnectUI {
       // Step 2: Connect to tab
       const connectResponse = await chrome.runtime.sendMessage({
         type: 'connectToTab',
-        mcpRelayUrl: this.mcpRelayUrl,
+        relayUrl: this.relayUrl,
         tabId: tab.id,
         windowId: tab.windowId,
         sessionId: this.sessionId,

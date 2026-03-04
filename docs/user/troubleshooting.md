@@ -96,7 +96,7 @@ cat ~/.claude.json | jq '.mcpServers'
 
 ### Verify development mode
 ```bash
-ps aux | grep mcp-wrapper | grep MCP_ENV=development
+ps aux | grep daemon-wrapper | grep CAI_ENV=development
 ```
 
 ### Check tsc -w is running
@@ -106,7 +106,7 @@ ps aux | grep 'tsc -w'
 
 ### Manually restart wrapper
 ```bash
-pkill -f mcp-wrapper
+pkill -f daemon-wrapper
 # Then restart AI client (Cmd+R)
 ```
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import {connectViaExtensionRaw, RawExtensionConnection} from './extension-raw.js';
 import {CdpClient} from './cdp-client.js';
 import {RelayServer} from '../extension/relay-server.js';
-import {logConnectionState, logInfo, logError, logWarn} from './mcp-logger.js';
+import {logConnectionState, logInfo, logError, logWarn} from './debug-logger.js';
 import {DOM_UTILS_CODE} from './utils/index.js';
 import {getDriver, type SiteDriver} from './drivers/index.js';
 import {NetworkInterceptor} from './network-interceptor.js';
@@ -64,32 +64,42 @@ function setClientForAgent(
   }
 }
 
+// Env var deprecation helpers
+function envWithFallback(newName: string, oldName: string, defaultVal: string): string {
+  if (process.env[newName]) return process.env[newName]!;
+  if (process.env[oldName]) {
+    console.error(`[deprecation] ${oldName} is deprecated, use ${newName} instead`);
+    return process.env[oldName]!;
+  }
+  return defaultVal;
+}
+
 const CONNECT_REUSE_TIMEOUT_MS = Number(
-  process.env.MCP_CONNECT_REUSE_TIMEOUT_MS || '12000',
+  envWithFallback('CAI_CONNECT_REUSE_TIMEOUT_MS', 'MCP_CONNECT_REUSE_TIMEOUT_MS', '12000'),
 );
 const CONNECT_NEWTAB_TIMEOUT_MS = Number(
-  process.env.MCP_CONNECT_NEWTAB_TIMEOUT_MS || '20000',
+  envWithFallback('CAI_CONNECT_NEWTAB_TIMEOUT_MS', 'MCP_CONNECT_NEWTAB_TIMEOUT_MS', '20000'),
 );
-const MCP_TOOL_BUDGET_MS = Number(
-  process.env.CAI_MCP_TOOL_BUDGET_MS || '50000',
+const TOOL_BUDGET_MS = Number(
+  envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '50000'),
 );
 const RESPONSE_WAIT_MAX_MS = Number(
   process.env.CAI_RESPONSE_WAIT_MAX_MS || '40000',
 );
 const BUDGET_RESERVE_MS = Number(
-  process.env.CAI_MCP_BUDGET_RESERVE_MS || '3000',
+  envWithFallback('CAI_BUDGET_RESERVE_MS', 'CAI_MCP_BUDGET_RESERVE_MS', '3000'),
 );
 
 function getRemainingBudgetMs(startMs: number, overrideBudgetMs?: number): number {
-  return (overrideBudgetMs ?? MCP_TOOL_BUDGET_MS) - (nowMs() - startMs) - BUDGET_RESERVE_MS;
+  return (overrideBudgetMs ?? TOOL_BUDGET_MS) - (nowMs() - startMs) - BUDGET_RESERVE_MS;
 }
 
 function getResponseWaitBudgetMs(startMs: number, ceilingMs: number, stage: string, overrideBudgetMs?: number): number {
-  const effectiveBudget = overrideBudgetMs ?? MCP_TOOL_BUDGET_MS;
+  const effectiveBudget = overrideBudgetMs ?? TOOL_BUDGET_MS;
   const remaining = getRemainingBudgetMs(startMs, overrideBudgetMs);
   if (remaining <= 1000) {
     throw new Error(
-      `MCP_TOOL_BUDGET_EXCEEDED: stage=${stage} budgetMs=${effectiveBudget} reserveMs=${BUDGET_RESERVE_MS}`,
+      `TOOL_BUDGET_EXCEEDED: stage=${stage} budgetMs=${effectiveBudget} reserveMs=${BUDGET_RESERVE_MS}`,
     );
   }
   return Math.max(1000, Math.min(ceilingMs, remaining));
@@ -341,7 +351,7 @@ export async function resetConnection(kind: 'chatgpt' | 'gemini'): Promise<void>
 
 /**
  * 全接続をクリーンアップ（プロセス終了時用）
- * MCPサーバー終了時にゾンビプロセスを防ぐために使用
+ * サーバー終了時にゾンビプロセスを防ぐために使用
  */
 export async function cleanupAllConnections(): Promise<void> {
   // Snapshot entries before clearing to avoid mutation during iteration
