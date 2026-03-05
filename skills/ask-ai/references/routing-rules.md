@@ -1,34 +1,25 @@
-# Routing Rules (Gemini-first)
+# Routing Rules
 
 ## Default
 
-- Use `ask_gemini_web` by default.
+- 「AIに聞いて」→ `ask-ai both "質問"`（両方に並列）
 
 ## Explicit provider override
 
-- If user explicitly says ChatGPT-only, use `ask_chatgpt_web`.
-- If user explicitly says both/parallel/cross-discussion, use `ask_chatgpt_gemini_web`.
+- 「ChatGPTに聞いて」「C」→ `ask-ai chatgpt "質問"`
+- 「Geminiに聞いて」「G」→ `ask-ai gemini "質問"`
+- 「クロス議論」「D」→ クロス議論モード（SKILL.md 参照）
 
 ## Auto-upgrade to cross-discussion
 
-Upgrade from default Gemini-only to `ask_chatgpt_gemini_web` when one or more of the following is true:
+以下のいずれかに該当する場合、クロス議論モードに切り替える:
 
-1. User asks for comparison, cross-check, or multiple viewpoints.
-2. User asks for final selection among alternatives (architecture/tool/design choices).
-3. User asks for risk assessment or tradeoff evaluation.
-4. User uses keywords like:
-   - `compare`
-   - `cross-check`
-   - `second opinion`
-   - `tradeoff`
-   - `pros and cons`
-   - `比較`
-   - `クロス議論`
-   - `反証`
-   - `別視点`
+1. 比較、クロスチェック、複数の視点を求めている
+2. 選択肢の最終選定（アーキテクチャ/ツール/設計）
+3. リスク評価やトレードオフの検討
+4. キーワード: `compare`, `cross-check`, `second opinion`, `tradeoff`, `pros and cons`, `比較`, `クロス議論`, `反証`, `別視点`
 
 ## Cost and speed control
 
-- For low-risk/simple factual questions, keep Gemini-only unless user requests cross-discussion.
-- For high-impact decisions, prefer cross-discussion.
-
+- 低リスク/単純な事実確認 → 単一AI（ユーザー指定がなければ both）
+- 重要な判断 → クロス議論を推奨

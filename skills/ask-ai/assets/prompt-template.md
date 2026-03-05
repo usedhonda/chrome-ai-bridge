@@ -1,6 +1,6 @@
 # ask-ai prompt template
 
-Use this internal template before tool execution.
+質問を構築する前に、以下で整理する。
 
 ## Normalized request
 
@@ -12,8 +12,8 @@ Use this internal template before tool execution.
 
 ## Execution decision
 
-- Selected mode: `gemini-only` or `cross-discussion`
-- Selected tool:
+- Selected mode: `chatgpt` / `gemini` / `both` / `cross-discussion`
+- Selected command: `ask-ai <mode> "質問"`
 - Why this mode:
 
 ## Response format
@@ -26,4 +26,3 @@ Return:
    - `Agreement`
    - `Differences`
    - `Decision hint`
-
