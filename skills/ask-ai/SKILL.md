@@ -6,7 +6,7 @@ description: |
   モード2: クロス議論（「クロス議論」）
   略語: C=ChatGPT, G=Gemini, D=議論
 argument-hint: <質問内容>
-allowed-tools: [Bash, ask_chatgpt_web, ask_gemini_web, ask_chatgpt_gemini_web]
+allowed-tools: [Bash]
 compression-anchors:
   - "ask-ai CLIでChatGPT/Geminiに質問"
   - "クロス議論プロトコルで設計判断"
