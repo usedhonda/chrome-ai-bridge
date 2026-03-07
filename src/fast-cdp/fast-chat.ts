@@ -1242,8 +1242,9 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
     let lastLoggedState = '';
     let sawStopButton = false;  // 生成中状態を検出したかどうか
     let streamingText = '';     // ストリーミング中に取得したテキスト（完了後に折りたたまれる対策）
-    let textStableCount = 0;    // テキスト長が安定した回数（2-poll confirmation）
-    let lastTextLength = -1;    // 前回のテキスト長
+    let textStableCount = 0;      // テキスト長が安定した回数（2-poll confirmation）
+    let lastTextLength = -1;      // 前回のテキスト長
+    let stopButtonGoneCount = 0;  // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
 
     while (Date.now() - startWait < maxWaitMs) {
       const state = await client.evaluate<{
@@ -1559,11 +1560,18 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         lastTextLength = currentTextLen;
       }
 
-      if (sawStopButton && !state.hasStopButton && !state.inputBoxHasText &&
+      // ストップボタン不在の連続カウント（Thinkingフェーズ切替時の一瞬消失を除外）
+      if (sawStopButton && !state.hasStopButton) {
+        stopButtonGoneCount++;
+      } else {
+        stopButtonGoneCount = 0;
+      }
+
+      if (sawStopButton && stopButtonGoneCount >= 3 && !state.inputBoxHasText &&
           state.assistantMsgCount > initialAssistantCount) {
         // 2-poll confirmation: テキスト長が2回連続安定してから完了とする
         if (textStableCount >= 2) {
-          console.error(`[ChatGPT] Response complete - stop gone, text stable for ${textStableCount} polls (len=${currentTextLen})`);
+          console.error(`[ChatGPT] Response complete - stop gone for ${stopButtonGoneCount} polls, text stable for ${textStableCount} polls (len=${currentTextLen})`);
           streamingText = await client.evaluate<string>(`
             (() => {
               const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
@@ -1585,7 +1593,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           break;
         }
         // まだ安定していない — 次のポールまで待機
-        console.error(`[ChatGPT] Stop button gone but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
+        console.error(`[ChatGPT] Stop button gone (${stopButtonGoneCount} polls) but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
         await new Promise(r => setTimeout(r, pollIntervalMs));
         continue;
       }
