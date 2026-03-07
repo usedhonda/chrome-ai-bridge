@@ -1245,6 +1245,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
     let textStableCount = 0;      // テキスト長が安定した回数（2-poll confirmation）
     let lastTextLength = -1;      // 前回のテキスト長
     let stopButtonGoneCount = 0;  // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
+    let textGrowingCount = 0;     // テキストが成長中のポール数（成長中はフォールバック抑止）
 
     while (Date.now() - startWait < maxWaitMs) {
       const state = await client.evaluate<{
@@ -1281,8 +1282,13 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
 
           // 停止ボタン検出（フォールバックセレクター付き）
           const stopBtn = document.querySelector('button[data-testid="stop-button"]') ||
+                          document.querySelector('button[aria-label="ストリーミングの停止"]') ||
+                          document.querySelector('button[aria-label="Stop streaming"]') ||
                           document.querySelector('button[aria-label*="停止"]') ||
-                          document.querySelector('button[aria-label*="Stop"]');
+                          document.querySelector('button[aria-label*="Stop"]') ||
+                          [...document.querySelectorAll('button')].find(b =>
+                            b.querySelector('rect') && (b.textContent || '').trim() === ''
+                          );
           const buttons = __collectDeep(['button', '[role="button"]']).nodes;
           // 送信ボタン検出（フォールバックセレクター付き）
           // 注意: 応答完了後は音声ボタンに置き換わり、送信ボタンがDOMから消える
@@ -1320,7 +1326,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           // 「今すぐ回答」「Skip thinking」ボタンがある場合はThinking進行中
           const hasSkipThinkingButton = bodyText.includes('今すぐ回答') ||
                                         bodyText.includes('Skip thinking');
-          const isStillGenerating = (hasGeneratingText && !hasThinkingComplete) || hasSkipThinkingButton;
+          const isStillGenerating = Boolean(stopBtn) || (hasGeneratingText && !hasThinkingComplete) || hasSkipThinkingButton;
 
           // 最後のアシスタントメッセージに実際のテキストがあるかチェック
           // 旧UIセレクター + 新UI(article)の両方を試す
@@ -1542,7 +1548,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       const currentState = JSON.stringify(state);
       if (currentState !== lastLoggedState) {
         const elapsed = Math.round((Date.now() - startWait) / 1000);
-        console.error(`[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}`);
+        console.error(`[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}, textGrow=${textGrowingCount}`);
         lastLoggedState = currentState;
       }
 
@@ -1555,8 +1561,14 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       const currentTextLen = state.debug_lastAssistantInnerTextLen;
       if (currentTextLen === lastTextLength && currentTextLen > 0) {
         textStableCount++;
+        textGrowingCount = 0;
+      } else if (currentTextLen > lastTextLength) {
+        textStableCount = 0;
+        textGrowingCount++;
+        lastTextLength = currentTextLen;
       } else {
         textStableCount = 0;
+        textGrowingCount = 0;
         lastTextLength = currentTextLen;
       }
 
@@ -1602,7 +1614,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       // （stopボタンを見逃した場合の救済）
       const elapsed = Date.now() - startWait;
       if (elapsed > 5000 && !state.hasStopButton && !state.inputBoxHasText &&
-          state.assistantMsgCount > initialAssistantCount && !state.isStillGenerating) {
+          state.assistantMsgCount > initialAssistantCount && !state.isStillGenerating &&
+          textGrowingCount === 0) {
         if (textStableCount >= 2) {
           console.error(`[ChatGPT] Response complete - fallback after 5s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`);
           break;
