@@ -4,7 +4,9 @@
 #        ask-ai health    Check daemon status
 #        ask-ai --help    Show help
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks to get the real script path (macOS compatible)
+_SELF="$(realpath "$0" 2>/dev/null || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 CAB="$SCRIPT_DIR/../../../scripts/cab"
 
 if [ ! -x "$CAB" ]; then

@@ -11,7 +11,9 @@ set -euo pipefail
 CAB_PORT="${CAI_IPC_PORT:-9321}"
 CAB_HOST="127.0.0.1"
 CAB_BASE="http://${CAB_HOST}:${CAB_PORT}"
-CAB_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks to get the real script path (macOS compatible)
+_CAB_SELF="$(realpath "$0" 2>/dev/null || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$0")"
+CAB_DIR="$(cd "$(dirname "$_CAB_SELF")" && pwd)"
 CAB_LOG_DIR="${HOME}/.cache/chrome-ai-bridge"
 CAB_LOG="${CAB_LOG_DIR}/cab-daemon.log"
 CAB_STARTUP_TIMEOUT=30
