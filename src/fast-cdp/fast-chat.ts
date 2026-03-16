@@ -1249,8 +1249,12 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
     let stopButtonGoneCount = 0;  // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
     let textGrowingCount = 0;     // テキストが成長中のポール数（成長中はフォールバック抑止）
 
-    // ストップボタンが見えている間は無制限に待つ（maxWaitMs は絶対安全上限）
-    while (Date.now() - startWait < maxWaitMs && Date.now() - lastActivityAt < IDLE_TIMEOUT_MS) {
+    // ストップボタンが見えている間は maxWaitMs を無視し、IDLE_TIMEOUT のみで判定する。
+    // sawStopButton=false の初期フェーズでは maxWaitMs も併用。
+    while (
+      Date.now() - lastActivityAt < IDLE_TIMEOUT_MS &&
+      (sawStopButton || Date.now() - startWait < maxWaitMs)
+    ) {
       const state = await client.evaluate<{
         hasStopButton: boolean;
         sendButtonFound: boolean;
@@ -1643,8 +1647,10 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       await new Promise(r => setTimeout(r, pollIntervalMs));
     }
 
-    // タイムアウトチェック
-    if (Date.now() - startWait >= maxWaitMs) {
+    // タイムアウトチェック（IDLE_TIMEOUT で抜けた場合も含む）
+    const loopElapsed = Date.now() - startWait;
+    const loopIdle = Date.now() - lastActivityAt;
+    if (loopIdle >= IDLE_TIMEOUT_MS || (!sawStopButton && loopElapsed >= maxWaitMs)) {
       const finalState = await client.evaluate<Record<string, unknown>>(`
         (() => {
           // フォールバックセレクター付きの検出
@@ -3153,13 +3159,19 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     budgetMs,
   );
   const pollIntervalMs = 1000;
+  const IDLE_TIMEOUT_MS = 30000;  // ストップボタン消失後、30秒間無活動でタイムアウト
   const startWait = Date.now();
+  let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
   let lastLoggedState = '';
   let sawStopButton = false;  // 停止ボタンを見たかどうか（生成が始まった証拠）
   let lastTextLength = 0;
   let textStableCount = 0;  // テキスト長が変わらなかった回数
 
-  while (Date.now() - startWait < maxWaitMs) {
+  // ストップボタンが見えている間は maxWaitMs を無視し、IDLE_TIMEOUT のみで判定する。
+  while (
+    Date.now() - lastActivityAt < IDLE_TIMEOUT_MS &&
+    (sawStopButton || Date.now() - startWait < maxWaitMs)
+  ) {
     const state = await client.evaluate<{
       hasStopButton: boolean;
       hasMicButton: boolean;
@@ -3270,14 +3282,19 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
       })()
     `);
 
-    // 停止ボタンを検出したらフラグを立てる（生成が始まった証拠）
+    // 停止ボタンを検出したらフラグを立て、アクティビティを更新
     if (state.hasStopButton) {
       sawStopButton = true;
+      lastActivityAt = Date.now();
     }
 
     // テキスト長安定化検出
     if (state.lastResponseTextLength === lastTextLength && state.lastResponseTextLength > 0) {
       textStableCount++;
+    } else if (state.lastResponseTextLength > lastTextLength) {
+      textStableCount = 0;
+      lastTextLength = state.lastResponseTextLength;
+      lastActivityAt = Date.now();  // テキスト成長もアクティビティとみなす
     } else {
       textStableCount = 0;
       lastTextLength = state.lastResponseTextLength;
@@ -3337,8 +3354,13 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     await new Promise(r => setTimeout(r, pollIntervalMs));
   }
 
-  // タイムアウトチェック
-  if (Date.now() - startWait >= maxWaitMs) {
+  // タイムアウトチェック（IDLE_TIMEOUT で抜けた場合も含む）
+  const geminiLoopElapsed = Date.now() - startWait;
+  const geminiLoopIdle = Date.now() - lastActivityAt;
+  if (geminiLoopIdle >= IDLE_TIMEOUT_MS || (!sawStopButton && geminiLoopElapsed >= maxWaitMs)) {
+    const reason = geminiLoopIdle >= IDLE_TIMEOUT_MS
+      ? `idle for ${Math.round(geminiLoopIdle / 1000)}s (no stop button or text growth)`
+      : `absolute ceiling ${maxWaitMs}ms reached (stop button never seen)`;
     const finalState = await client.evaluate<Record<string, unknown>>(`
       (() => {
         const textIncludes = (needle) => document.body && document.body.innerText && document.body.innerText.includes(needle);
@@ -3367,9 +3389,9 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
         };
       })()
     `);
-    console.error(`[Gemini] Timeout - final state: ${JSON.stringify(finalState)}`);
+    console.error(`[Gemini] Timeout - ${reason}, elapsed=${Math.round(geminiLoopElapsed / 1000)}s, final state: ${JSON.stringify(finalState)}`);
     await resetConnection('gemini');
-    throw new Error(`Timed out waiting for Gemini response (${maxWaitMs}ms). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`);
+    throw new Error(`Timed out waiting for Gemini response (${Math.round(geminiLoopElapsed / 1000)}s, ${reason}). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`);
   }
 
   // 重要: タブをフォアグラウンドに持ってくる（バックグラウンドタブ対策）
