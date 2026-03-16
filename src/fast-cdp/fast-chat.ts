@@ -81,10 +81,10 @@ const CONNECT_NEWTAB_TIMEOUT_MS = Number(
   envWithFallback('CAI_CONNECT_NEWTAB_TIMEOUT_MS', 'MCP_CONNECT_NEWTAB_TIMEOUT_MS', '20000'),
 );
 const TOOL_BUDGET_MS = Number(
-  envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '50000'),
+  envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '300000'),
 );
 const RESPONSE_WAIT_MAX_MS = Number(
-  process.env.CAI_RESPONSE_WAIT_MAX_MS || '40000',
+  process.env.CAI_RESPONSE_WAIT_MAX_MS || '300000',
 );
 const BUDGET_RESERVE_MS = Number(
   envWithFallback('CAI_BUDGET_RESERVE_MS', 'CAI_MCP_BUDGET_RESERVE_MS', '3000'),
@@ -1238,7 +1238,9 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       budgetMs,
     );
     const pollIntervalMs = 1000;
+    const IDLE_TIMEOUT_MS = 30000;  // ストップボタン消失後、30秒間無活動でタイムアウト
     const startWait = Date.now();
+    let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
     let lastLoggedState = '';
     let sawStopButton = false;  // 生成中状態を検出したかどうか
     let streamingText = '';     // ストリーミング中に取得したテキスト（完了後に折りたたまれる対策）
@@ -1247,7 +1249,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
     let stopButtonGoneCount = 0;  // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
     let textGrowingCount = 0;     // テキストが成長中のポール数（成長中はフォールバック抑止）
 
-    while (Date.now() - startWait < maxWaitMs) {
+    // ストップボタンが見えている間は無制限に待つ（maxWaitMs は絶対安全上限）
+    while (Date.now() - startWait < maxWaitMs && Date.now() - lastActivityAt < IDLE_TIMEOUT_MS) {
       const state = await client.evaluate<{
         hasStopButton: boolean;
         sendButtonFound: boolean;
@@ -1540,8 +1543,10 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       `);
 
       // stopボタンを検出したらフラグを立てる（生成が始まった証拠）
+      // ストップボタンが見えている間はアクティブとみなし、タイムアウトを延長し続ける
       if (state.hasStopButton) {
         sawStopButton = true;
+        lastActivityAt = Date.now();
       }
 
       // 状態が変化した場合のみログ出力
@@ -1566,6 +1571,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         textStableCount = 0;
         textGrowingCount++;
         lastTextLength = currentTextLen;
+        lastActivityAt = Date.now();
       } else {
         textStableCount = 0;
         textGrowingCount = 0;
@@ -1667,9 +1673,14 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      console.error(`[ChatGPT] Timeout - final state: ${JSON.stringify(finalState)}`);
+      const elapsedMs = Date.now() - startWait;
+      const idleMs = Date.now() - lastActivityAt;
+      const reason = idleMs >= IDLE_TIMEOUT_MS
+        ? `idle for ${Math.round(idleMs / 1000)}s (no stop button or text growth)`
+        : `absolute ceiling ${maxWaitMs}ms reached`;
+      console.error(`[ChatGPT] Timeout - ${reason}, elapsed=${Math.round(elapsedMs / 1000)}s, final state: ${JSON.stringify(finalState)}`);
       await resetConnection('chatgpt');
-      throw new Error(`Timed out waiting for ChatGPT response (${maxWaitMs}ms). Final state: ${JSON.stringify(finalState)}`);
+      throw new Error(`Timed out waiting for ChatGPT response (${Math.round(elapsedMs / 1000)}s, ${reason}). Final state: ${JSON.stringify(finalState)}`);
     }
 
     // ChatGPT 5.2 Thinking モデル対応:

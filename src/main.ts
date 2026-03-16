@@ -265,7 +265,7 @@ const httpServer = http.createServer(async (req, res) => {
       }
 
       const {target, question, debug: debugFlag, budgetMs: requestBudgetMs} = parsed;
-      const effectiveBudgetMs = requestBudgetMs ?? 120000;
+      const effectiveBudgetMs = requestBudgetMs ?? 300000;
       if (!target || !question) {
         res.writeHead(400, {'Content-Type': 'application/json'}).end(
           JSON.stringify({success: false, error: 'Missing required fields: target, question'}),
