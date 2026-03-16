@@ -10,6 +10,7 @@
 ```
 
 **Tips:**
+
 - Use `take_snapshot` to analyze page structure before writing content scripts
 - Use `list_console_messages` to check for errors
 - Use `reload_iframe_extension` after code changes
@@ -24,6 +25,7 @@
 ```
 
 **Useful tools:**
+
 - `list_console_messages` - View extension errors
 - `evaluate_script` - Run JavaScript in page context
 - `take_screenshot` - Capture visual state
@@ -37,6 +39,7 @@
 ```
 
 **Requirements:**
+
 - Valid Manifest V3
 - Proper permissions declared
 - Store-ready screenshots (1280x800 recommended)
@@ -49,6 +52,7 @@
 ```
 
 **Notes:**
+
 - Questions are logged to `docs/ask/chatgpt/` or `docs/ask/gemini/`
 - Use `createNewChat: true` only when explicitly starting a new topic
 - Provide detailed context for better answers
@@ -62,11 +66,13 @@
 ```
 
 **Routing behavior:**
+
 - Default: Gemini-only (`ask_gemini_web`)
 - Cross-discussion trigger: comparison / tradeoff / decision / "both" / "クロス議論"
 - Cross-discussion tool: `ask_chatgpt_gemini_web`
 
 **Output expectation:**
+
 - Mode
 - Answer
 - Cross-check (Agreement / Differences / Decision hint) when in cross-discussion mode
@@ -81,6 +87,7 @@
 ```
 
 **Use cases:**
+
 - Identify extension performance impact
 - Find rendering bottlenecks
 - Measure load times
@@ -95,6 +102,7 @@
 ```
 
 **Available actions:**
+
 - `click`, `fill`, `drag`, `hover`
 - `take_screenshot`, `take_snapshot`
 - `navigate`, `wait_for`
@@ -109,6 +117,7 @@
 ```
 
 **Tips:**
+
 - Use `pages op=list` to see all tabs
 - Use `pages op=select` to switch tabs
 - Each tab maintains its own state

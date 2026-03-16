@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Wait Utilities for browser automation
  *
  * Browser-side code for various waiting strategies.

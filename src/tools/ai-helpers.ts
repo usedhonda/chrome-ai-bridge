@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {askChatGPTFastWithTimings, askGeminiFastWithTimings, getClient, resetConnection, ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import type {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import {
+  askChatGPTFastWithTimings,
+  askGeminiFastWithTimings,
+  getClient,
+  resetConnection,
+} from '../fast-cdp/fast-chat.js';
 
 export type AIKind = 'chatgpt' | 'gemini';
 
@@ -57,8 +63,10 @@ function isRetryableConnectionError(error: unknown): boolean {
 function isNonRetryableError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const msg = error.message;
-  return msg.includes('TOOL_BUDGET_EXCEEDED') ||
-         msg.includes('Timed out waiting for function');
+  return (
+    msg.includes('TOOL_BUDGET_EXCEEDED') ||
+    msg.includes('Timed out waiting for function')
+  );
 }
 
 /**
@@ -66,8 +74,14 @@ function isNonRetryableError(error: unknown): boolean {
  * 接続確立からクエリ送信までを一括で行う
  * 接続エラー・Geminiスタックエラーの場合は自動リトライ（resetConnection → 再接続）
  */
-export async function askAI(kind: AIKind, question: string, debug?: boolean, budgetMs?: number): Promise<AIResult> {
-  const askFn = kind === 'chatgpt' ? askChatGPTFastWithTimings : askGeminiFastWithTimings;
+export async function askAI(
+  kind: AIKind,
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<AIResult> {
+  const askFn =
+    kind === 'chatgpt' ? askChatGPTFastWithTimings : askGeminiFastWithTimings;
   const label = kind === 'chatgpt' ? 'ChatGPT' : 'Gemini';
 
   const maxRetries = 2;
@@ -96,7 +110,9 @@ export async function askAI(kind: AIKind, question: string, debug?: boolean, bud
 
       // 接続系エラーまたは Gemini stuck → resetConnection してリトライ
       if (isRetryableConnectionError(error) || isGeminiStuckError(error)) {
-        console.error(`[askAI] ${label} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`);
+        console.error(
+          `[askAI] ${label} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`,
+        );
         try {
           await resetConnection(kind);
         } catch {
@@ -147,7 +163,9 @@ export async function connectAI(kind: AIKind): Promise<ConnectionResult> {
       }
 
       if (isRetryableConnectionError(error) || isGeminiStuckError(error)) {
-        console.error(`[connectAI] ${kind} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`);
+        console.error(
+          `[connectAI] ${kind} error on attempt ${attempt} (${isRetryableConnectionError(error) ? 'connection' : 'stuck'}), resetting and retrying...`,
+        );
         try {
           await resetConnection(kind);
         } catch {

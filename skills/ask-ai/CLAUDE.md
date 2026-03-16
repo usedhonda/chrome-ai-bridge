@@ -1,5 +1,7 @@
 <!-- CDX-PERSONA-AGENTS -->
+
 **Read `.codex/config.toml` in this directory and adopt the persona in its `instructions` field.**
+
 <!-- CDX-PERSONA-AGENTS-END -->
 
 # ask-ai スキル管理
@@ -23,22 +25,22 @@ ask-ai CLI を使った AI 質問・議論スキル。chrome-ai-bridge リポジ
 
 ### コマンド
 
-| コマンド | 動作 |
-|----------|------|
-| `ask-ai chatgpt "質問"` | ChatGPT のみに質問 |
-| `ask-ai gemini "質問"` | Gemini のみに質問 |
-| `ask-ai both "質問"` | 両方に並列で質問 |
-| `ask-ai health` | cab デーモンのステータス確認 |
-| `ask-ai --help` | ヘルプ表示 |
+| コマンド                | 動作                         |
+| ----------------------- | ---------------------------- |
+| `ask-ai chatgpt "質問"` | ChatGPT のみに質問           |
+| `ask-ai gemini "質問"`  | Gemini のみに質問            |
+| `ask-ai both "質問"`    | 両方に並列で質問             |
+| `ask-ai health`         | cab デーモンのステータス確認 |
+| `ask-ai --help`         | ヘルプ表示                   |
 
 ### トリガーワード → コマンド対応
 
-| トリガー | コマンド |
-|----------|---------|
-| 「AIに聞いて」 | `ask-ai both "質問"` |
-| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"` |
-| 「Geminiに聞いて」「G」 | `ask-ai gemini "質問"` |
-| 「クロス議論」「D」 | クロス議論モード（SKILL.md 参照） |
+| トリガー                 | コマンド                          |
+| ------------------------ | --------------------------------- |
+| 「AIに聞いて」           | `ask-ai both "質問"`              |
+| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"`           |
+| 「Geminiに聞いて」「G」  | `ask-ai gemini "質問"`            |
+| 「クロス議論」「D」      | クロス議論モード（SKILL.md 参照） |
 
 ### 実行例
 

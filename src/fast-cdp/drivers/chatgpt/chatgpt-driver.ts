@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * ChatGPT Driver
  *
  * Handles ChatGPT-specific DOM interactions for sending prompts
@@ -12,6 +17,7 @@ import type {
   ExtractResult,
   DriverOptions,
 } from '../types.js';
+
 import {CHATGPT_SELECTORS} from './selectors.js';
 
 /**
@@ -25,7 +31,7 @@ export class ChatGPTDriver extends BaseDriver {
    * Send a prompt to ChatGPT
    */
   async sendPrompt(text: string): Promise<SendResult> {
-    const client = this.getClient();
+    const _client = this.getClient();
     const sanitized = JSON.stringify(text);
 
     // Input the text
@@ -103,7 +109,10 @@ export class ChatGPTDriver extends BaseDriver {
     await this.sleep(100);
 
     // Click send button
-    const clickResult = await this.evaluateWithUtils<{clicked: boolean; selector: string | null}>(`
+    const clickResult = await this.evaluateWithUtils<{
+      clicked: boolean;
+      selector: string | null;
+    }>(`
       const selectors = [
         'button[data-testid="send-button"]',
         '#composer-submit-button',
@@ -156,7 +165,7 @@ export class ChatGPTDriver extends BaseDriver {
       const hasGeneratingText = bodyText.includes('回答を生成しています') ||
                                bodyText.includes('is still generating') ||
                                bodyText.includes('generating a response');
-      const hasThinkingComplete = /思考時間[：:]\s*\\d+s?/.test(bodyText) ||
+      const hasThinkingComplete = /思考時間[：:]\\s*\\d+s?/.test(bodyText) ||
                                   /Thinking.*\\d+s?/.test(bodyText);
       const hasSkipThinkingButton = bodyText.includes('今すぐ回答') ||
                                     bodyText.includes('Skip thinking');
@@ -168,8 +177,11 @@ export class ChatGPTDriver extends BaseDriver {
   /**
    * Extract the latest response from ChatGPT
    */
-  async extractResponse(options?: DriverOptions): Promise<ExtractResult> {
-    const result = await this.evaluateWithUtils<{text: string; evidence: string}>(`
+  async extractResponse(_options?: DriverOptions): Promise<ExtractResult> {
+    const result = await this.evaluateWithUtils<{
+      text: string;
+      evidence: string;
+    }>(`
       // Get all assistant messages
       const assistantMsgs = document.querySelectorAll('[data-message-author-role="assistant"]');
 
@@ -247,10 +259,7 @@ export class ChatGPTDriver extends BaseDriver {
  */
 export const CHATGPT_DRIVER_META = {
   name: 'chatgpt',
-  urlPatterns: [
-    'https://chatgpt.com/*',
-    'https://chat.openai.com/*',
-  ],
+  urlPatterns: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
   description: 'ChatGPT by OpenAI',
 };
 

@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Process lock management using exclusive file lock.
  *
  * Lock file stores JSON: {pid, port, startedAt}
@@ -10,6 +15,7 @@ import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {logger} from './logger.js';
 import {getRuntimeNamespace} from './runtime-scope.js';
 
@@ -152,7 +158,11 @@ function tryCreateLock(port: number, instanceId: string): number | null {
     fs.writeSync(fd, JSON.stringify(lockInfo));
     return fd;
   } catch (error: unknown) {
-    if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'EEXIST') {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error as NodeJS.ErrnoException).code === 'EEXIST'
+    ) {
       return null;
     }
     throw error;
@@ -171,24 +181,40 @@ async function handleExistingLock(): Promise<boolean> {
 
   if (info === null) {
     logger('[process-lock] Corrupted lock file found. Removing.');
-    try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(LOCK_FILE);
+    } catch {
+      /* ignore */
+    }
     return true;
   }
 
   // Don't conflict with ourselves
   if (info.pid === process.pid) {
-    try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(LOCK_FILE);
+    } catch {
+      /* ignore */
+    }
     return true;
   }
 
   if (!isProcessAlive(info.pid)) {
-    logger(`[process-lock] Stale lock (pid=${info.pid}, not running). Removing.`);
-    try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
+    logger(
+      `[process-lock] Stale lock (pid=${info.pid}, not running). Removing.`,
+    );
+    try {
+      fs.unlinkSync(LOCK_FILE);
+    } catch {
+      /* ignore */
+    }
     return true;
   }
 
   // Process is alive — do NOT kill. Caller should enter proxy mode.
-  logger(`[process-lock] Primary is alive (pid=${info.pid}, port=${info.port}). Cannot acquire lock.`);
+  logger(
+    `[process-lock] Primary is alive (pid=${info.pid}, port=${info.port}). Cannot acquire lock.`,
+  );
   return false;
 }
 
@@ -197,11 +223,16 @@ async function handleExistingLock(): Promise<boolean> {
  * Returns true if lock acquired, false if another process holds it.
  * Used by the retry-based startup loop in main.ts.
  */
-export async function tryAcquireLockSafe(port: number, instanceId: string): Promise<boolean> {
+export async function tryAcquireLockSafe(
+  port: number,
+  instanceId: string,
+): Promise<boolean> {
   const fd = tryCreateLock(port, instanceId);
   if (fd !== null) {
     lockFd = fd;
-    logger(`[process-lock] Lock acquired (pid=${process.pid}, port=${port}, instanceId=${instanceId.slice(0, 8)})`);
+    logger(
+      `[process-lock] Lock acquired (pid=${process.pid}, port=${port}, instanceId=${instanceId.slice(0, 8)})`,
+    );
     return true;
   }
 
@@ -213,7 +244,9 @@ export async function tryAcquireLockSafe(port: number, instanceId: string): Prom
   const fd2 = tryCreateLock(port, instanceId);
   if (fd2 !== null) {
     lockFd = fd2;
-    logger(`[process-lock] Lock acquired after cleanup (pid=${process.pid}, port=${port})`);
+    logger(
+      `[process-lock] Lock acquired after cleanup (pid=${process.pid}, port=${port})`,
+    );
     return true;
   }
 
@@ -229,11 +262,16 @@ export async function tryAcquireLockSafe(port: number, instanceId: string): Prom
  * 3. EEXIST -> check holder; remove only if stale, retry once
  * 4. If holder is alive -> throw (caller should enter proxy mode)
  */
-export async function acquireLock(port: number, instanceId: string): Promise<void> {
+export async function acquireLock(
+  port: number,
+  instanceId: string,
+): Promise<void> {
   const fd = tryCreateLock(port, instanceId);
   if (fd !== null) {
     lockFd = fd;
-    logger(`[process-lock] Lock acquired (pid=${process.pid}, port=${port}, instanceId=${instanceId.slice(0, 8)})`);
+    logger(
+      `[process-lock] Lock acquired (pid=${process.pid}, port=${port}, instanceId=${instanceId.slice(0, 8)})`,
+    );
     return;
   }
 
@@ -247,7 +285,9 @@ export async function acquireLock(port: number, instanceId: string): Promise<voi
   const fd2 = tryCreateLock(port, instanceId);
   if (fd2 !== null) {
     lockFd = fd2;
-    logger(`[process-lock] Lock acquired after cleanup (pid=${process.pid}, port=${port})`);
+    logger(
+      `[process-lock] Lock acquired after cleanup (pid=${process.pid}, port=${port})`,
+    );
     return;
   }
 
@@ -281,10 +321,18 @@ export function updateLockPort(newPort: number): void {
  */
 export function releaseLock(): void {
   if (lockFd !== null) {
-    try { fs.closeSync(lockFd); } catch { /* ignore */ }
+    try {
+      fs.closeSync(lockFd);
+    } catch {
+      /* ignore */
+    }
     lockFd = null;
   }
-  try { fs.unlinkSync(LOCK_FILE); } catch { /* ignore */ }
+  try {
+    fs.unlinkSync(LOCK_FILE);
+  } catch {
+    /* ignore */
+  }
   logger('[process-lock] Lock released.');
 }
 
@@ -296,7 +344,9 @@ export async function terminatePrimaryProcess(pid: number): Promise<boolean> {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   if (!isProcessAlive(pid)) return true;
 
-  logger(`[process-lock] Attempting self-heal termination for pid=${pid} (SIGTERM).`);
+  logger(
+    `[process-lock] Attempting self-heal termination for pid=${pid} (SIGTERM).`,
+  );
   try {
     process.kill(pid, 'SIGTERM');
   } catch {
@@ -305,11 +355,15 @@ export async function terminatePrimaryProcess(pid: number): Promise<boolean> {
 
   await sleep(1500);
   if (!isProcessAlive(pid)) {
-    logger(`[process-lock] Self-heal termination succeeded for pid=${pid} after SIGTERM.`);
+    logger(
+      `[process-lock] Self-heal termination succeeded for pid=${pid} after SIGTERM.`,
+    );
     return true;
   }
 
-  logger(`[process-lock] pid=${pid} still alive after SIGTERM. Sending SIGKILL.`);
+  logger(
+    `[process-lock] pid=${pid} still alive after SIGTERM. Sending SIGKILL.`,
+  );
   try {
     process.kill(pid, 'SIGKILL');
   } catch {
@@ -358,8 +412,9 @@ function listProcessRows(): ProcessRow[] {
           command: match[3],
         };
       })
-      .filter((row): row is ProcessRow =>
-        !!row && Number.isFinite(row.pid) && Number.isFinite(row.ppid),
+      .filter(
+        (row): row is ProcessRow =>
+          !!row && Number.isFinite(row.pid) && Number.isFinite(row.ppid),
       );
   } catch {
     return [];
@@ -453,11 +508,17 @@ export async function cleanupOrphanBridgeProcesses(
 export async function killSiblings(): Promise<number> {
   let pids: number[];
   try {
-    const output = execFileSync('pgrep', ['-f', 'chrome-ai-bridge/build/src/main.js'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-    pids = output.trim().split('\n')
+    const output = execFileSync(
+      'pgrep',
+      ['-f', 'chrome-ai-bridge/build/src/main.js'],
+      {
+        encoding: 'utf-8',
+        timeout: 5000,
+      },
+    );
+    pids = output
+      .trim()
+      .split('\n')
       .map(s => Number(s.trim()))
       .filter(n => Number.isFinite(n) && n > 0);
   } catch {
@@ -474,7 +535,9 @@ export async function killSiblings(): Promise<number> {
     return 0;
   }
 
-  logger(`[process-lock] Found ${targets.length} stale sibling(s): ${targets.join(', ')}`);
+  logger(
+    `[process-lock] Found ${targets.length} stale sibling(s): ${targets.join(', ')}`,
+  );
 
   // Send SIGTERM to all
   for (const pid of targets) {
@@ -492,7 +555,9 @@ export async function killSiblings(): Promise<number> {
   let killed = 0;
   for (const pid of targets) {
     if (isProcessAlive(pid)) {
-      logger(`[process-lock] Process ${pid} still alive after SIGTERM. Sending SIGKILL...`);
+      logger(
+        `[process-lock] Process ${pid} still alive after SIGTERM. Sending SIGKILL...`,
+      );
       try {
         process.kill(pid, 'SIGKILL');
       } catch {

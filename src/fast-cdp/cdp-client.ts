@@ -1,22 +1,30 @@
+/**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import type {RelayServer} from '../extension/relay-server.js';
 
 export interface CdpEvent {
   method: string;
-  params: any;
+  params: Record<string, unknown>;
   sessionId?: string;
 }
 
 export class CdpClient {
   private relay: RelayServer;
   private sessionId?: string;
-  private eventHandlers = new Map<string, Map<(params: any) => void, (event: CdpEvent) => void>>();
+  private eventHandlers = new Map<
+    string,
+    Map<(params: Record<string, unknown>) => void, (event: CdpEvent) => void>
+  >();
 
   constructor(relay: RelayServer, sessionId?: string) {
     this.relay = relay;
     this.sessionId = sessionId;
   }
 
-  async send(method: string, params?: any) {
+  async send(method: string, params?: Record<string, unknown>) {
     return this.relay.sendRequest('forwardCDPCommand', {
       sessionId: this.sessionId,
       method,
@@ -28,7 +36,10 @@ export class CdpClient {
    * Subscribe to a specific CDP event method (e.g. 'Network.webSocketFrameReceived').
    * Filters RelayServer 'cdp-event' emissions by method name.
    */
-  on(eventMethod: string, callback: (params: any) => void): void {
+  on(
+    eventMethod: string,
+    callback: (params: Record<string, unknown>) => void,
+  ): void {
     const handler = (event: CdpEvent) => {
       if (event.method === eventMethod) callback(event.params);
     };
@@ -42,7 +53,10 @@ export class CdpClient {
   /**
    * Unsubscribe from a specific CDP event method.
    */
-  off(eventMethod: string, callback: (params: any) => void): void {
+  off(
+    eventMethod: string,
+    callback: (params: Record<string, unknown>) => void,
+  ): void {
     const methodMap = this.eventHandlers.get(eventMethod);
     if (!methodMap) return;
     const handler = methodMap.get(callback);
@@ -67,7 +81,7 @@ export class CdpClient {
     this.eventHandlers.clear();
   }
 
-  async evaluate<T = any>(expression: string): Promise<T> {
+  async evaluate<T = unknown>(expression: string): Promise<T> {
     const result = await this.send('Runtime.evaluate', {
       expression,
       awaitPromise: true,
@@ -75,9 +89,13 @@ export class CdpClient {
     });
     // デバッグ: 例外がある場合はログに出力
     if (result?.exceptionDetails) {
-      console.error('[CDP] evaluate exception:', JSON.stringify(result.exceptionDetails));
+      console.error(
+        '[CDP] evaluate exception:',
+        JSON.stringify(result.exceptionDetails),
+      );
     }
-    return result?.result?.value as T;
+    const inner = result?.result as Record<string, unknown> | undefined;
+    return inner?.value as T;
   }
 
   async waitForFunction(

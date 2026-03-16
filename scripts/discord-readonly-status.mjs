@@ -25,7 +25,9 @@ function tableExists(db, tableName) {
 
 function printRunSummary(db, limit) {
   if (!tableExists(db, 'runs')) {
-    console.log('[status] No runs table found. Execute collector at least once.');
+    console.log(
+      '[status] No runs table found. Execute collector at least once.',
+    );
     return;
   }
 
@@ -66,7 +68,9 @@ function printRunSummary(db, limit) {
 
 function printMessageSummary(db, channelFilter, tailLimit) {
   if (!tableExists(db, 'messages')) {
-    console.log('[status] No messages table found. Execute collector at least once.');
+    console.log(
+      '[status] No messages table found. Execute collector at least once.',
+    );
     return;
   }
 
@@ -78,7 +82,8 @@ function printMessageSummary(db, channelFilter, tailLimit) {
 
   const channelCount = channelFilter
     ? 1
-    : db.prepare('SELECT COUNT(DISTINCT channel_id) AS n FROM messages').get().n;
+    : db.prepare('SELECT COUNT(DISTINCT channel_id) AS n FROM messages').get()
+        .n;
 
   console.log(
     `messages_total=${countRow.n} channels=${channelCount}${channelFilter ? ` channel_filter=${channelFilter}` : ''}`,
@@ -106,7 +111,9 @@ function printMessageSummary(db, channelFilter, tailLimit) {
 
   console.log('channel_counts');
   for (const row of topRows) {
-    console.log(`  channel=${row.channel_id} messages=${row.n} latest=${row.latest}`);
+    console.log(
+      `  channel=${row.channel_id} messages=${row.n} latest=${row.latest}`,
+    );
   }
 
   const tailRows = channelFilter
@@ -130,7 +137,9 @@ function printMessageSummary(db, channelFilter, tailLimit) {
 
   console.log(`tail_messages(limit=${tailLimit})`);
   for (const row of tailRows) {
-    const safeContent = String(row.content || '').replace(/\s+/g, ' ').trim();
+    const safeContent = String(row.content || '')
+      .replace(/\s+/g, ' ')
+      .trim();
     console.log(
       `  at=${row.created_at} channel=${row.channel_id} author=${row.author_name} content="${safeContent}"`,
     );

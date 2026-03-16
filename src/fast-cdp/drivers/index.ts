@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Driver module exports
  *
  * This module provides the driver infrastructure and built-in drivers
@@ -45,9 +50,9 @@ export {
 } from './gemini/index.js';
 
 // Auto-register built-in drivers
-import {registerDriver} from './registry.js';
 import {CHATGPT_DRIVER_META, createChatGPTDriver} from './chatgpt/index.js';
 import {GEMINI_DRIVER_META, createGeminiDriver} from './gemini/index.js';
+import {registerDriver} from './registry.js';
 
 registerDriver(CHATGPT_DRIVER_META, createChatGPTDriver);
 registerDriver(GEMINI_DRIVER_META, createGeminiDriver);

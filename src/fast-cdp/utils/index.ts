@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Utilities for browser automation
  *
  * This module exports browser-side utility code that can be injected

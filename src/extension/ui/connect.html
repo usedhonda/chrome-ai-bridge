@@ -1,429 +1,483 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>chrome-ai-bridge - Select Tab</title>
-  <style>
-    :root {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f6f8fa;
-      --bg-hover: #f3f4f6;
-      --text-primary: #24292f;
-      --text-secondary: #57606a;
-      --text-muted: #8b949e;
-      --border-color: #d0d7de;
-      --border-hover: #1f6feb;
-      --accent-color: #1f6feb;
-      --success-bg: #dafbe1;
-      --success-text: #1a7f37;
-      --error-bg: #ffebe9;
-      --error-text: #cf222e;
-      --info-bg: #ddf4ff;
-      --info-text: #0969da;
-      --active-bg: #fff8c5;
-      --active-border: #d4a72c;
-    }
+  <head>
+    <meta charset="utf-8" />
+    <title>chrome-ai-bridge - Select Tab</title>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f6f8fa;
+        --bg-hover: #f3f4f6;
+        --text-primary: #24292f;
+        --text-secondary: #57606a;
+        --text-muted: #8b949e;
+        --border-color: #d0d7de;
+        --border-hover: #1f6feb;
+        --accent-color: #1f6feb;
+        --success-bg: #dafbe1;
+        --success-text: #1a7f37;
+        --error-bg: #ffebe9;
+        --error-text: #cf222e;
+        --info-bg: #ddf4ff;
+        --info-text: #0969da;
+        --active-bg: #fff8c5;
+        --active-border: #d4a72c;
+      }
 
-    * {
-      box-sizing: border-box;
-    }
+      * {
+        box-sizing: border-box;
+      }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background: var(--bg-secondary);
-      min-width: 500px;
-      color: var(--text-primary);
-    }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica,
+          Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: var(--bg-secondary);
+        min-width: 500px;
+        color: var(--text-primary);
+      }
 
-    .container {
-      background: var(--bg-primary);
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 1px 3px rgba(27, 31, 35, 0.12), 0 8px 24px rgba(66, 74, 83, 0.12);
-      max-width: 640px;
-      margin: 0 auto;
-    }
+      .container {
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow:
+          0 1px 3px rgba(27, 31, 35, 0.12),
+          0 8px 24px rgba(66, 74, 83, 0.12);
+        max-width: 640px;
+        margin: 0 auto;
+      }
 
-    .header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border-color);
-    }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
+      }
 
-    .header-icon {
-      font-size: 28px;
-    }
+      .header-icon {
+        font-size: 28px;
+      }
 
-    .header-title {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
+      .header-title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
 
-    .status {
-      padding: 12px 16px;
-      border-radius: 6px;
-      margin-bottom: 16px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+      .status {
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-    .status.info {
-      background: var(--info-bg);
-      color: var(--info-text);
-    }
+      .status.info {
+        background: var(--info-bg);
+        color: var(--info-text);
+      }
 
-    .status.success {
-      background: var(--success-bg);
-      color: var(--success-text);
-    }
+      .status.success {
+        background: var(--success-bg);
+        color: var(--success-text);
+      }
 
-    .status.error {
-      background: var(--error-bg);
-      color: var(--error-text);
-    }
+      .status.error {
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
 
-    .status-icon {
-      font-size: 16px;
-    }
+      .status-icon {
+        font-size: 16px;
+      }
 
-    .section-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      margin-bottom: 12px;
-    }
+      .section-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+      }
 
-    .tabs-list {
-      max-height: 450px;
-      overflow-y: auto;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-    }
+      .tabs-list {
+        max-height: 450px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+      }
 
-    .tab-item {
-      display: flex;
-      align-items: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border-color);
-      cursor: pointer;
-      transition: background 0.15s ease;
-      gap: 12px;
-    }
+      .tab-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: background 0.15s ease;
+        gap: 12px;
+      }
 
-    .tab-item:last-child {
-      border-bottom: none;
-    }
+      .tab-item:last-child {
+        border-bottom: none;
+      }
 
-    .tab-item:hover {
-      background: var(--bg-hover);
-    }
+      .tab-item:hover {
+        background: var(--bg-hover);
+      }
 
-    .tab-item.active {
-      background: var(--active-bg);
-      border-left: 3px solid var(--active-border);
-      padding-left: 13px;
-    }
+      .tab-item.active {
+        background: var(--active-bg);
+        border-left: 3px solid var(--active-border);
+        padding-left: 13px;
+      }
 
-    .tab-favicon {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      flex-shrink: 0;
-      background: var(--bg-secondary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-    }
+      .tab-favicon {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+      }
 
-    .tab-favicon img {
-      width: 16px;
-      height: 16px;
-    }
+      .tab-favicon img {
+        width: 16px;
+        height: 16px;
+      }
 
-    .tab-info {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-    }
+      .tab-info {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+      }
 
-    .tab-title-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+      .tab-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-    .tab-title {
-      font-weight: 500;
-      color: var(--text-primary);
-      font-size: 14px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+      .tab-title {
+        font-weight: 500;
+        color: var(--text-primary);
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .tab-active-badge {
-      font-size: 11px;
-      padding: 2px 6px;
-      background: var(--active-border);
-      color: white;
-      border-radius: 10px;
-      flex-shrink: 0;
-    }
+      .tab-active-badge {
+        font-size: 11px;
+        padding: 2px 6px;
+        background: var(--active-border);
+        color: white;
+        border-radius: 10px;
+        flex-shrink: 0;
+      }
 
-    .tab-url {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+      .tab-url {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .tab-id {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
+      .tab-id {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
 
-    .tab-connect-btn {
-      padding: 6px 14px;
-      font-size: 13px;
-      font-weight: 500;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
+      .tab-connect-btn {
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        flex-shrink: 0;
+      }
 
-    .tab-connect-btn:hover {
-      background: var(--accent-color);
-      color: white;
-      border-color: var(--accent-color);
-    }
+      .tab-connect-btn:hover {
+        background: var(--accent-color);
+        color: white;
+        border-color: var(--accent-color);
+      }
 
-    .tab-connect-btn:disabled {
-      background: var(--bg-secondary);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      border-color: var(--border-color);
-    }
+      .tab-connect-btn:disabled {
+        background: var(--bg-secondary);
+        color: var(--text-muted);
+        cursor: not-allowed;
+        border-color: var(--border-color);
+      }
 
-    .hidden {
-      display: none !important;
-    }
+      .hidden {
+        display: none !important;
+      }
 
-    .connected-view {
-      text-align: center;
-      padding: 24px;
-    }
+      .connected-view {
+        text-align: center;
+        padding: 24px;
+      }
 
-    .connected-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-    }
+      .connected-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
 
-    .connected-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 8px;
-    }
+      .connected-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+      }
 
-    .connected-details {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: 20px;
-    }
+      .connected-details {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
 
-    .disconnect-btn {
-      padding: 8px 20px;
-      font-size: 14px;
-      font-weight: 500;
-      border-radius: 6px;
-      border: 1px solid var(--error-text);
-      background: var(--bg-primary);
-      color: var(--error-text);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
+      .disconnect-btn {
+        padding: 8px 20px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+        border: 1px solid var(--error-text);
+        background: var(--bg-primary);
+        color: var(--error-text);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
 
-    .disconnect-btn:hover {
-      background: var(--error-text);
-      color: white;
-    }
+      .disconnect-btn:hover {
+        background: var(--error-text);
+        color: white;
+      }
 
-    /* Debug Panel Styles */
-    #debug-toggle {
-      margin-top: 20px;
-      padding: 8px 16px;
-      font-size: 12px;
-      font-weight: 500;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
+      /* Debug Panel Styles */
+      #debug-toggle {
+        margin-top: 20px;
+        padding: 8px 16px;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
 
-    #debug-toggle:hover {
-      background: var(--bg-hover);
-    }
+      #debug-toggle:hover {
+        background: var(--bg-hover);
+      }
 
-    #debug-panel {
-      margin-top: 20px;
-      border-top: 1px solid var(--border-color);
-      padding-top: 16px;
-    }
+      #debug-panel {
+        margin-top: 20px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 16px;
+      }
 
-    #debug-panel h3 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
+      #debug-panel h3 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
 
-    .debug-controls {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
+      .debug-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
 
-    .debug-controls select {
-      padding: 6px 10px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-size: 13px;
-      background: white;
-    }
+      .debug-controls select {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 13px;
+        background: white;
+      }
 
-    .debug-controls button {
-      padding: 6px 12px;
-      font-size: 13px;
-      border-radius: 4px;
-      border: 1px solid var(--border-color);
-      background: var(--bg-secondary);
-      cursor: pointer;
-    }
+      .debug-controls button {
+        padding: 6px 12px;
+        font-size: 13px;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        cursor: pointer;
+      }
 
-    .debug-controls button.danger {
-      background: var(--error-bg);
-      color: var(--error-text);
-      border-color: var(--error-text);
-    }
+      .debug-controls button.danger {
+        background: var(--error-bg);
+        color: var(--error-text);
+        border-color: var(--error-text);
+      }
 
-    #debug-stats {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 8px;
-      padding: 8px;
-      background: var(--bg-secondary);
-      border-radius: 4px;
-    }
+      #debug-stats {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+        padding: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+      }
 
-    #log-output {
-      font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      background: #1e1e1e;
-      color: #d4d4d4;
-      padding: 12px;
-      border-radius: 6px;
-      max-height: 300px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
+      #log-output {
+        font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 12px;
+        border-radius: 6px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
 
-    .log-entry .ts { color: #6a9955; }
-    .log-entry .cat-ws { color: #569cd6; }
-    .log-entry .cat-cdp { color: #ce9178; }
-    .log-entry .cat-tab { color: #dcdcaa; }
-    .log-entry .cat-relay { color: #c586c0; }
-    .log-entry .cat-error { color: #f44747; }
-    .log-entry .msg { color: #d4d4d4; }
-    .log-entry .data { color: #9cdcfe; margin-left: 4px; }
+      .log-entry .ts {
+        color: #6a9955;
+      }
+      .log-entry .cat-ws {
+        color: #569cd6;
+      }
+      .log-entry .cat-cdp {
+        color: #ce9178;
+      }
+      .log-entry .cat-tab {
+        color: #dcdcaa;
+      }
+      .log-entry .cat-relay {
+        color: #c586c0;
+      }
+      .log-entry .cat-error {
+        color: #f44747;
+      }
+      .log-entry .msg {
+        color: #d4d4d4;
+      }
+      .log-entry .data {
+        color: #9cdcfe;
+        margin-left: 4px;
+      }
 
-    .empty-state {
-      padding: 40px 20px;
-      text-align: center;
-      color: var(--text-secondary);
-    }
+      .empty-state {
+        padding: 40px 20px;
+        text-align: center;
+        color: var(--text-secondary);
+      }
 
-    .empty-state-icon {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <span class="header-icon">🎭</span>
-      <h1 class="header-title">chrome-ai-bridge - Select Tab</h1>
-    </div>
-
-    <div id="status" class="status info">
-      <span class="status-icon">⏳</span>
-      <span id="status-text">Initializing...</span>
-    </div>
-
-    <div id="tab-selection" class="hidden">
-      <div class="section-label">Select page to expose to Chrome AI Bridge:</div>
-      <div class="tabs-list" id="tabs-list"></div>
-    </div>
-
-    <div id="connected-view" class="hidden connected-view">
-      <div class="connected-icon">✅</div>
-      <div class="connected-title">Connected to <span id="connected-tab-title"></span></div>
-      <div class="connected-details">
-        Tab ID: <span id="connected-tab-id"></span>
+      .empty-state-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <span class="header-icon">🎭</span>
+        <h1 class="header-title">chrome-ai-bridge - Select Tab</h1>
       </div>
-      <button id="disconnect-btn" class="disconnect-btn">Disconnect</button>
-    </div>
 
-    <div id="error-view" class="hidden">
-      <div class="empty-state">
-        <div class="empty-state-icon">❌</div>
-        <div id="error-message">An error occurred</div>
+      <div
+        id="status"
+        class="status info"
+      >
+        <span class="status-icon">⏳</span>
+        <span id="status-text">Initializing...</span>
+      </div>
+
+      <div
+        id="tab-selection"
+        class="hidden"
+      >
+        <div class="section-label"
+          >Select page to expose to Chrome AI Bridge:</div
+        >
+        <div
+          class="tabs-list"
+          id="tabs-list"
+        ></div>
+      </div>
+
+      <div
+        id="connected-view"
+        class="hidden connected-view"
+      >
+        <div class="connected-icon">✅</div>
+        <div class="connected-title"
+          >Connected to <span id="connected-tab-title"></span
+        ></div>
+        <div class="connected-details">
+          Tab ID: <span id="connected-tab-id"></span>
+        </div>
+        <button
+          id="disconnect-btn"
+          class="disconnect-btn"
+          >Disconnect</button
+        >
+      </div>
+
+      <div
+        id="error-view"
+        class="hidden"
+      >
+        <div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <div id="error-message">An error occurred</div>
+        </div>
+      </div>
+
+      <button id="debug-toggle">Show Debug Logs</button>
+
+      <div
+        id="debug-panel"
+        class="hidden"
+      >
+        <h3>Debug Logs</h3>
+        <div class="debug-controls">
+          <select id="log-filter">
+            <option value="">All Categories</option>
+            <option value="ws">WebSocket</option>
+            <option value="cdp">CDP</option>
+            <option value="tab">Tab</option>
+            <option value="relay">Relay</option>
+            <option value="error">Error</option>
+          </select>
+          <button id="refresh-logs">Refresh</button>
+          <button
+            id="clear-logs"
+            class="danger"
+            >Clear</button
+          >
+          <button id="export-logs">Export</button>
+        </div>
+        <div id="debug-stats"></div>
+        <div id="log-output"></div>
       </div>
     </div>
 
-    <button id="debug-toggle">Show Debug Logs</button>
-
-    <div id="debug-panel" class="hidden">
-      <h3>Debug Logs</h3>
-      <div class="debug-controls">
-        <select id="log-filter">
-          <option value="">All Categories</option>
-          <option value="ws">WebSocket</option>
-          <option value="cdp">CDP</option>
-          <option value="tab">Tab</option>
-          <option value="relay">Relay</option>
-          <option value="error">Error</option>
-        </select>
-        <button id="refresh-logs">Refresh</button>
-        <button id="clear-logs" class="danger">Clear</button>
-        <button id="export-logs">Export</button>
-      </div>
-      <div id="debug-stats"></div>
-      <div id="log-output"></div>
-    </div>
-  </div>
-
-  <script src="connect.js" type="module"></script>
-</body>
+    <script
+      src="connect.js"
+      type="module"
+    ></script>
+  </body>
 </html>

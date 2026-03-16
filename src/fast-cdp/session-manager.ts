@@ -15,7 +15,9 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
 import {getSessionConfig} from '../config.js';
+
 import {getAgentId, hasAgentId} from './agent-context.js';
 
 /**
@@ -31,7 +33,7 @@ export interface SessionEntry {
  * Per-agent session data
  */
 export interface AgentSession {
-  lastAccess: string;  // ISO timestamp
+  lastAccess: string; // ISO timestamp
   chatgpt: SessionEntry | null;
   gemini: SessionEntry | null;
 }
@@ -52,10 +54,13 @@ export interface SessionStoreV2 {
  * V1 session store format (legacy, per-project)
  */
 interface SessionStoreV1 {
-  projects: Record<string, {
-    chatgpt?: SessionEntry;
-    gemini?: SessionEntry;
-  }>;
+  projects: Record<
+    string,
+    {
+      chatgpt?: SessionEntry;
+      gemini?: SessionEntry;
+    }
+  >;
 }
 
 /**
@@ -63,7 +68,12 @@ interface SessionStoreV1 {
  * Uses project-local .local/ directory.
  */
 function getSessionPath(): string {
-  return path.join(process.cwd(), '.local', 'chrome-ai-bridge', 'sessions.json');
+  return path.join(
+    process.cwd(),
+    '.local',
+    'chrome-ai-bridge',
+    'sessions.json',
+  );
 }
 
 /**
@@ -78,7 +88,9 @@ async function loadRawSessions(): Promise<SessionStoreV1 | SessionStoreV2> {
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== 'ENOENT') {
       // File exists but is corrupted or unreadable
-      console.error(`[session-manager] Failed to load ${sessionPath}: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(
+        `[session-manager] Failed to load ${sessionPath}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     return {projects: {}};
   }
@@ -96,7 +108,9 @@ async function saveRawSessions(sessions: SessionStoreV2): Promise<void> {
 /**
  * Check if sessions are V2 format.
  */
-function isV2Format(sessions: SessionStoreV1 | SessionStoreV2): sessions is SessionStoreV2 {
+function isV2Format(
+  sessions: SessionStoreV1 | SessionStoreV2,
+): sessions is SessionStoreV2 {
   return 'version' in sessions && sessions.version === 2;
 }
 
@@ -128,7 +142,9 @@ async function migrateToV2(v1: SessionStoreV1): Promise<SessionStoreV2> {
     };
   }
 
-  console.error(`[session-manager] Migrated ${Object.keys(v1.projects).length} projects to V2 format`);
+  console.error(
+    `[session-manager] Migrated ${Object.keys(v1.projects).length} projects to V2 format`,
+  );
   return v2;
 }
 
@@ -210,14 +226,18 @@ export async function saveAgentSession(
 /**
  * Clear session for the current agent.
  */
-export async function clearAgentSession(kind: 'chatgpt' | 'gemini'): Promise<void> {
+export async function clearAgentSession(
+  kind: 'chatgpt' | 'gemini',
+): Promise<void> {
   const agentId = hasAgentId() ? getAgentId() : 'default';
   const sessions = await loadSessions();
 
   if (sessions.agents[agentId]) {
     sessions.agents[agentId][kind] = null;
     await saveRawSessions(sessions);
-    console.error(`[session-manager] Cleared ${kind} session for agent: ${agentId}`);
+    console.error(
+      `[session-manager] Cleared ${kind} session for agent: ${agentId}`,
+    );
   }
 }
 
@@ -241,7 +261,9 @@ export async function cleanupStaleSessions(): Promise<number> {
     if (age > ttlMs) {
       delete sessions.agents[agentId];
       removedCount++;
-      console.error(`[session-manager] Removed stale agent: ${agentId} (${Math.round(age / 60000)}min old)`);
+      console.error(
+        `[session-manager] Removed stale agent: ${agentId} (${Math.round(age / 60000)}min old)`,
+      );
     }
   }
 

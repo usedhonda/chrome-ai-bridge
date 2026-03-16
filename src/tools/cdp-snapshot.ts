@@ -7,6 +7,7 @@
 import z from 'zod';
 
 import {takeCdpSnapshot, getPageDom} from '../fast-cdp/fast-chat.js';
+
 import {ToolCategories} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
 
@@ -50,7 +51,9 @@ export const cdpSnapshot = defineTool({
       response.appendResponseLine('');
 
       if (!snapshot.connected) {
-        response.appendResponseLine(`❌ Not connected: ${snapshot.error || 'Unknown error'}`);
+        response.appendResponseLine(
+          `❌ Not connected: ${snapshot.error || 'Unknown error'}`,
+        );
         return;
       }
 
@@ -62,31 +65,53 @@ export const cdpSnapshot = defineTool({
       response.appendResponseLine('');
 
       response.appendResponseLine('## Input Field');
-      response.appendResponseLine(`- Found: ${snapshot.hasInputField ? '✅ Yes' : '❌ No'}`);
+      response.appendResponseLine(
+        `- Found: ${snapshot.hasInputField ? '✅ Yes' : '❌ No'}`,
+      );
       if (snapshot.inputFieldSelector) {
-        response.appendResponseLine(`- Selector: ${snapshot.inputFieldSelector}`);
+        response.appendResponseLine(
+          `- Selector: ${snapshot.inputFieldSelector}`,
+        );
       }
-      response.appendResponseLine(`- Current Value: "${snapshot.inputFieldValue || '(empty)'}"`);
+      response.appendResponseLine(
+        `- Current Value: "${snapshot.inputFieldValue || '(empty)'}"`,
+      );
       response.appendResponseLine('');
 
       response.appendResponseLine('## Send Button');
-      response.appendResponseLine(`- Found: ${snapshot.hasSendButton ? '✅ Yes' : '❌ No'}`);
+      response.appendResponseLine(
+        `- Found: ${snapshot.hasSendButton ? '✅ Yes' : '❌ No'}`,
+      );
       if (snapshot.sendButtonSelector) {
-        response.appendResponseLine(`- Selector: ${snapshot.sendButtonSelector}`);
+        response.appendResponseLine(
+          `- Selector: ${snapshot.sendButtonSelector}`,
+        );
       }
-      response.appendResponseLine(`- Disabled: ${snapshot.sendButtonDisabled ? '⚠️ Yes' : 'No'}`);
+      response.appendResponseLine(
+        `- Disabled: ${snapshot.sendButtonDisabled ? '⚠️ Yes' : 'No'}`,
+      );
       response.appendResponseLine('');
 
       response.appendResponseLine('## Message Counts');
-      response.appendResponseLine(`- User Messages: ${snapshot.userMessageCount ?? 'N/A'}`);
-      response.appendResponseLine(`- Assistant Messages: ${snapshot.assistantMessageCount ?? 'N/A'}`);
+      response.appendResponseLine(
+        `- User Messages: ${snapshot.userMessageCount ?? 'N/A'}`,
+      );
+      response.appendResponseLine(
+        `- Assistant Messages: ${snapshot.assistantMessageCount ?? 'N/A'}`,
+      );
       response.appendResponseLine('');
 
       response.appendResponseLine('## Other State');
-      response.appendResponseLine(`- Stop Button: ${snapshot.hasStopButton ? '⚠️ Visible (generating)' : 'Not visible'}`);
-      response.appendResponseLine(`- Login Prompt: ${snapshot.hasLoginPrompt ? '⚠️ Detected' : 'Not detected'}`);
+      response.appendResponseLine(
+        `- Stop Button: ${snapshot.hasStopButton ? '⚠️ Visible (generating)' : 'Not visible'}`,
+      );
+      response.appendResponseLine(
+        `- Login Prompt: ${snapshot.hasLoginPrompt ? '⚠️ Detected' : 'Not detected'}`,
+      );
       if (snapshot.visibleDialogs && snapshot.visibleDialogs.length > 0) {
-        response.appendResponseLine(`- Dialogs: ${snapshot.visibleDialogs.join(', ')}`);
+        response.appendResponseLine(
+          `- Dialogs: ${snapshot.visibleDialogs.join(', ')}`,
+        );
       }
       response.appendResponseLine('');
 
@@ -105,7 +130,6 @@ export const cdpSnapshot = defineTool({
         response.appendResponseLine('');
         response.appendResponseLine(`⚠️ Partial error: ${snapshot.error}`);
       }
-
     } catch (error) {
       response.appendResponseLine(
         `❌ Failed to take snapshot: ${error instanceof Error ? error.message : String(error)}`,
@@ -125,14 +149,14 @@ export const getPageDomTool = defineTool({
     readOnlyHint: true,
   },
   schema: {
-    target: z
-      .enum(['chatgpt', 'gemini'])
-      .describe('Which AI to get DOM from'),
+    target: z.enum(['chatgpt', 'gemini']).describe('Which AI to get DOM from'),
     selectors: z
       .array(z.string())
       .optional()
       .default([])
-      .describe('CSS selectors to query. If empty, uses default selectors for the target.'),
+      .describe(
+        'CSS selectors to query. If empty, uses default selectors for the target.',
+      ),
   },
   handler: async (request, response) => {
     const {target, selectors} = request.params;
@@ -147,7 +171,9 @@ export const getPageDomTool = defineTool({
       response.appendResponseLine('');
 
       if (!snapshot.connected) {
-        response.appendResponseLine(`❌ Not connected: ${snapshot.error || 'Unknown error'}`);
+        response.appendResponseLine(
+          `❌ Not connected: ${snapshot.error || 'Unknown error'}`,
+        );
         return;
       }
 
@@ -155,7 +181,9 @@ export const getPageDomTool = defineTool({
       response.appendResponseLine('## Selector Results');
       for (const [selector, result] of Object.entries(snapshot.selectors)) {
         response.appendResponseLine('');
-        response.appendResponseLine(`### \`${selector}\` (${result.count} elements)`);
+        response.appendResponseLine(
+          `### \`${selector}\` (${result.count} elements)`,
+        );
 
         if (result.elements.length === 0) {
           response.appendResponseLine('No elements found.');
@@ -163,24 +191,31 @@ export const getPageDomTool = defineTool({
           for (let i = 0; i < result.elements.length; i++) {
             const el = result.elements[i];
             response.appendResponseLine('');
-            response.appendResponseLine(`**Element ${i + 1}:** \`<${el.tagName}>\``);
+            response.appendResponseLine(
+              `**Element ${i + 1}:** \`<${el.tagName}>\``,
+            );
 
             // Attributes
             const attrEntries = Object.entries(el.attributes);
             if (attrEntries.length > 0) {
               response.appendResponseLine('Attributes:');
               for (const [name, value] of attrEntries.slice(0, 10)) {
-                const displayValue = value.length > 50 ? value.slice(0, 50) + '...' : value;
+                const displayValue =
+                  value.length > 50 ? value.slice(0, 50) + '...' : value;
                 response.appendResponseLine(`  - ${name}="${displayValue}"`);
               }
               if (attrEntries.length > 10) {
-                response.appendResponseLine(`  ... and ${attrEntries.length - 10} more`);
+                response.appendResponseLine(
+                  `  ... and ${attrEntries.length - 10} more`,
+                );
               }
             }
 
             // Text content
             if (el.textContent) {
-              response.appendResponseLine(`Text: "${el.textContent.slice(0, 100)}${el.textContent.length > 100 ? '...' : ''}"`);
+              response.appendResponseLine(
+                `Text: "${el.textContent.slice(0, 100)}${el.textContent.length > 100 ? '...' : ''}"`,
+              );
             }
           }
         }
@@ -193,10 +228,14 @@ export const getPageDomTool = defineTool({
         response.appendResponseLine(`Total: ${snapshot.messages.length}`);
 
         const userMsgs = snapshot.messages.filter(m => m.role === 'user');
-        const assistantMsgs = snapshot.messages.filter(m => m.role === 'assistant');
+        const assistantMsgs = snapshot.messages.filter(
+          m => m.role === 'assistant',
+        );
 
         response.appendResponseLine(`- User messages: ${userMsgs.length}`);
-        response.appendResponseLine(`- Assistant messages: ${assistantMsgs.length}`);
+        response.appendResponseLine(
+          `- Assistant messages: ${assistantMsgs.length}`,
+        );
 
         // Show last few messages
         const recentMessages = snapshot.messages.slice(-4);
@@ -204,8 +243,14 @@ export const getPageDomTool = defineTool({
           response.appendResponseLine('');
           response.appendResponseLine('### Recent Messages');
           for (const msg of recentMessages) {
-            const role = msg.role === 'user' ? '👤 User' : msg.role === 'assistant' ? '🤖 Assistant' : '❓ Unknown';
-            const text = msg.text.slice(0, 150) + (msg.text.length > 150 ? '...' : '');
+            const role =
+              msg.role === 'user'
+                ? '👤 User'
+                : msg.role === 'assistant'
+                  ? '🤖 Assistant'
+                  : '❓ Unknown';
+            const text =
+              msg.text.slice(0, 150) + (msg.text.length > 150 ? '...' : '');
             response.appendResponseLine(`${role}: "${text}"`);
           }
         }
@@ -215,7 +260,6 @@ export const getPageDomTool = defineTool({
         response.appendResponseLine('');
         response.appendResponseLine(`⚠️ Partial error: ${snapshot.error}`);
       }
-
     } catch (error) {
       response.appendResponseLine(
         `❌ Failed to get DOM: ${error instanceof Error ? error.message : String(error)}`,

@@ -65,18 +65,18 @@ V1 のセッションストアは以下の構造でした:
 {
   "projects": {
     "my-project": {
-      "chatgpt": { "url": "https://chatgpt.com/c/abc123" },
-      "gemini": { "url": "https://gemini.google.com/app/xyz789" }
+      "chatgpt": {"url": "https://chatgpt.com/c/abc123"},
+      "gemini": {"url": "https://gemini.google.com/app/xyz789"}
     }
   }
 }
 ```
 
-| 問題 | 説明 |
-|------|------|
-| 同一プロジェクト内の区別不可 | キーがプロジェクト名のみ |
-| Last-write-wins | 複数エージェントが同じキーに書き込む |
-| セッション漏洩 | Agent A のリクエストが Agent B のチャットに送られる |
+| 問題                         | 説明                                                |
+| ---------------------------- | --------------------------------------------------- |
+| 同一プロジェクト内の区別不可 | キーがプロジェクト名のみ                            |
+| Last-write-wins              | 複数エージェントが同じキーに書き込む                |
+| セッション漏洩               | Agent A のリクエストが Agent B のチャットに送られる |
 
 単一エージェントの利用では顕在化しませんが、Agent Teams を使った瞬間に破綻します。
 
@@ -92,13 +92,13 @@ V1 のセッションストアは以下の構造でした:
   "agents": {
     "claude-code-12345": {
       "lastAccess": "2026-02-07T10:00:00.000Z",
-      "chatgpt": { "url": "https://chatgpt.com/c/abc123", "tabId": 1 },
+      "chatgpt": {"url": "https://chatgpt.com/c/abc123", "tabId": 1},
       "gemini": null
     },
     "claude-code-12346": {
       "lastAccess": "2026-02-07T10:01:00.000Z",
-      "chatgpt": { "url": "https://chatgpt.com/c/def456", "tabId": 2 },
-      "gemini": { "url": "https://gemini.google.com/app/xyz789" }
+      "chatgpt": {"url": "https://chatgpt.com/c/def456", "tabId": 2},
+      "gemini": {"url": "https://gemini.google.com/app/xyz789"}
     }
   },
   "config": {
@@ -114,11 +114,11 @@ V1 のセッションストアは以下の構造でした:
 
 Agent ID はハイブリッド方式で生成します（`agent-context.ts:generateAgentId()`）:
 
-| 優先度 | 方法 | 生成される ID | ユースケース |
-|--------|------|-------------|-------------|
-| 1 | `CAI_AGENT_ID` 環境変数 + PID | `my-agent-12345` | 明示的な制御が必要な場合 |
-| 2 | MCP クライアント名 + PID | `claude-code-12345` | 通常の Agent Teams 利用 |
-| 3 | フォールバック | `agent-12345-1707300000000` | クライアント名が不明な場合 |
+| 優先度 | 方法                          | 生成される ID               | ユースケース               |
+| ------ | ----------------------------- | --------------------------- | -------------------------- |
+| 1      | `CAI_AGENT_ID` 環境変数 + PID | `my-agent-12345`            | 明示的な制御が必要な場合   |
+| 2      | MCP クライアント名 + PID      | `claude-code-12345`         | 通常の Agent Teams 利用    |
+| 3      | フォールバック                | `agent-12345-1707300000000` | クライアント名が不明な場合 |
 
 PID を含めることで、同一マシン上の複数プロセスが一意に区別されます。
 
@@ -158,13 +158,13 @@ V1: projects["my-project"] → V2: agents["legacy-my_project"]
 
 ### ファイル構成
 
-| ファイル | 役割 |
-|---------|------|
-| `src/fast-cdp/agent-context.ts` | Agent ID 生成、接続状態管理（`AgentConnection`） |
+| ファイル                          | 役割                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| `src/fast-cdp/agent-context.ts`   | Agent ID 生成、接続状態管理（`AgentConnection`）             |
 | `src/fast-cdp/session-manager.ts` | V2 セッション永続化、V1 マイグレーション、TTL クリーンアップ |
-| `src/config.ts` | 環境変数からのセッション設定読み込み（`> 0` バリデーション） |
-| `src/fast-cdp/fast-chat.ts` | V2 セッション API を使用したタブ管理 |
-| `src/main.ts` | MCP initialize 時に Agent ID 生成・設定 |
+| `src/config.ts`                   | 環境変数からのセッション設定読み込み（`> 0` バリデーション） |
+| `src/fast-cdp/fast-chat.ts`       | V2 セッション API を使用したタブ管理                         |
+| `src/main.ts`                     | MCP initialize 時に Agent ID 生成・設定                      |
 
 ### agent-context.ts — 接続状態の分離
 
@@ -204,10 +204,10 @@ MCP サーバーの起動直後、最初のリクエストを処理する前に 
 
 ## 残課題
 
-| 課題 | 状況 | 影響 |
-|------|------|------|
-| `history.jsonl` の Agent 対応 | 未対応 | 全エージェントの履歴が混在して記録される |
-| RelayServer のエージェント間分離 | 各エージェントが独立インスタンスを保持（実装済み） | ポート数の増加 |
+| 課題                             | 状況                                               | 影響                                     |
+| -------------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| `history.jsonl` の Agent 対応    | 未対応                                             | 全エージェントの履歴が混在して記録される |
+| RelayServer のエージェント間分離 | 各エージェントが独立インスタンスを保持（実装済み） | ポート数の増加                           |
 
 `history.jsonl` は現状、Agent ID を記録していません。Agent Teams 利用時に「どのエージェントがどの質問をしたか」をログから追跡するには、今後の対応が必要です。
 

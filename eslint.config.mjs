@@ -20,6 +20,8 @@ export default defineConfig([
     '**/data/',
     '**/packages/',
     'scripts/*.mjs',
+    'src/extension/**/*.mjs',
+    'src/extension/**/*.js',
   ]),
   importPlugin.flatConfigs.typescript,
   {

@@ -39,7 +39,9 @@ const useLongQuestion = args.includes('--long');
 const delayArg = args.find(a => a.startsWith('--delay='));
 const delay = delayArg ? parseInt(delayArg.split('=')[1], 10) : 0;
 const minTextLenArg = args.find(a => a.startsWith('--min-textlen='));
-const minTextLen = minTextLenArg ? parseInt(minTextLenArg.split('=')[1], 10) : 0;
+const minTextLen = minTextLenArg
+  ? parseInt(minTextLenArg.split('=')[1], 10)
+  : 0;
 
 // Emulate.setFocusEmulationEnabled の検証用
 const emulateFocus = args.includes('--emulate-focus');
@@ -411,14 +413,24 @@ async function main() {
   const targetLabel = target === 'chatgpt' ? 'ChatGPT' : 'Gemini';
 
   console.error('');
-  console.error('╔═══════════════════════════════════════════════════════════════╗');
-  console.error(`║  ${targetLabel} バックグラウンドタブ検証                              ║`);
-  console.error('╚═══════════════════════════════════════════════════════════════╝');
+  console.error(
+    '╔═══════════════════════════════════════════════════════════════╗',
+  );
+  console.error(
+    `║  ${targetLabel} バックグラウンドタブ検証                              ║`,
+  );
+  console.error(
+    '╚═══════════════════════════════════════════════════════════════╝',
+  );
   console.error('');
   console.error(`ターゲット: ${targetLabel}`);
-  console.error(`モード: ${skipBackground ? 'フォアグラウンド維持（比較用）' : 'バックグラウンド化テスト'}`);
+  console.error(
+    `モード: ${skipBackground ? 'フォアグラウンド維持（比較用）' : 'バックグラウンド化テスト'}`,
+  );
   console.error(`モニタリング時間: ${duration}秒`);
-  console.error(`質問タイプ: ${useLongQuestion ? '長い回答を期待' : '短い回答'}`);
+  console.error(
+    `質問タイプ: ${useLongQuestion ? '長い回答を期待' : '短い回答'}`,
+  );
   if (delay > 0) {
     console.error(`待機時間: 停止ボタン検出後 ${delay}秒`);
   }
@@ -441,9 +453,11 @@ async function main() {
 
   // Emulate.setFocusEmulationEnabled の設定（--emulate-focus オプション時）
   if (emulateFocus) {
-    console.error('[Phase 1.5] Emulate.setFocusEmulationEnabled(true) を実行中...');
+    console.error(
+      '[Phase 1.5] Emulate.setFocusEmulationEnabled(true) を実行中...',
+    );
     try {
-      await client.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+      await client.send('Emulation.setFocusEmulationEnabled', {enabled: true});
       console.error('[Phase 1.5] setFocusEmulationEnabled 成功');
     } catch (e) {
       console.error(`[Phase 1.5] setFocusEmulationEnabled 失敗: ${e.message}`);
@@ -453,7 +467,9 @@ async function main() {
 
   // 初期状態を取得
   const initialState = await getState(client, target);
-  console.error(`[Initial] visibilityState=${initialState.visibilityState}, responseCount=${initialState.responseCount}`);
+  console.error(
+    `[Initial] visibilityState=${initialState.visibilityState}, responseCount=${initialState.responseCount}`,
+  );
 
   // bringToFront で確実にフォアグラウンドに
   try {
@@ -489,12 +505,16 @@ async function main() {
     }
 
     if (waitedForGeneration >= maxWaitForGeneration) {
-      console.error('[Phase 4] 警告: 停止ボタンが検出されませんでした（タイムアウト）');
+      console.error(
+        '[Phase 4] 警告: 停止ボタンが検出されませんでした（タイムアウト）',
+      );
     }
 
     // 停止ボタン検出時点の状態を記録
     const stateAtStopButton = await getState(client, target);
-    console.error(`[Phase 4] 停止ボタン検出時: textLen=${stateAtStopButton.textLen}`);
+    console.error(
+      `[Phase 4] 停止ボタン検出時: textLen=${stateAtStopButton.textLen}`,
+    );
 
     // --delay オプション: 指定秒数待機
     if (delay > 0) {
@@ -515,12 +535,16 @@ async function main() {
         const state = await getState(client, target);
         console.error(`  textLen = ${state.textLen}`);
         if (state.textLen >= minTextLen) {
-          console.error(`[Phase 4] textLen 閾値到達: ${state.textLen} >= ${minTextLen}`);
+          console.error(
+            `[Phase 4] textLen 閾値到達: ${state.textLen} >= ${minTextLen}`,
+          );
           break;
         }
         // 応答完了したらそれ以上待たない
         if (state.hasFeedbackButtons && !state.hasStopButton) {
-          console.error(`[Phase 4] 応答完了（textLen=${state.textLen}は閾値未達だが続行）`);
+          console.error(
+            `[Phase 4] 応答完了（textLen=${state.textLen}は閾値未達だが続行）`,
+          );
           break;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -533,13 +557,19 @@ async function main() {
 
     // バックグラウンド化直前の状態を記録
     const stateBeforeBackground = await getState(client, target);
-    console.error(`[Phase 4] バックグラウンド化直前: textLen=${stateBeforeBackground.textLen}`);
+    console.error(
+      `[Phase 4] バックグラウンド化直前: textLen=${stateBeforeBackground.textLen}`,
+    );
 
-    console.error('[Phase 4] バックグラウンド化中（Target.createTarget で新規タブ作成）...');
+    console.error(
+      '[Phase 4] バックグラウンド化中（Target.createTarget で新規タブ作成）...',
+    );
     try {
       // CDP Target.createTarget を使用して新規タブを作成
       // これはポップアップブロッカーの影響を受けない
-      const { targetId } = await client.send('Target.createTarget', { url: 'about:blank' });
+      const {targetId} = await client.send('Target.createTarget', {
+        url: 'about:blank',
+      });
       console.error(`[Phase 4] 新規タブを開きました (targetId: ${targetId})`);
       console.error(`[Phase 4] ${targetLabel} タブはバックグラウンドへ`);
     } catch (e) {
@@ -569,9 +599,15 @@ async function main() {
 
   // 5. 1秒ごとにDOM状態を取得
   console.error('');
-  console.error('╔═══════════════════════════════════════════════════════════════╗');
-  console.error(`║  DOM状態モニタリング開始（1秒間隔 × ${duration}回）                    ║`);
-  console.error('╚═══════════════════════════════════════════════════════════════╝');
+  console.error(
+    '╔═══════════════════════════════════════════════════════════════╗',
+  );
+  console.error(
+    `║  DOM状態モニタリング開始（1秒間隔 × ${duration}回）                    ║`,
+  );
+  console.error(
+    '╚═══════════════════════════════════════════════════════════════╝',
+  );
   console.error('');
 
   const samples = [];
@@ -595,17 +631,21 @@ async function main() {
       increaseCount++;
     }
 
-    const status = state.hasStopButton ? '⏳ 生成中' : (state.hasFeedbackButtons ? '✅ 完了' : '⏸️ 待機');
+    const status = state.hasStopButton
+      ? '⏳ 生成中'
+      : state.hasFeedbackButtons
+        ? '✅ 完了'
+        : '⏸️ 待機';
     const focusStr = state.hasFocus ? 'F' : '-';
 
     console.error(
       `@${String(i).padStart(2)}s: ` +
-      `vis=${state.visibilityState.padEnd(7)} ` +
-      `focus=${focusStr} ` +
-      `resp=${String(state.responseCount).padStart(2)} ` +
-      `textLen=${String(state.textLen).padStart(5)} ` +
-      `(+${String(textDelta).padStart(4)}) ` +
-      `${status}`
+        `vis=${state.visibilityState.padEnd(7)} ` +
+        `focus=${focusStr} ` +
+        `resp=${String(state.responseCount).padStart(2)} ` +
+        `textLen=${String(state.textLen).padStart(5)} ` +
+        `(+${String(textDelta).padStart(4)}) ` +
+        `${status}`,
     );
 
     // 緊急フォーカス回復: textLen === 0 が続く場合
@@ -613,7 +653,9 @@ async function main() {
       if (state.textLen === 0) {
         zeroTextLenSeconds++;
         if (zeroTextLenSeconds >= ZERO_TEXTLEN_THRESHOLD) {
-          console.error(`[Recovery] textLen=0 が ${ZERO_TEXTLEN_THRESHOLD}秒継続 → bringToFront を試行`);
+          console.error(
+            `[Recovery] textLen=0 が ${ZERO_TEXTLEN_THRESHOLD}秒継続 → bringToFront を試行`,
+          );
           try {
             await client.send('Page.bringToFront');
             focusRecoveryAttempted = true;
@@ -648,9 +690,15 @@ async function main() {
 
   if (!skipBackground) {
     console.error('');
-    console.error('╔═══════════════════════════════════════════════════════════════╗');
-    console.error('║  フォーカス回復テスト（bringToFront 後の変化）                 ║');
-    console.error('╚═══════════════════════════════════════════════════════════════╝');
+    console.error(
+      '╔═══════════════════════════════════════════════════════════════╗',
+    );
+    console.error(
+      '║  フォーカス回復テスト（bringToFront 後の変化）                 ║',
+    );
+    console.error(
+      '╚═══════════════════════════════════════════════════════════════╝',
+    );
     console.error('');
 
     try {
@@ -668,17 +716,21 @@ async function main() {
       recoverySamples.push(state);
 
       const textDelta = state.textLen - recoveryLastTextLen;
-      const status = state.hasStopButton ? '⏳ 生成中' : (state.hasFeedbackButtons ? '✅ 完了' : '⏸️ 待機');
+      const status = state.hasStopButton
+        ? '⏳ 生成中'
+        : state.hasFeedbackButtons
+          ? '✅ 完了'
+          : '⏸️ 待機';
       const focusStr = state.hasFocus ? 'F' : '-';
 
       console.error(
         `[R+${String(i).padStart(2)}s]: ` +
-        `vis=${state.visibilityState.padEnd(7)} ` +
-        `focus=${focusStr} ` +
-        `resp=${String(state.responseCount).padStart(2)} ` +
-        `textLen=${String(state.textLen).padStart(5)} ` +
-        `(+${String(textDelta).padStart(4)}) ` +
-        `${status}`
+          `vis=${state.visibilityState.padEnd(7)} ` +
+          `focus=${focusStr} ` +
+          `resp=${String(state.responseCount).padStart(2)} ` +
+          `textLen=${String(state.textLen).padStart(5)} ` +
+          `(+${String(textDelta).padStart(4)}) ` +
+          `${status}`,
       );
 
       recoveryLastTextLen = state.textLen;
@@ -687,13 +739,22 @@ async function main() {
 
   // 7. 結果判定
   console.error('');
-  console.error('╔═══════════════════════════════════════════════════════════════╗');
-  console.error('║  検証結果                                                      ║');
-  console.error('╚═══════════════════════════════════════════════════════════════╝');
+  console.error(
+    '╔═══════════════════════════════════════════════════════════════╗',
+  );
+  console.error(
+    '║  検証結果                                                      ║',
+  );
+  console.error(
+    '╚═══════════════════════════════════════════════════════════════╝',
+  );
   console.error('');
 
   const finalState = samples[samples.length - 1];
-  const recoveryFinalState = recoverySamples.length > 0 ? recoverySamples[recoverySamples.length - 1] : null;
+  const recoveryFinalState =
+    recoverySamples.length > 0
+      ? recoverySamples[recoverySamples.length - 1]
+      : null;
   const wasBackground = samples.some(s => s.visibilityState === 'hidden');
 
   console.error(`サンプル数: ${samples.length}`);
@@ -701,17 +762,26 @@ async function main() {
   console.error(`バックグラウンド化時 textLen: ${textLenAtBackground}`);
   console.error(`textLen増加回数: ${increaseCount} / ${samples.length - 1}`);
   console.error(`バックグラウンド中 最終textLen: ${finalState.textLen}`);
-  console.error(`応答完了: ${completedAt ? `${completedAt}秒目で検出` : '未検出'}`);
-  console.error(`緊急フォーカス回復: ${focusRecoveryAttempted ? 'あり' : 'なし'}`);
+  console.error(
+    `応答完了: ${completedAt ? `${completedAt}秒目で検出` : '未検出'}`,
+  );
+  console.error(
+    `緊急フォーカス回復: ${focusRecoveryAttempted ? 'あり' : 'なし'}`,
+  );
 
   if (recoveryFinalState) {
-    const recoveryTextIncrease = recoveryFinalState.textLen - recoveryStartTextLen;
+    const recoveryTextIncrease =
+      recoveryFinalState.textLen - recoveryStartTextLen;
     console.error('');
     console.error('--- フォーカス回復後 ---');
     console.error(`回復開始時 textLen: ${recoveryStartTextLen}`);
     console.error(`回復後 最終textLen: ${recoveryFinalState.textLen}`);
-    console.error(`回復後の増加量: ${recoveryTextIncrease > 0 ? '+' : ''}${recoveryTextIncrease}`);
-    console.error(`回復後 応答完了: ${recoveryFinalState.hasFeedbackButtons && !recoveryFinalState.hasStopButton ? 'はい' : 'いいえ'}`);
+    console.error(
+      `回復後の増加量: ${recoveryTextIncrease > 0 ? '+' : ''}${recoveryTextIncrease}`,
+    );
+    console.error(
+      `回復後 応答完了: ${recoveryFinalState.hasFeedbackButtons && !recoveryFinalState.hasStopButton ? 'はい' : 'いいえ'}`,
+    );
   }
   console.error('');
   console.error('--- 条件パラメータ ---');
@@ -724,57 +794,113 @@ async function main() {
   // 判定
   if (wasBackground && increaseCount >= 3 && !focusRecoveryAttempted) {
     if (emulateFocus) {
-      console.error('╔═══════════════════════════════════════════════════════════════╗');
-      console.error('║  ✅ setFocusEmulationEnabled 有効: DOM更新継続！             ║');
-      console.error('╚═══════════════════════════════════════════════════════════════╝');
+      console.error(
+        '╔═══════════════════════════════════════════════════════════════╗',
+      );
+      console.error(
+        '║  ✅ setFocusEmulationEnabled 有効: DOM更新継続！             ║',
+      );
+      console.error(
+        '╚═══════════════════════════════════════════════════════════════╝',
+      );
       console.error('');
-      console.error('結論: Emulation.setFocusEmulationEnabled(true) が効果的。');
-      console.error('      フォーカスをエミュレートすることでバックグラウンドでもDOM更新継続。');
+      console.error(
+        '結論: Emulation.setFocusEmulationEnabled(true) が効果的。',
+      );
+      console.error(
+        '      フォーカスをエミュレートすることでバックグラウンドでもDOM更新継続。',
+      );
       console.error('      → 接続時に一度呼ぶだけで透明に動作する解決策。');
     } else {
-      console.error('╔═══════════════════════════════════════════════════════════════╗');
-      console.error('║  ✅ 仮説A 正しい: バックグラウンドでもDOM更新継続            ║');
-      console.error('╚═══════════════════════════════════════════════════════════════╝');
+      console.error(
+        '╔═══════════════════════════════════════════════════════════════╗',
+      );
+      console.error(
+        '║  ✅ 仮説A 正しい: バックグラウンドでもDOM更新継続            ║',
+      );
+      console.error(
+        '╚═══════════════════════════════════════════════════════════════╝',
+      );
       console.error('');
-      console.error('結論: bringToFront を送信時に一度呼べば、その後バックグラウンドでも');
+      console.error(
+        '結論: bringToFront を送信時に一度呼べば、その後バックグラウンドでも',
+      );
       console.error('      DOM更新は継続される。現状の実装で問題なし。');
     }
     process.exit(0);
   } else if (focusRecoveryAttempted && increaseCount >= 3) {
-    console.error('╔═══════════════════════════════════════════════════════════════╗');
-    console.error('║  🔄 回復成功: フォーカス回復後にtextLen増加開始              ║');
-    console.error('╚═══════════════════════════════════════════════════════════════╝');
+    console.error(
+      '╔═══════════════════════════════════════════════════════════════╗',
+    );
+    console.error(
+      '║  🔄 回復成功: フォーカス回復後にtextLen増加開始              ║',
+    );
+    console.error(
+      '╚═══════════════════════════════════════════════════════════════╝',
+    );
     console.error('');
-    console.error('結論: バックグラウンドでは応答検出ができなかったが、bringToFront で回復。');
+    console.error(
+      '結論: バックグラウンドでは応答検出ができなかったが、bringToFront で回復。',
+    );
     console.error('      定期的な bringToFront が必要。');
     process.exit(1);
   } else if (wasBackground && increaseCount < 3) {
     if (emulateFocus) {
-      console.error('╔═══════════════════════════════════════════════════════════════╗');
-      console.error('║  ❌ setFocusEmulationEnabled は効果なし                       ║');
-      console.error('╚═══════════════════════════════════════════════════════════════╝');
+      console.error(
+        '╔═══════════════════════════════════════════════════════════════╗',
+      );
+      console.error(
+        '║  ❌ setFocusEmulationEnabled は効果なし                       ║',
+      );
+      console.error(
+        '╚═══════════════════════════════════════════════════════════════╝',
+      );
       console.error('');
-      console.error('結論: Emulation.setFocusEmulationEnabled(true) でも DOM 更新停止。');
-      console.error('      フォーカスのエミュレートは visibilityState に影響しない可能性。');
-      console.error('      別ウィンドウアプローチまたは定期的な bringToFront が必要。');
+      console.error(
+        '結論: Emulation.setFocusEmulationEnabled(true) でも DOM 更新停止。',
+      );
+      console.error(
+        '      フォーカスのエミュレートは visibilityState に影響しない可能性。',
+      );
+      console.error(
+        '      別ウィンドウアプローチまたは定期的な bringToFront が必要。',
+      );
     } else {
-      console.error('╔═══════════════════════════════════════════════════════════════╗');
-      console.error('║  ❌ 仮説B: バックグラウンドでDOM更新が停止                   ║');
-      console.error('╚═══════════════════════════════════════════════════════════════╝');
+      console.error(
+        '╔═══════════════════════════════════════════════════════════════╗',
+      );
+      console.error(
+        '║  ❌ 仮説B: バックグラウンドでDOM更新が停止                   ║',
+      );
+      console.error(
+        '╚═══════════════════════════════════════════════════════════════╝',
+      );
       console.error('');
       console.error('結論: バックグラウンドタブでは DOM 更新が停止する。');
-      console.error('      対策が必要（定期的な bringToFront、または別アプローチ）。');
+      console.error(
+        '      対策が必要（定期的な bringToFront、または別アプローチ）。',
+      );
     }
     process.exit(1);
   } else if (!wasBackground) {
-    console.error('╔═══════════════════════════════════════════════════════════════╗');
-    console.error('║  ⚠️  バックグラウンド状態が検出されませんでした              ║');
-    console.error('╚═══════════════════════════════════════════════════════════════╝');
+    console.error(
+      '╔═══════════════════════════════════════════════════════════════╗',
+    );
+    console.error(
+      '║  ⚠️  バックグラウンド状態が検出されませんでした              ║',
+    );
+    console.error(
+      '╚═══════════════════════════════════════════════════════════════╝',
+    );
     console.error('');
     if (skipBackground) {
-      console.error('--skip-background フラグが指定されているため、これは期待通りです。');
+      console.error(
+        '--skip-background フラグが指定されているため、これは期待通りです。',
+      );
     } else {
-      console.error('Target.createTarget / window.open が機能しなかった可能性があります。');
+      console.error(
+        'Target.createTarget / window.open が機能しなかった可能性があります。',
+      );
       console.error('手動で別タブに切り替えてテストしてください。');
     }
     process.exit(skipBackground ? 0 : 1);
@@ -783,9 +909,15 @@ async function main() {
 
 main().catch(err => {
   console.error('');
-  console.error('╔═══════════════════════════════════════════════════════════════╗');
-  console.error('║  Fatal Error                                                   ║');
-  console.error('╚═══════════════════════════════════════════════════════════════╝');
+  console.error(
+    '╔═══════════════════════════════════════════════════════════════╗',
+  );
+  console.error(
+    '║  Fatal Error                                                   ║',
+  );
+  console.error(
+    '╚═══════════════════════════════════════════════════════════════╝',
+  );
   console.error(err);
   process.exit(1);
 });

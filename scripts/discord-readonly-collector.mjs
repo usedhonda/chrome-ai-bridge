@@ -42,14 +42,25 @@ function maxSnowflake(current, candidate) {
 
 function parseChannelIds(argvChannels, argvChannelsCsv, envChannelsCsv) {
   const fromArgList = Array.isArray(argvChannels)
-    ? argvChannels.map(String).map(s => s.trim()).filter(Boolean)
+    ? argvChannels
+        .map(String)
+        .map(s => s.trim())
+        .filter(Boolean)
     : [];
-  const fromArgCsv = typeof argvChannelsCsv === 'string'
-    ? argvChannelsCsv.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
-  const fromEnvCsv = typeof envChannelsCsv === 'string'
-    ? envChannelsCsv.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const fromArgCsv =
+    typeof argvChannelsCsv === 'string'
+      ? argvChannelsCsv
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
+  const fromEnvCsv =
+    typeof envChannelsCsv === 'string'
+      ? envChannelsCsv
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
   return [...new Set([...fromArgList, ...fromArgCsv, ...fromEnvCsv])];
 }
 
@@ -249,7 +260,13 @@ function normalizeMessage(raw, fallbackGuildId, channelId) {
   };
 }
 
-async function fetchChannelMessages(client, channelId, afterId, pageSize, maxPages) {
+async function fetchChannelMessages(
+  client,
+  channelId,
+  afterId,
+  pageSize,
+  maxPages,
+) {
   const messages = [];
   let cursor = afterId || null;
   let highestMessageId = afterId || null;
@@ -362,22 +379,26 @@ function readCheckpoint(db, channelId) {
 }
 
 function writeCheckpoint(db, channelId, lastMessageId, updatedAt) {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO checkpoints (channel_id, last_message_id, updated_at)
     VALUES (?, ?, ?)
     ON CONFLICT(channel_id) DO UPDATE SET
       last_message_id = excluded.last_message_id,
       updated_at = excluded.updated_at
-  `).run(channelId, lastMessageId, updatedAt);
+  `,
+  ).run(channelId, lastMessageId, updatedAt);
 }
 
 function insertRunSummary(db, summary) {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO runs (
       run_id, started_at, finished_at, channels_scanned,
       messages_inserted, messages_updated, errors_count
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     summary.runId,
     summary.startedAt,
     summary.finishedAt,
@@ -389,10 +410,12 @@ function insertRunSummary(db, summary) {
 }
 
 function insertRunError(db, runId, channelId, errorMessage, createdAt) {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO run_errors (run_id, channel_id, error_message, created_at)
     VALUES (?, ?, ?, ?)
-  `).run(runId, channelId, errorMessage, createdAt);
+  `,
+  ).run(runId, channelId, errorMessage, createdAt);
 }
 
 function maskToken(token) {
@@ -445,7 +468,9 @@ async function main() {
     .help()
     .parseSync();
 
-  const token = String(argv.token || process.env.DISCORD_BOT_TOKEN || '').trim();
+  const token = String(
+    argv.token || process.env.DISCORD_BOT_TOKEN || '',
+  ).trim();
   if (!token) {
     throw new Error('Missing token. Provide --token or DISCORD_BOT_TOKEN.');
   }
@@ -455,9 +480,12 @@ async function main() {
     argv.channels,
     process.env.DISCORD_CHANNEL_IDS,
   );
-  const envChannelUrls = typeof process.env.DISCORD_CHANNEL_URLS === 'string'
-    ? process.env.DISCORD_CHANNEL_URLS.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const envChannelUrls =
+    typeof process.env.DISCORD_CHANNEL_URLS === 'string'
+      ? process.env.DISCORD_CHANNEL_URLS.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
   const channelRefsFromUrls = parseChannelRefsFromUrls([
     ...(Array.isArray(argv['channel-url']) ? argv['channel-url'] : []),
     ...envChannelUrls,
@@ -467,7 +495,9 @@ async function main() {
   }
   const dedupedChannelIds = [...new Set(channelIds)];
   if (dedupedChannelIds.length === 0) {
-    throw new Error('No channel IDs provided. Use --channel or DISCORD_CHANNEL_IDS.');
+    throw new Error(
+      'No channel IDs provided. Use --channel or DISCORD_CHANNEL_IDS.',
+    );
   }
 
   const guildId = String(
@@ -477,8 +507,14 @@ async function main() {
       '',
   ).trim();
   const dbPath = path.resolve(String(argv.db));
-  const pageSize = Math.max(1, Math.min(100, Math.floor(Number(argv['page-size']) || DEFAULT_PAGE_SIZE)));
-  const maxPages = Math.max(1, Math.floor(Number(argv['max-pages']) || DEFAULT_MAX_PAGES));
+  const pageSize = Math.max(
+    1,
+    Math.min(100, Math.floor(Number(argv['page-size']) || DEFAULT_PAGE_SIZE)),
+  );
+  const maxPages = Math.max(
+    1,
+    Math.floor(Number(argv['max-pages']) || DEFAULT_MAX_PAGES),
+  );
   const startedAt = nowIso();
   const runId = randomUUID();
   const fetchedAt = nowIso();
@@ -510,13 +546,14 @@ async function main() {
       summary.channelsScanned += 1;
       const checkpoint = readCheckpoint(db, channelId);
       try {
-        const {messages, highestMessageId, pagesFetched} = await fetchChannelMessages(
-          client,
-          channelId,
-          checkpoint,
-          pageSize,
-          maxPages,
-        );
+        const {messages, highestMessageId, pagesFetched} =
+          await fetchChannelMessages(
+            client,
+            channelId,
+            checkpoint,
+            pageSize,
+            maxPages,
+          );
 
         const normalized = messages.map(message =>
           normalizeMessage(message, guildId, channelId),
@@ -534,8 +571,7 @@ async function main() {
         );
       } catch (error) {
         summary.errorsCount += 1;
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         insertRunError(db, runId, channelId, message, nowIso());
         console.error(`[collector] channel=${channelId} error=${message}`);
       }

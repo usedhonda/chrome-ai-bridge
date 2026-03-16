@@ -15,16 +15,16 @@ import {connectViaExtensionRaw} from '../build/src/fast-cdp/extension-raw.js';
 import {CdpClient} from '../build/src/fast-cdp/cdp-client.js';
 
 const target = process.argv[2] || 'chatgpt';
-const includeScreenshot = process.argv.includes('--screenshot') || process.argv.includes('-s');
+const includeScreenshot =
+  process.argv.includes('--screenshot') || process.argv.includes('-s');
 
 if (target !== 'chatgpt' && target !== 'gemini') {
   console.error('Usage: cdp-snapshot.mjs <chatgpt|gemini> [--screenshot]');
   process.exit(1);
 }
 
-const targetUrl = target === 'chatgpt'
-  ? 'https://chatgpt.com/'
-  : 'https://gemini.google.com/';
+const targetUrl =
+  target === 'chatgpt' ? 'https://chatgpt.com/' : 'https://gemini.google.com/';
 
 async function main() {
   console.log(`\n${'='.repeat(50)}`);
@@ -39,7 +39,7 @@ async function main() {
   try {
     const result = await connectViaExtensionRaw({
       tabUrl: targetUrl,
-      newTab: false,  // 既存タブを使う
+      newTab: false, // 既存タブを使う
       timeoutMs: 10000,
     });
 
@@ -54,7 +54,9 @@ async function main() {
     await client.send('Page.enable');
   } catch (error) {
     console.log(`    ❌ 接続失敗: ${error.message}`);
-    console.log('\n    Chrome拡張機能が有効で、Chromeが開いていることを確認してください。');
+    console.log(
+      '\n    Chrome拡張機能が有効で、Chromeが開いていることを確認してください。',
+    );
     process.exit(1);
   }
 
@@ -125,8 +127,12 @@ async function main() {
       console.log(`  Value:    "${state.inputValue || '(empty)'}"`);
 
       console.log('\n## Buttons');
-      console.log(`  Send:     ${state.sendButtonFound ? '✅ Found' : '❌ Not found'} ${state.sendButtonDisabled ? '(disabled)' : ''}`);
-      console.log(`  Stop:     ${state.stopButtonFound ? '⚠️ Visible (generating)' : 'Not visible'}`);
+      console.log(
+        `  Send:     ${state.sendButtonFound ? '✅ Found' : '❌ Not found'} ${state.sendButtonDisabled ? '(disabled)' : ''}`,
+      );
+      console.log(
+        `  Stop:     ${state.stopButtonFound ? '⚠️ Visible (generating)' : 'Not visible'}`,
+      );
 
       console.log('\n## Messages');
       console.log(`  User:      ${state.userMsgCount}`);
@@ -135,7 +141,6 @@ async function main() {
       if (state.hasLoginPrompt) {
         console.log('\n⚠️ ログインが必要な可能性があります');
       }
-
     } else {
       // Gemini
       const state = await client.evaluate(`
@@ -199,7 +204,9 @@ async function main() {
     if (includeScreenshot) {
       console.log('\n[3] スクリーンショット撮影中...');
       try {
-        const screenshot = await client.send('Page.captureScreenshot', {format: 'png'});
+        const screenshot = await client.send('Page.captureScreenshot', {
+          format: 'png',
+        });
         if (screenshot?.data) {
           const fs = await import('fs');
           const path = `/tmp/cdp-snapshot-${target}-${Date.now()}.png`;
@@ -210,7 +217,6 @@ async function main() {
         console.log(`    ❌ Failed: ${ssErr.message}`);
       }
     }
-
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}`);
   }

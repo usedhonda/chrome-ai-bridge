@@ -108,6 +108,7 @@ For Claude Code, you can also add project-specific configuration, but it's gener
 > **⚠️ v2.0.0 Breaking Change**
 >
 > v2.0.0 switched to Chrome extension mode. The following CLI options from v1.x are **no longer supported**:
+>
 > - `--headless`, `--channel`, `--loadExtension`, `--loadExtensionsDir`
 > - `--loadSystemExtensions`, `--isolated`, `--userDataDir`
 >
@@ -159,6 +160,7 @@ Once configured, you can use these tools:
 - `ask_chatgpt_gemini_web` - Ask both AIs in parallel (recommended)
 
 > Codex `ask-ai` skill policy in this repository:
+>
 > - Default routing: `ask_gemini_web`
 > - Cross-discussion mode: `ask_chatgpt_gemini_web`
 

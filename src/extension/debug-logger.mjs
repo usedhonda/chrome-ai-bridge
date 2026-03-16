@@ -29,7 +29,7 @@ class DebugLogger {
       ts: new Date().toISOString(),
       category,
       message,
-      data: data !== null ? this._safeStringify(data) : null
+      data: data !== null ? this._safeStringify(data) : null,
     };
 
     this.logs.push(entry);
@@ -54,9 +54,10 @@ class DebugLogger {
    * @param {any} error - エラーオブジェクト
    */
   error(message, error = null) {
-    const errorData = error instanceof Error
-      ? { name: error.name, message: error.message, stack: error.stack }
-      : error;
+    const errorData =
+      error instanceof Error
+        ? {name: error.name, message: error.message, stack: error.stack}
+        : error;
     this.log('error', message, errorData);
   }
 
@@ -99,25 +100,31 @@ class DebugLogger {
    */
   _safeStringify(obj) {
     if (obj === null || obj === undefined) return obj;
-    if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+    if (
+      typeof obj === 'string' ||
+      typeof obj === 'number' ||
+      typeof obj === 'boolean'
+    ) {
       return obj;
     }
 
     try {
       const seen = new WeakSet();
-      return JSON.parse(JSON.stringify(obj, (key, value) => {
-        if (typeof value === 'object' && value !== null) {
-          if (seen.has(value)) {
-            return '[Circular]';
+      return JSON.parse(
+        JSON.stringify(obj, (key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
           }
-          seen.add(value);
-        }
-        // WebSocketなど大きなオブジェクトは省略
-        if (value instanceof WebSocket) {
-          return `[WebSocket: ${value.readyState}]`;
-        }
-        return value;
-      }));
+          // WebSocketなど大きなオブジェクトは省略
+          if (value instanceof WebSocket) {
+            return `[WebSocket: ${value.readyState}]`;
+          }
+          return value;
+        }),
+      );
     } catch (e) {
       return String(obj);
     }
@@ -130,11 +137,12 @@ class DebugLogger {
   getStats() {
     const stats = {
       total: this.logs.length,
-      byCategory: {}
+      byCategory: {},
     };
 
     for (const log of this.logs) {
-      stats.byCategory[log.category] = (stats.byCategory[log.category] || 0) + 1;
+      stats.byCategory[log.category] =
+        (stats.byCategory[log.category] || 0) + 1;
     }
 
     return stats;

@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * NetworkInterceptor - Captures network-layer responses from ChatGPT/Gemini
  *
  * Phase 1: Captures raw network data via CDP Network domain.
@@ -68,24 +73,26 @@ function isResponseUrl(url: string): boolean {
  */
 function stripFormatting(text: string): string {
   if (!text) return text;
-  return text
-    // Remove image references: [Image of ...]
-    .replace(/\[Image of [^\]]*\]/g, '')
-    // LaTeX display math: $$...$$
-    .replace(/\$\$(.*?)\$\$/g, '$1')
-    // LaTeX inline math: $...$
-    .replace(/\$(.*?)\$/g, '$1')
-    // LaTeX commands: \log -> log, \sum -> sum
-    .replace(/\\([a-zA-Z]+)/g, '$1')
-    // Markdown bold: **text** or __text__
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/__(.*?)__/g, '$1')
-    // Markdown italic: *text* or _text_ (but not inside words)
-    .replace(/(?<!\w)\*([^*]+)\*(?!\w)/g, '$1')
-    .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
-    // Collapse multiple newlines
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return (
+    text
+      // Remove image references: [Image of ...]
+      .replace(/\[Image of [^\]]*\]/g, '')
+      // LaTeX display math: $$...$$
+      .replace(/\$\$(.*?)\$\$/g, '$1')
+      // LaTeX inline math: $...$
+      .replace(/\$(.*?)\$/g, '$1')
+      // LaTeX commands: \log -> log, \sum -> sum
+      .replace(/\\([a-zA-Z]+)/g, '$1')
+      // Markdown bold: **text** or __text__
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      // Markdown italic: *text* or _text_ (but not inside words)
+      .replace(/(?<!\w)\*([^*]+)\*(?!\w)/g, '$1')
+      .replace(/(?<!\w)_([^_]+)_(?!\w)/g, '$1')
+      // Collapse multiple newlines
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  );
 }
 
 export class NetworkInterceptor {
@@ -98,7 +105,8 @@ export class NetworkInterceptor {
   private captureStart = 0;
 
   // Bound handler references for cleanup
-  private handlers: Array<[string, (params: any) => void]> = [];
+  private handlers: Array<[string, (params: Record<string, unknown>) => void]> =
+    [];
 
   // Pending response body fetches
   private pendingBodies = new Set<string>();
@@ -118,16 +126,20 @@ export class NetworkInterceptor {
     this.pendingBodies.clear();
     this.captureStart = Date.now();
 
-    this.addHandler('Network.requestWillBeSent', (params: any) => {
-      const {requestId, request, type} = params;
+    this.addHandler('Network.requestWillBeSent', params => {
+      const requestId = params.requestId as string;
+      const request = params.request as {url?: string} | undefined;
+      const type = params.type as string | undefined;
       if (request?.url) {
         this.requestUrls.set(requestId, request.url);
         this.requestTypes.set(requestId, type || 'other');
       }
     });
 
-    this.addHandler('Network.webSocketFrameReceived', (params: any) => {
-      const {requestId, timestamp, response} = params;
+    this.addHandler('Network.webSocketFrameReceived', params => {
+      const requestId = params.requestId as string;
+      const timestamp = params.timestamp as number | undefined;
+      const response = params.response as {payloadData?: string} | undefined;
       if (response?.payloadData) {
         this.frames.push({
           timestamp: timestamp || Date.now() / 1000,
@@ -139,16 +151,22 @@ export class NetworkInterceptor {
       }
     });
 
-    this.addHandler('Network.responseReceived', (params: any) => {
-      const {requestId, response, type} = params;
+    this.addHandler('Network.responseReceived', params => {
+      const requestId = params.requestId as string;
+      const response = params.response as
+        | {url?: string; headers?: Record<string, string>}
+        | undefined;
+      const type = params.type as string | undefined;
       if (response?.url) {
         this.requestUrls.set(requestId, response.url);
       }
       if (type) {
         this.requestTypes.set(requestId, type);
       }
-      const contentType = response?.headers?.['content-type'] ||
-                          response?.headers?.['Content-Type'] || '';
+      const contentType =
+        response?.headers?.['content-type'] ||
+        response?.headers?.['Content-Type'] ||
+        '';
       this.responseContentTypes.set(requestId, contentType);
 
       if (contentType.includes('text/event-stream')) {
@@ -156,8 +174,10 @@ export class NetworkInterceptor {
       }
     });
 
-    this.addHandler('Network.eventSourceMessageReceived', (params: any) => {
-      const {requestId, timestamp, data} = params;
+    this.addHandler('Network.eventSourceMessageReceived', params => {
+      const requestId = params.requestId as string;
+      const timestamp = params.timestamp as number | undefined;
+      const data = params.data as string | undefined;
       if (data) {
         this.frames.push({
           timestamp: timestamp || Date.now() / 1000,
@@ -171,16 +191,18 @@ export class NetworkInterceptor {
 
     // Key: When a response finishes loading, fetch its body if it's an API response
     // Also capture any text/event-stream responses (SSE) regardless of URL pattern
-    this.addHandler('Network.loadingFinished', (params: any) => {
-      const {requestId} = params;
+    this.addHandler('Network.loadingFinished', params => {
+      const requestId = params.requestId as string;
       const url = this.requestUrls.get(requestId) || '';
       const contentType = this.responseContentTypes.get(requestId) || '';
       const isSSE = contentType.includes('text/event-stream');
 
       if (isResponseUrl(url) || isSSE) {
         this.pendingBodies.add(requestId);
-        this.fetchResponseBody(requestId, url).catch((err) => {
-          console.error(`[NetworkInterceptor] fetchResponseBody error for ${url.slice(0, 80)}: ${err instanceof Error ? err.message : String(err)}`);
+        this.fetchResponseBody(requestId, url).catch(err => {
+          console.error(
+            `[NetworkInterceptor] fetchResponseBody error for ${url.slice(0, 80)}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         });
       } else if (!url) {
         // Speculative capture: requestWillBeSent was missed (tab reuse scenario)
@@ -194,8 +216,11 @@ export class NetworkInterceptor {
     console.error('[NetworkInterceptor] Capture started');
   }
 
-  private addHandler(event: string, handler: (params: any) => void): void {
-    const wrappedHandler = (params: any) => {
+  private addHandler(
+    event: string,
+    handler: (params: Record<string, unknown>) => void,
+  ): void {
+    const wrappedHandler = (params: Record<string, unknown>) => {
       if (!this.capturing) return;
       handler(params);
     };
@@ -203,25 +228,33 @@ export class NetworkInterceptor {
     this.client.on(event, wrappedHandler);
   }
 
-  private async fetchResponseBody(requestId: string, url: string): Promise<void> {
+  private async fetchResponseBody(
+    requestId: string,
+    url: string,
+  ): Promise<void> {
     const maxRetries = 2;
     const retryDelayMs = 500;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const result = await this.client.send('Network.getResponseBody', {requestId});
-        if (result?.body) {
+        const result = await this.client.send('Network.getResponseBody', {
+          requestId,
+        });
+        const body = result?.body as string | undefined;
+        if (body) {
           let data: string;
           if (result.base64Encoded) {
             try {
-              data = Buffer.from(result.body, 'base64').toString('utf-8');
+              data = Buffer.from(body, 'base64').toString('utf-8');
             } catch (decodeErr) {
-              console.error(`[NetworkInterceptor] Base64 decode failed for ${url.slice(0, 80)}: ${decodeErr instanceof Error ? decodeErr.message : String(decodeErr)}`);
+              console.error(
+                `[NetworkInterceptor] Base64 decode failed for ${url.slice(0, 80)}: ${decodeErr instanceof Error ? decodeErr.message : String(decodeErr)}`,
+              );
               this.pendingBodies.delete(requestId);
               return;
             }
           } else {
-            data = result.body;
+            data = body;
           }
 
           this.frames.push({
@@ -231,24 +264,33 @@ export class NetworkInterceptor {
             url,
             data,
           });
-          console.error(`[NetworkInterceptor] Body captured: ${url.slice(0, 80)} (${data.length} bytes)`);
+          console.error(
+            `[NetworkInterceptor] Body captured: ${url.slice(0, 80)} (${data.length} bytes)`,
+          );
         }
         this.pendingBodies.delete(requestId);
         return;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        const isRetryable = msg.includes('No resource') || msg.includes('No data found');
+        const isRetryable =
+          msg.includes('No resource') || msg.includes('No data found');
 
         if (isRetryable && attempt < maxRetries) {
-          console.error(`[NetworkInterceptor] getResponseBody retry ${attempt + 1}/${maxRetries} for ${url.slice(0, 80)}`);
+          console.error(
+            `[NetworkInterceptor] getResponseBody retry ${attempt + 1}/${maxRetries} for ${url.slice(0, 80)}`,
+          );
           await new Promise(r => setTimeout(r, retryDelayMs));
           continue;
         }
 
         if (!isRetryable) {
-          console.error(`[NetworkInterceptor] getResponseBody failed for ${url.slice(0, 80)}: ${msg}`);
+          console.error(
+            `[NetworkInterceptor] getResponseBody failed for ${url.slice(0, 80)}: ${msg}`,
+          );
         } else {
-          console.error(`[NetworkInterceptor] getResponseBody failed after ${maxRetries} retries for ${url.slice(0, 80)}: ${msg}`);
+          console.error(
+            `[NetworkInterceptor] getResponseBody failed after ${maxRetries} retries for ${url.slice(0, 80)}: ${msg}`,
+          );
         }
         this.pendingBodies.delete(requestId);
         return;
@@ -263,12 +305,15 @@ export class NetworkInterceptor {
    */
   private async speculativeFetchBody(requestId: string): Promise<void> {
     try {
-      const result = await this.client.send('Network.getResponseBody', {requestId});
-      if (!result?.body) return;
+      const result = await this.client.send('Network.getResponseBody', {
+        requestId,
+      });
+      const body = result?.body as string | undefined;
+      if (!body) return;
 
       const data = result.base64Encoded
-        ? Buffer.from(result.body, 'base64').toString('utf-8')
-        : result.body;
+        ? Buffer.from(body, 'base64').toString('utf-8')
+        : body;
 
       // Check if body looks like ChatGPT SSE (contains "data: " lines and [DONE])
       const isChatGPTSSE = data.includes('data: ') && data.includes('[DONE]');
@@ -283,7 +328,9 @@ export class NetworkInterceptor {
           url: '<speculative>',
           data,
         });
-        console.error(`[NetworkInterceptor] Speculative capture hit: ${isChatGPTSSE ? 'ChatGPT SSE' : 'Gemini'} (${data.length} bytes)`);
+        console.error(
+          `[NetworkInterceptor] Speculative capture hit: ${isChatGPTSSE ? 'ChatGPT SSE' : 'Gemini'} (${data.length} bytes)`,
+        );
       }
     } catch {
       // Silent: speculative capture is best-effort
@@ -300,7 +347,9 @@ export class NetworkInterceptor {
     this.handlers = [];
 
     const elapsed = Date.now() - this.captureStart;
-    console.error(`[NetworkInterceptor] Capture stopped: ${this.frames.length} frames in ${elapsed}ms`);
+    console.error(
+      `[NetworkInterceptor] Capture stopped: ${this.frames.length} frames in ${elapsed}ms`,
+    );
   }
 
   /**
@@ -319,7 +368,9 @@ export class NetworkInterceptor {
     // Phase 2: Grace period — if no frames captured yet, wait for late loadingFinished
     if (this.frames.length === 0) {
       const graceDeadline = Math.min(Date.now() + 3000, deadline);
-      console.error('[NetworkInterceptor] No frames yet, waiting grace period for late events...');
+      console.error(
+        '[NetworkInterceptor] No frames yet, waiting grace period for late events...',
+      );
       while (this.frames.length === 0 && Date.now() < graceDeadline) {
         await new Promise(r => setTimeout(r, 100));
         // Also wait for any new pending bodies that appeared during grace
@@ -334,7 +385,9 @@ export class NetworkInterceptor {
 
     // Warn if pending bodies remain after timeout
     if (this.pendingBodies.size > 0) {
-      console.warn(`[NetworkInterceptor] Timeout: ${this.pendingBodies.size} pending bodies abandoned (requestIds: ${[...this.pendingBodies].slice(0, 3).join(', ')}${this.pendingBodies.size > 3 ? '...' : ''})`);
+      console.warn(
+        `[NetworkInterceptor] Timeout: ${this.pendingBodies.size} pending bodies abandoned (requestIds: ${[...this.pendingBodies].slice(0, 3).join(', ')}${this.pendingBodies.size > 3 ? '...' : ''})`,
+      );
     }
 
     // Remove handlers
@@ -344,7 +397,9 @@ export class NetworkInterceptor {
     this.handlers = [];
 
     const elapsed = Date.now() - this.captureStart;
-    console.error(`[NetworkInterceptor] Capture stopped: ${this.frames.length} frames in ${elapsed}ms`);
+    console.error(
+      `[NetworkInterceptor] Capture stopped: ${this.frames.length} frames in ${elapsed}ms`,
+    );
   }
 
   getResult(): CaptureResult {
@@ -373,18 +428,32 @@ export class NetworkInterceptor {
     }
     const totalBytes = this.frames.reduce((sum, f) => sum + f.data.length, 0);
     const uniqueUrls = new Set(this.frames.map(f => f.url).filter(Boolean));
-    const typeStr = Object.entries(byType).map(([k, v]) => `${k}=${v}`).join(', ');
+    const typeStr = Object.entries(byType)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(', ');
 
-    return `frames=${this.frames.length} (${typeStr}), ` +
-           `bytes=${totalBytes}, urls=${uniqueUrls.size}, ` +
-           `duration=${Date.now() - this.captureStart}ms`;
+    return (
+      `frames=${this.frames.length} (${typeStr}), ` +
+      `bytes=${totalBytes}, urls=${uniqueUrls.size}, ` +
+      `duration=${Date.now() - this.captureStart}ms`
+    );
   }
 
   /**
    * Get all tracked request URLs (for debugging which requests were seen)
    */
-  getTrackedRequests(): Array<{requestId: string; url: string; type: string; contentType: string}> {
-    const result: Array<{requestId: string; url: string; type: string; contentType: string}> = [];
+  getTrackedRequests(): Array<{
+    requestId: string;
+    url: string;
+    type: string;
+    contentType: string;
+  }> {
+    const result: Array<{
+      requestId: string;
+      url: string;
+      type: string;
+      contentType: string;
+    }> = [];
     for (const [requestId, url] of this.requestUrls) {
       result.push({
         requestId,
@@ -450,15 +519,15 @@ export class NetworkInterceptor {
       const parsed = JSON.parse(body);
       // ChatGPT conversation response
       if (parsed?.message?.content?.parts) {
-        return parsed.message.content.parts
-          .filter((p: any) => typeof p === 'string')
+        return (parsed.message.content.parts as unknown[])
+          .filter((p): p is string => typeof p === 'string')
           .join('');
       }
       // Gemini candidate response
       if (parsed?.candidates?.[0]?.content?.parts) {
-        return parsed.candidates[0].content.parts
-          .filter((p: any) => p.text)
-          .map((p: any) => p.text)
+        return (parsed.candidates[0].content.parts as Array<{text?: string}>)
+          .filter(p => p.text)
+          .map(p => p.text)
           .join('');
       }
     } catch {
@@ -483,9 +552,7 @@ export class NetworkInterceptor {
     let text = '';
     let isDeltaEncoding = false;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
+    for (const line of lines) {
       // Detect delta_encoding v1 mode
       if (line === 'event: delta_encoding') {
         isDeltaEncoding = true;
@@ -505,8 +572,8 @@ export class NetworkInterceptor {
         } else {
           // Legacy format: full message in each SSE line
           if (parsed?.message?.content?.parts) {
-            const t = parsed.message.content.parts
-              .filter((p: any) => typeof p === 'string')
+            const t = (parsed.message.content.parts as unknown[])
+              .filter((p): p is string => typeof p === 'string')
               .join('');
             if (t.length > text.length) {
               text = t;
@@ -534,7 +601,7 @@ export class NetworkInterceptor {
    * - {"p": "", "o": "patch", "v": [{...}, {...}]} - batch operations
    * - {"p": "", "o": "add", "v": {"message": {...}}} - initial message creation
    */
-  private extractDeltaText(data: any): string {
+  private extractDeltaText(data: Record<string, unknown>): string {
     if (!data || typeof data !== 'object') return '';
 
     // Skip non-delta message types (debug log for future format analysis)
@@ -549,8 +616,12 @@ export class NetworkInterceptor {
     }
 
     // Append operation on text parts
-    if (data.o === 'append' && typeof data.v === 'string' &&
-        typeof data.p === 'string' && data.p.includes('/content/parts/')) {
+    if (
+      data.o === 'append' &&
+      typeof data.v === 'string' &&
+      typeof data.p === 'string' &&
+      data.p.includes('/content/parts/')
+    ) {
       return data.v;
     }
 
@@ -558,8 +629,12 @@ export class NetworkInterceptor {
     if (data.o === 'patch' && Array.isArray(data.v)) {
       let text = '';
       for (const op of data.v) {
-        if (op.o === 'append' && typeof op.v === 'string' &&
-            typeof op.p === 'string' && op.p.includes('/content/parts/')) {
+        if (
+          op.o === 'append' &&
+          typeof op.v === 'string' &&
+          typeof op.p === 'string' &&
+          op.p.includes('/content/parts/')
+        ) {
           text += op.v;
         }
       }
@@ -590,9 +665,9 @@ export class NetworkInterceptor {
     try {
       const parsed = JSON.parse(body);
       if (parsed?.candidates?.[0]?.content?.parts) {
-        return parsed.candidates[0].content.parts
-          .filter((p: any) => p.text)
-          .map((p: any) => p.text)
+        return (parsed.candidates[0].content.parts as Array<{text?: string}>)
+          .filter(p => p.text)
+          .map(p => p.text)
           .join('');
       }
     } catch {
@@ -645,12 +720,13 @@ export class NetworkInterceptor {
    * Extract text from parsed Gemini inner JSON structure.
    * The text is at [4][0][1][0] in the parsed array.
    */
-  private extractGeminiText(inner: any): string | null {
+  private extractGeminiText(inner: unknown): string | null {
     if (!Array.isArray(inner) || inner.length < 5) return null;
 
     // Primary path: inner[4][0][1][0]
     const responseContent = inner[4];
-    if (!Array.isArray(responseContent) || responseContent.length === 0) return null;
+    if (!Array.isArray(responseContent) || responseContent.length === 0)
+      return null;
 
     const firstChunk = responseContent[0];
     if (!Array.isArray(firstChunk) || firstChunk.length < 2) return null;
@@ -671,13 +747,18 @@ export class NetworkInterceptor {
     try {
       const parsed = JSON.parse(data);
       if (parsed?.message?.content?.parts) {
-        return parsed.message.content.parts.filter((p: any) => typeof p === 'string').join('');
+        return (parsed.message.content.parts as unknown[])
+          .filter((p): p is string => typeof p === 'string')
+          .join('');
       }
       if (parsed?.choices?.[0]?.delta?.content) {
         return parsed.choices[0].delta.content;
       }
       if (parsed?.candidates?.[0]?.content?.parts) {
-        return parsed.candidates[0].content.parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
+        return (parsed.candidates[0].content.parts as Array<{text?: string}>)
+          .filter(p => p.text)
+          .map(p => p.text)
+          .join('');
       }
       return null;
     } catch {
@@ -690,7 +771,9 @@ export class NetworkInterceptor {
     try {
       const parsed = JSON.parse(data);
       if (parsed?.message?.content?.parts) {
-        return parsed.message.content.parts.filter((p: any) => typeof p === 'string').join('');
+        return (parsed.message.content.parts as unknown[])
+          .filter((p): p is string => typeof p === 'string')
+          .join('');
       }
       if (parsed?.choices?.[0]?.delta?.content) {
         return parsed.choices[0].delta.content;

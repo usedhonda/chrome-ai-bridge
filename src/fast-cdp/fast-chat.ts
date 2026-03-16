@@ -1,21 +1,35 @@
+/**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import {connectViaExtensionRaw, RawExtensionConnection} from './extension-raw.js';
-import {CdpClient} from './cdp-client.js';
-import {RelayServer} from '../extension/relay-server.js';
-import {logConnectionState, logInfo, logError, logWarn} from './debug-logger.js';
-import {DOM_UTILS_CODE} from './utils/index.js';
-import {getDriver, type SiteDriver} from './drivers/index.js';
-import {NetworkInterceptor} from './network-interceptor.js';
+import type {RelayServer} from '../extension/relay-server.js';
+
 import {
   getAgentConnection,
   getAllAgentConnections,
   clearAllAgentConnections,
   hasAgentId,
-  type AgentConnection,
 } from './agent-context.js';
-import {saveAgentSession, getPreferredSessionV2, clearAgentSession} from './session-manager.js';
+import {CdpClient} from './cdp-client.js';
+import {
+  logConnectionState,
+  logInfo,
+  logError,
+  logWarn,
+} from './debug-logger.js';
+import {getDriver} from './drivers/index.js';
+import {connectViaExtensionRaw} from './extension-raw.js';
+import {NetworkInterceptor} from './network-interceptor.js';
+import {
+  saveAgentSession,
+  getPreferredSessionV2,
+  clearAgentSession,
+} from './session-manager.js';
+import {DOM_UTILS_CODE} from './utils/index.js';
 
 /**
  * Get current agent's client for the specified kind.
@@ -51,7 +65,9 @@ function setClientForAgent(
   relay: RelayServer | null,
 ): void {
   if (!hasAgentId()) {
-    console.error('[fast-chat] Warning: setClientForAgent called without agent ID');
+    console.error(
+      '[fast-chat] Warning: setClientForAgent called without agent ID',
+    );
     return;
   }
   const conn = getAgentConnection();
@@ -65,20 +81,34 @@ function setClientForAgent(
 }
 
 // Env var deprecation helpers
-function envWithFallback(newName: string, oldName: string, defaultVal: string): string {
+function envWithFallback(
+  newName: string,
+  oldName: string,
+  defaultVal: string,
+): string {
   if (process.env[newName]) return process.env[newName]!;
   if (process.env[oldName]) {
-    console.error(`[deprecation] ${oldName} is deprecated, use ${newName} instead`);
+    console.error(
+      `[deprecation] ${oldName} is deprecated, use ${newName} instead`,
+    );
     return process.env[oldName]!;
   }
   return defaultVal;
 }
 
 const CONNECT_REUSE_TIMEOUT_MS = Number(
-  envWithFallback('CAI_CONNECT_REUSE_TIMEOUT_MS', 'MCP_CONNECT_REUSE_TIMEOUT_MS', '12000'),
+  envWithFallback(
+    'CAI_CONNECT_REUSE_TIMEOUT_MS',
+    'MCP_CONNECT_REUSE_TIMEOUT_MS',
+    '12000',
+  ),
 );
 const CONNECT_NEWTAB_TIMEOUT_MS = Number(
-  envWithFallback('CAI_CONNECT_NEWTAB_TIMEOUT_MS', 'MCP_CONNECT_NEWTAB_TIMEOUT_MS', '20000'),
+  envWithFallback(
+    'CAI_CONNECT_NEWTAB_TIMEOUT_MS',
+    'MCP_CONNECT_NEWTAB_TIMEOUT_MS',
+    '20000',
+  ),
 );
 const TOOL_BUDGET_MS = Number(
   envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '300000'),
@@ -90,11 +120,23 @@ const BUDGET_RESERVE_MS = Number(
   envWithFallback('CAI_BUDGET_RESERVE_MS', 'CAI_MCP_BUDGET_RESERVE_MS', '3000'),
 );
 
-function getRemainingBudgetMs(startMs: number, overrideBudgetMs?: number): number {
-  return (overrideBudgetMs ?? TOOL_BUDGET_MS) - (nowMs() - startMs) - BUDGET_RESERVE_MS;
+function getRemainingBudgetMs(
+  startMs: number,
+  overrideBudgetMs?: number,
+): number {
+  return (
+    (overrideBudgetMs ?? TOOL_BUDGET_MS) -
+    (nowMs() - startMs) -
+    BUDGET_RESERVE_MS
+  );
 }
 
-function getResponseWaitBudgetMs(startMs: number, ceilingMs: number, stage: string, overrideBudgetMs?: number): number {
+function getResponseWaitBudgetMs(
+  startMs: number,
+  ceilingMs: number,
+  stage: string,
+  overrideBudgetMs?: number,
+): number {
   const effectiveBudget = overrideBudgetMs ?? TOOL_BUDGET_MS;
   const remaining = getRemainingBudgetMs(startMs, overrideBudgetMs);
   if (remaining <= 1000) {
@@ -115,7 +157,7 @@ export interface ChatTimings {
   sendMs: number;
   waitResponseMs: number;
   totalMs: number;
-  navigateMs?: number;  // Gemini only
+  navigateMs?: number; // Gemini only
 }
 
 /**
@@ -165,12 +207,18 @@ function nowMs(): number {
  * 接続の健全性を確認する
  * 軽量なevaluateコマンドで接続が生きているかチェック
  */
-async function isConnectionHealthy(client: CdpClient, kind?: 'chatgpt' | 'gemini'): Promise<boolean> {
+async function isConnectionHealthy(
+  client: CdpClient,
+  kind?: 'chatgpt' | 'gemini',
+): Promise<boolean> {
   // Fast-path: if relay is already disconnected, skip the expensive evaluate call
   if (kind) {
     const relay = getRelayFromAgent(kind);
     if (relay && !relay.isReady()) {
-      logConnectionState(kind, 'unhealthy', {elapsed: 0, error: 'relay not ready (fast-path)'});
+      logConnectionState(kind, 'unhealthy', {
+        elapsed: 0,
+        error: 'relay not ready (fast-path)',
+      });
       return false;
     }
   }
@@ -179,7 +227,7 @@ async function isConnectionHealthy(client: CdpClient, kind?: 'chatgpt' | 'gemini
   try {
     // 4秒タイムアウトで簡単なコマンドを実行（2秒では不十分な場合があった）
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Health check timeout')), 4000)
+      setTimeout(() => reject(new Error('Health check timeout')), 4000),
     );
     await Promise.race([client.evaluate('1'), timeoutPromise]);
     const elapsed = Date.now() - startTime;
@@ -212,8 +260,8 @@ async function isConnectionHealthy(client: CdpClient, kind?: 'chatgpt' | 'gemini
 async function waitForStableCount(
   client: CdpClient,
   countExpr: string,
-  maxWaitMs: number = 3000,
-  pollIntervalMs: number = 300,
+  maxWaitMs = 3000,
+  pollIntervalMs = 300,
 ): Promise<number> {
   const startTime = Date.now();
   let lastCount = -1;
@@ -245,7 +293,12 @@ function getProjectName(): string {
 }
 
 function getHistoryPath(): string {
-  return path.join(process.cwd(), '.local', 'chrome-ai-bridge', 'history.jsonl');
+  return path.join(
+    process.cwd(),
+    '.local',
+    'chrome-ai-bridge',
+    'history.jsonl',
+  );
 }
 
 function getLocalTimestamp(): string {
@@ -287,7 +340,9 @@ async function rotateHistoryIfNeeded(): Promise<void> {
     // 削除対象があれば書き換え
     if (filtered.length < lines.length) {
       await fs.writeFile(historyPath, filtered.join('\n') + '\n', 'utf-8');
-      console.error(`[history] Rotated: ${lines.length} -> ${filtered.length} entries`);
+      console.error(
+        `[history] Rotated: ${lines.length} -> ${filtered.length} entries`,
+      );
     }
   } catch (err) {
     // ファイルがない場合は無視
@@ -310,9 +365,13 @@ export async function clearGeminiClient(): Promise<void> {
  * RelayServer・CdpClient・SessionManager・CDP リスナーを一括リセット。
  * 接続失敗時のリトライ前に呼ぶことで「スティッキーな障害状態」を防ぐ。
  */
-export async function resetConnection(kind: 'chatgpt' | 'gemini'): Promise<void> {
+export async function resetConnection(
+  kind: 'chatgpt' | 'gemini',
+): Promise<void> {
   const label = kind === 'chatgpt' ? 'ChatGPT' : 'Gemini';
-  console.error(`[fast-cdp] resetConnection(${kind}) — coordinated cleanup start`);
+  console.error(
+    `[fast-cdp] resetConnection(${kind}) — coordinated cleanup start`,
+  );
 
   // 1. CdpClient: all CDP event listeners removed
   const client = getClientFromAgent(kind);
@@ -384,7 +443,9 @@ export async function cleanupAllConnections(): Promise<void> {
  * 既存Geminiチャットがスタック状態（停止ボタンが消えない）かチェック
  * 最大5秒間待機して停止ボタンが消えるか確認
  */
-async function checkGeminiStuckState(client: CdpClient): Promise<{isStuck: boolean; waitedMs: number}> {
+async function _checkGeminiStuckState(
+  client: CdpClient,
+): Promise<{isStuck: boolean; waitedMs: number}> {
   const maxWaitMs = 5000;
   const pollIntervalMs = 500;
   const startTime = Date.now();
@@ -444,11 +505,21 @@ async function appendHistory(entry: {
   await fs.appendFile(targetPath, `${JSON.stringify(payload)}\n`, 'utf-8');
 
   // ローテーション実行（非同期、エラーは無視）
-  rotateHistoryIfNeeded().catch(() => {});
+  rotateHistoryIfNeeded().catch(() => {
+    /* no-op: rotation is best-effort */
+  });
 }
 
-async function saveDebug(kind: 'chatgpt' | 'gemini', payload: Record<string, any>) {
-  const targetDir = path.join(process.cwd(), '.local', 'chrome-ai-bridge', 'debug');
+async function saveDebug(
+  kind: 'chatgpt' | 'gemini',
+  payload: Record<string, unknown>,
+) {
+  const targetDir = path.join(
+    process.cwd(),
+    '.local',
+    'chrome-ai-bridge',
+    'debug',
+  );
   await fs.mkdir(targetDir, {recursive: true});
   const file = path.join(targetDir, `${kind}-${Date.now()}.json`);
   await fs.writeFile(file, JSON.stringify(payload, null, 2), 'utf-8');
@@ -466,7 +537,9 @@ function normalizeGeminiResponse(text: string, question?: string): string {
         !/^次へのステップ/.test(line) &&
         !/^Show thinking/i.test(line) &&
         !/^Next steps/i.test(line) &&
-        !/^(Gemini|PRO|作成したもの|Gemini との会話|ツール|思考モード|今すぐ回答)$/i.test(line) &&
+        !/^(Gemini|PRO|作成したもの|Gemini との会話|ツール|思考モード|今すぐ回答)$/i.test(
+          line,
+        ) &&
         !/^Initiating Connection Check/i.test(line) &&
         !/^Acknowledging Connection Test/i.test(line) &&
         !/^Confirming Connection Integrity/i.test(line),
@@ -486,16 +559,17 @@ function normalizeGeminiResponse(text: string, question?: string): string {
  * - ChatGPT: 常に新規タブ（URLが /c/xxx に変わるため再利用困難）
  * - Gemini: 既存タブを再利用、失敗したら新規タブ
  */
-async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> {
+async function createConnection(
+  kind: 'chatgpt' | 'gemini',
+): Promise<CdpClient> {
   const startTime = Date.now();
   logConnectionState(kind, 'connecting');
 
   const preferredSession = await getPreferredSessionV2(kind);
   const preferred = preferredSession.url;
   const preferredTabId = preferredSession.tabId;
-  const defaultUrl = kind === 'chatgpt'
-    ? 'https://chatgpt.com/'
-    : 'https://gemini.google.com/';
+  const defaultUrl =
+    kind === 'chatgpt' ? 'https://chatgpt.com/' : 'https://gemini.google.com/';
 
   logInfo('fast-chat', `createConnection: ${kind}`, {
     preferred,
@@ -507,8 +581,14 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
   // まず既存タブを探す（ChatGPT/Gemini共通）
   // 既存タブがあればそれを使う、なければ新規作成
   if (preferred) {
-    logInfo('fast-chat', `Trying to reuse existing ${kind} tab`, {url: preferred, tabId: preferredTabId, timeoutMs: CONNECT_REUSE_TIMEOUT_MS});
-    console.error(`[fast-cdp] Trying to reuse existing ${kind} tab: ${preferred} (tabId: ${preferredTabId}, ${CONNECT_REUSE_TIMEOUT_MS}ms timeout)`);
+    logInfo('fast-chat', `Trying to reuse existing ${kind} tab`, {
+      url: preferred,
+      tabId: preferredTabId,
+      timeoutMs: CONNECT_REUSE_TIMEOUT_MS,
+    });
+    console.error(
+      `[fast-cdp] Trying to reuse existing ${kind} tab: ${preferred} (tabId: ${preferredTabId}, ${CONNECT_REUSE_TIMEOUT_MS}ms timeout)`,
+    );
     try {
       const relayResult = await connectViaExtensionRaw({
         tabUrl: preferred,
@@ -530,22 +610,31 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
       // Chrome DevTools: "Emulate a focused page" と同等
       // visibilityState を 'visible' に固定し、DOM更新の継続を促す
       try {
-        await client.send('Emulation.setFocusEmulationEnabled', {enabled: true});
+        await client.send('Emulation.setFocusEmulationEnabled', {
+          enabled: true,
+        });
         console.error(`[fast-cdp] ${kind} focus emulation enabled`);
       } catch (e) {
         // 非クリティカル: 失敗しても続行
-        console.error(`[fast-cdp] ${kind} setFocusEmulationEnabled failed (non-critical):`, e instanceof Error ? e.message : String(e));
+        console.error(
+          `[fast-cdp] ${kind} setFocusEmulationEnabled failed (non-critical):`,
+          e instanceof Error ? e.message : String(e),
+        );
       }
 
       // デバッグ: 接続直後のURLを確認
       const debugUrl = await client.evaluate<string>('location.href');
       console.error(`[fast-cdp] DEBUG: Connected tab URL = ${debugUrl}`);
-      console.error(`[fast-cdp] DEBUG: targetInfo URL = ${relayResult.targetInfo?.url}`);
+      console.error(
+        `[fast-cdp] DEBUG: targetInfo URL = ${relayResult.targetInfo?.url}`,
+      );
 
       // ページが読み込まれるまで待機（about:blank でなくなるまで）
       // タイムアウトは3秒で十分（通常は数百ms以内に完了）
       if (debugUrl === 'about:blank') {
-        console.error(`[fast-cdp] WARNING: evaluate returns about:blank, waiting for navigation...`);
+        console.error(
+          `[fast-cdp] WARNING: evaluate returns about:blank, waiting for navigation...`,
+        );
         await client.waitForFunction(
           `location.href !== 'about:blank' && document.readyState === 'complete'`,
           3000,
@@ -562,7 +651,9 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
       logWarn('fast-chat', `${kind} existing tab not found`, {
         error: error instanceof Error ? error.message : String(error),
       });
-      console.error(`[fast-cdp] ${kind} existing tab not found, resetting before new tab`);
+      console.error(
+        `[fast-cdp] ${kind} existing tab not found, resetting before new tab`,
+      );
       // 再利用失敗 → stale 参照をクリアしてから新規タブへ
       await resetConnection(kind);
     }
@@ -573,7 +664,10 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
   console.error(`[fast-cdp] Creating new ${kind} tab: ${defaultUrl}`);
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    logInfo('fast-chat', `${kind} connection attempt`, {attempt: attempt + 1, maxAttempts: 2});
+    logInfo('fast-chat', `${kind} connection attempt`, {
+      attempt: attempt + 1,
+      maxAttempts: 2,
+    });
     try {
       const relayResult = await connectViaExtensionRaw({
         tabUrl: defaultUrl,
@@ -593,11 +687,16 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
       // Chrome DevTools: "Emulate a focused page" と同等
       // visibilityState を 'visible' に固定し、DOM更新の継続を促す
       try {
-        await client.send('Emulation.setFocusEmulationEnabled', {enabled: true});
+        await client.send('Emulation.setFocusEmulationEnabled', {
+          enabled: true,
+        });
         console.error(`[fast-cdp] ${kind} focus emulation enabled (new tab)`);
       } catch (e) {
         // 非クリティカル: 失敗しても続行
-        console.error(`[fast-cdp] ${kind} setFocusEmulationEnabled failed (non-critical):`, e instanceof Error ? e.message : String(e));
+        console.error(
+          `[fast-cdp] ${kind} setFocusEmulationEnabled failed (non-critical):`,
+          e instanceof Error ? e.message : String(e),
+        );
       }
 
       // クライアントとRelay参照を保存
@@ -606,17 +705,25 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
       // 新規タブ作成後、ページが読み込まれるまで待機（about:blank でなくなるまで）
       const debugUrl = await client.evaluate<string>('location.href');
       if (debugUrl === 'about:blank') {
-        console.error(`[fast-cdp] Waiting for new tab to navigate from about:blank...`);
+        console.error(
+          `[fast-cdp] Waiting for new tab to navigate from about:blank...`,
+        );
         await client.waitForFunction(
           `location.href !== 'about:blank' && document.readyState === 'complete'`,
-          10000,  // 新規タブは読み込みに時間がかかる可能性があるので10秒
+          10000, // 新規タブは読み込みに時間がかかる可能性があるので10秒
         );
         console.error(`[fast-cdp] New tab navigation complete`);
       }
 
       const elapsed = Date.now() - startTime;
-      logConnectionState(kind, 'connected', {elapsed, attempt: attempt + 1, reused: false});
-      console.error(`[fast-cdp] ${kind} new tab created successfully (attempt ${attempt + 1})`);
+      logConnectionState(kind, 'connected', {
+        elapsed,
+        attempt: attempt + 1,
+        reused: false,
+      });
+      console.error(
+        `[fast-cdp] ${kind} new tab created successfully (attempt ${attempt + 1})`,
+      );
       return client;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -624,11 +731,16 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
         attempt: attempt + 1,
         error: lastError.message,
       });
-      console.error(`[fast-cdp] ${kind} new tab attempt ${attempt + 1} failed:`, lastError.message);
+      console.error(
+        `[fast-cdp] ${kind} new tab attempt ${attempt + 1} failed:`,
+        lastError.message,
+      );
 
       if (attempt < 1) {
         // リトライ前に協調クリーンアップして stale 状態を排除
-        console.error(`[fast-cdp] Resetting ${kind} connection before retry...`);
+        console.error(
+          `[fast-cdp] Resetting ${kind} connection before retry...`,
+        );
         await resetConnection(kind);
         await new Promise(r => setTimeout(r, 1000));
       }
@@ -643,7 +755,9 @@ async function createConnection(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
  * 既存の接続が切れている場合は自動的に再接続する
  * @public 外部から接続を事前確立するためにエクスポート
  */
-export async function getClient(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> {
+export async function getClient(
+  kind: 'chatgpt' | 'gemini',
+): Promise<CdpClient> {
   const existing = getClientFromAgent(kind);
   logInfo('fast-chat', `getClient called`, {kind, hasExisting: !!existing});
 
@@ -659,7 +773,9 @@ export async function getClient(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> 
 
     // 接続が切れている → 協調クリーンアップして再接続
     logConnectionState(kind, 'reconnecting');
-    console.error(`[fast-cdp] ${kind} connection lost, performing coordinated reset...`);
+    console.error(
+      `[fast-cdp] ${kind} connection lost, performing coordinated reset...`,
+    );
     await resetConnection(kind);
   }
 
@@ -683,10 +799,16 @@ function getBaseUrl(kind: 'chatgpt' | 'gemini', url: string): string {
   return url;
 }
 
-async function askChatGPTFastInternal(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+async function askChatGPTFastInternal(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
-  logInfo('chatgpt', 'askChatGPTFast started', {questionLength: question.length});
+  logInfo('chatgpt', 'askChatGPTFast started', {
+    questionLength: question.length,
+  });
 
   const client = await getClient('chatgpt');
   timings.connectMs = nowMs() - t0;
@@ -711,7 +833,9 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
   // 同じ会話に質問を投入すると前回のコンテキストが応答に影響するため
   const currentUrl = await client.evaluate<string>('location.href');
   if (currentUrl.includes('/c/')) {
-    console.error('[ChatGPT] Existing conversation detected, navigating to new chat...');
+    console.error(
+      '[ChatGPT] Existing conversation detected, navigating to new chat...',
+    );
     await navigate(client, 'https://chatgpt.com/');
     await new Promise(r => setTimeout(r, 500));
     console.error('[ChatGPT] New chat page loaded');
@@ -737,14 +861,19 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
   const assistantCountExpr = `document.querySelectorAll('[data-message-author-role="assistant"]').length`;
 
   const initialUserCount = await waitForStableCount(client, userCountExpr);
-  const initialAssistantCount = await waitForStableCount(client, assistantCountExpr);
-  console.error(`[ChatGPT] Initial counts (stable): user=${initialUserCount}, assistant=${initialAssistantCount}`);
+  const initialAssistantCount = await waitForStableCount(
+    client,
+    assistantCountExpr,
+  );
+  console.error(
+    `[ChatGPT] Initial counts (stable): user=${initialUserCount}, assistant=${initialAssistantCount}`,
+  );
 
   // createConnection で正しいURL (https://chatgpt.com/) に接続済み
 
   const sanitized = JSON.stringify(question);
-    const tInput = nowMs();
-    await client.evaluate(`
+  const tInput = nowMs();
+  await client.evaluate(`
       (() => {
         const text = ${sanitized};
         const preferredTextarea =
@@ -845,8 +974,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         return false;
       })()
     `);
-    timings.inputMs = nowMs() - tInput;
-    let inputMatched = await client.evaluate<boolean>(`
+  timings.inputMs = nowMs() - tInput;
+  let inputMatched = await client.evaluate<boolean>(`
       (() => {
         const preferredTextarea =
           document.querySelector('textarea#prompt-textarea') ||
@@ -886,8 +1015,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         return text.replace(/\\s+/g, '').includes(${JSON.stringify(normalizedQuestion)});
       })()
     `);
-    if (!inputMatched) {
-      await client.evaluate(`
+  if (!inputMatched) {
+    await client.evaluate(`
         (() => {
           const target =
             document.querySelector('#prompt-textarea') ||
@@ -899,8 +1028,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           }
         })()
       `);
-      await client.send('Input.insertText', {text: question});
-      inputMatched = await client.evaluate<boolean>(`
+    await client.send('Input.insertText', {text: question});
+    inputMatched = await client.evaluate<boolean>(`
         (() => {
           const preferredTextarea =
             document.querySelector('textarea#prompt-textarea') ||
@@ -917,37 +1046,37 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           return false;
         })()
       `);
-      if (!inputMatched) {
-        await client.send('Input.dispatchKeyEvent', {
-          type: 'keyDown',
-          key: 'a',
-          code: 'KeyA',
-          windowsVirtualKeyCode: 65,
-          modifiers: 2,
-        });
-        await client.send('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          key: 'a',
-          code: 'KeyA',
-          windowsVirtualKeyCode: 65,
-          modifiers: 2,
-        });
-        await client.send('Input.dispatchKeyEvent', {
-          type: 'keyDown',
-          key: 'Backspace',
-          code: 'Backspace',
-          windowsVirtualKeyCode: 8,
-        });
-        await client.send('Input.dispatchKeyEvent', {
-          type: 'keyUp',
-          key: 'Backspace',
-          code: 'Backspace',
-          windowsVirtualKeyCode: 8,
-        });
-        for (const ch of question) {
-          await client.send('Input.dispatchKeyEvent', {type: 'char', text: ch});
-        }
-        inputMatched = await client.evaluate<boolean>(`
+    if (!inputMatched) {
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        modifiers: 2,
+      });
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        modifiers: 2,
+      });
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Backspace',
+        code: 'Backspace',
+        windowsVirtualKeyCode: 8,
+      });
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Backspace',
+        code: 'Backspace',
+        windowsVirtualKeyCode: 8,
+      });
+      for (const ch of question) {
+        await client.send('Input.dispatchKeyEvent', {type: 'char', text: ch});
+      }
+      inputMatched = await client.evaluate<boolean>(`
           (() => {
             const preferredTextarea =
               document.querySelector('textarea#prompt-textarea') ||
@@ -964,29 +1093,35 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
             return false;
           })()
         `);
-      }
-      if (!inputMatched) {
-        throw new Error('ChatGPT input mismatch after typing.');
-      }
     }
+    if (!inputMatched) {
+      throw new Error('ChatGPT input mismatch after typing.');
+    }
+  }
 
-    logInfo('chatgpt', 'Input completed, preparing to send', {initialUserCount});
+  logInfo('chatgpt', 'Input completed, preparing to send', {initialUserCount});
 
-    // 入力完了後の待機（内部状態更新を待つ）
-    await new Promise(resolve => setTimeout(resolve, 200));
+  // 入力完了後の待機（内部状態更新を待つ）
+  await new Promise(resolve => setTimeout(resolve, 200));
 
-    const tSend = nowMs();
-    logInfo('chatgpt', 'Looking for send button');
-    let buttonInfo: {found: boolean; disabled: boolean; x: number; y: number; selector: string} | null = null;
-    const maxRetries = 120; // 60秒（500ms × 120回）
-    for (let i = 0; i < maxRetries; i++) {
-      buttonInfo = await client.evaluate<{
-        found: boolean;
-        disabled: boolean;
-        x: number;
-        y: number;
-        selector: string;
-      }>(`
+  const tSend = nowMs();
+  logInfo('chatgpt', 'Looking for send button');
+  let buttonInfo: {
+    found: boolean;
+    disabled: boolean;
+    x: number;
+    y: number;
+    selector: string;
+  } | null = null;
+  const maxRetries = 120; // 60秒（500ms × 120回）
+  for (let i = 0; i < maxRetries; i++) {
+    buttonInfo = await client.evaluate<{
+      found: boolean;
+      disabled: boolean;
+      x: number;
+      y: number;
+      selector: string;
+    }>(`
         (() => {
           ${DOM_UTILS_CODE}
           const buttons = __collectDeep(['button', '[role="button"]']).nodes
@@ -1032,34 +1167,45 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      if (buttonInfo.found && !buttonInfo.disabled) {
-        console.error(`[ChatGPT] Send button ready on attempt ${i + 1}: selector="${buttonInfo.selector}"`);
-        break;
-      }
-
-      if (i < maxRetries - 1) {
-        const reason = !buttonInfo.found
-          ? 'not found'
-          : buttonInfo.disabled
-            ? 'disabled (still generating)'
-            : 'unknown';
-        console.error(`[ChatGPT] Send button not ready (${reason}) - attempt ${i + 1}/${maxRetries}, waiting 500ms...`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+    if (buttonInfo.found && !buttonInfo.disabled) {
+      console.error(
+        `[ChatGPT] Send button ready on attempt ${i + 1}: selector="${buttonInfo.selector}"`,
+      );
+      break;
     }
 
-    if (!buttonInfo) {
-      throw new Error('ChatGPT send button check failed (buttonInfo is null)');
+    if (i < maxRetries - 1) {
+      const reason = !buttonInfo.found
+        ? 'not found'
+        : buttonInfo.disabled
+          ? 'disabled (still generating)'
+          : 'unknown';
+      console.error(
+        `[ChatGPT] Send button not ready (${reason}) - attempt ${i + 1}/${maxRetries}, waiting 500ms...`,
+      );
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
-    if (!buttonInfo.found) {
-      throw new Error('ChatGPT send button not found after 60 seconds (page may not be fully loaded).');
-    }
-    if (buttonInfo.disabled) {
-      throw new Error('ChatGPT send button is disabled after 60 seconds (previous response still generating).');
-    }
+  }
 
-    // JavaScript click() で直接クリック（CDP座標クリックは不安定なため）
-    const clickResult = await client.evaluate<{clicked: boolean; selector: string | null}>(`
+  if (!buttonInfo) {
+    throw new Error('ChatGPT send button check failed (buttonInfo is null)');
+  }
+  if (!buttonInfo.found) {
+    throw new Error(
+      'ChatGPT send button not found after 60 seconds (page may not be fully loaded).',
+    );
+  }
+  if (buttonInfo.disabled) {
+    throw new Error(
+      'ChatGPT send button is disabled after 60 seconds (previous response still generating).',
+    );
+  }
+
+  // JavaScript click() で直接クリック（CDP座標クリックは不安定なため）
+  const clickResult = await client.evaluate<{
+    clicked: boolean;
+    selector: string | null;
+  }>(`
       (() => {
         const selectors = [
           'button[data-testid="send-button"]',
@@ -1078,69 +1224,80 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       })()
     `);
 
-    if (!clickResult.clicked) {
-      logWarn('chatgpt', 'JavaScript click failed, falling back to CDP click');
-      // フォールバック: CDP座標クリック
-      await client.send('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: buttonInfo.x,
-        y: buttonInfo.y,
-        button: 'left',
-        clickCount: 1
-      });
-      await new Promise(resolve => setTimeout(resolve, 50));
-      await client.send('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: buttonInfo.x,
-        y: buttonInfo.y,
-        button: 'left',
-        clickCount: 1
-      });
+  if (!clickResult.clicked) {
+    logWarn('chatgpt', 'JavaScript click failed, falling back to CDP click');
+    // フォールバック: CDP座標クリック
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: buttonInfo.x,
+      y: buttonInfo.y,
+      button: 'left',
+      clickCount: 1,
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await client.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: buttonInfo.x,
+      y: buttonInfo.y,
+      button: 'left',
+      clickCount: 1,
+    });
+  }
+
+  logInfo('chatgpt', 'Send button clicked', {
+    method: clickResult.clicked ? 'js-click' : 'cdp',
+    selector: clickResult.selector || buttonInfo.selector,
+  });
+  timings.sendMs = nowMs() - tSend;
+  // 既存チャットかどうかを事前に判定
+  const urlBefore = await client.evaluate<string>('location.href');
+  const isExistingChat = urlBefore.includes('/c/');
+
+  try {
+    if (isExistingChat) {
+      // 既存チャット: メッセージカウント増加のみをチェック
+      await client.waitForFunction(
+        `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount}`,
+        15000,
+      );
+    } else {
+      // 新規チャット: メッセージカウント増加 OR URL変更（/c/へのリダイレクト）
+      await client.waitForFunction(
+        `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount} || location.href.includes('/c/')`,
+        15000,
+      );
+
+      const urlNow = await client.evaluate<string>('location.href');
+      if (urlNow.includes('/c/') && initialUserCount === 0) {
+        // 新規チャット作成時: メッセージが表示されるまで待機
+        await client.waitForFunction(
+          `document.querySelectorAll('[data-message-author-role="user"]').length > 0`,
+          15000,
+        );
+      }
     }
 
-    logInfo('chatgpt', 'Send button clicked', {method: clickResult.clicked ? 'js-click' : 'cdp', selector: clickResult.selector || buttonInfo.selector});
-    timings.sendMs = nowMs() - tSend;
-    // 既存チャットかどうかを事前に判定
-    const urlBefore = await client.evaluate<string>('location.href');
-    const isExistingChat = urlBefore.includes('/c/');
+    // デバッグ: 送信後のメッセージカウント
+    const userCountAfter = await client.evaluate<number>(
+      `document.querySelectorAll('[data-message-author-role="user"]').length`,
+    );
+    logInfo('chatgpt', 'Message sent successfully', {
+      userCountBefore: initialUserCount,
+      userCountAfter,
+    });
 
-    try {
-      if (isExistingChat) {
-        // 既存チャット: メッセージカウント増加のみをチェック
-        await client.waitForFunction(
-          `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount}`,
-          15000,
-        );
-      } else {
-        // 新規チャット: メッセージカウント増加 OR URL変更（/c/へのリダイレクト）
-        await client.waitForFunction(
-          `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount} || location.href.includes('/c/')`,
-          15000,
-        );
-
-        const urlNow = await client.evaluate<string>('location.href');
-        if (urlNow.includes('/c/') && initialUserCount === 0) {
-          // 新規チャット作成時: メッセージが表示されるまで待機
-          await client.waitForFunction(
-            `document.querySelectorAll('[data-message-author-role="user"]').length > 0`,
-            15000,
-          );
-        }
-      }
-
-      // デバッグ: 送信後のメッセージカウント
-      const userCountAfter = await client.evaluate<number>(
-        `document.querySelectorAll('[data-message-author-role="user"]').length`
+    if (
+      userCountAfter <= initialUserCount &&
+      !(initialUserCount === 0 && userCountAfter > 0)
+    ) {
+      throw new Error(
+        `Message count did not increase (before: ${initialUserCount}, after: ${userCountAfter})`,
       );
-      logInfo('chatgpt', 'Message sent successfully', {userCountBefore: initialUserCount, userCountAfter});
-
-      if (userCountAfter <= initialUserCount && !(initialUserCount === 0 && userCountAfter > 0)) {
-        throw new Error(`Message count did not increase (before: ${initialUserCount}, after: ${userCountAfter})`);
-      }
-    } catch (error) {
-      // フォールバック: Enterキーイベント
-      logWarn('chatgpt', 'Message not sent, trying Enter key fallback');
-      await client.evaluate(`
+    }
+  } catch (error) {
+    // フォールバック: Enterキーイベント
+    logWarn('chatgpt', 'Message not sent, trying Enter key fallback');
+    await client.evaluate(`
         (() => {
           const textarea =
             document.querySelector('textarea#prompt-textarea') ||
@@ -1155,20 +1312,22 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           }
         })()
       `);
-      try {
-        await client.waitForFunction(
-          `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount}`,
-          5000
-        );
-        logInfo('chatgpt', 'Enter key fallback succeeded');
-      } catch (fallbackError) {
-        const debugPayload = await client.evaluate<Record<string, any>>(`(() => {
-          const msgs = document.querySelectorAll('[data-message-author-role=\"user\"]');
+    try {
+      await client.waitForFunction(
+        `document.querySelectorAll('[data-message-author-role="user"]').length > ${initialUserCount}`,
+        5000,
+      );
+      logInfo('chatgpt', 'Enter key fallback succeeded');
+    } catch (fallbackError) {
+      const debugPayload = await client.evaluate<
+        Record<string, unknown>
+      >(`(() => {
+          const msgs = document.querySelectorAll('[data-message-author-role="user"]');
           const textarea =
             document.querySelector('textarea#prompt-textarea') ||
-            document.querySelector('textarea[data-testid=\"prompt-textarea\"]') ||
+            document.querySelector('textarea[data-testid="prompt-textarea"]') ||
             document.querySelector('textarea');
-          const sendButton = document.querySelector('button[data-testid=\"send-button\"]');
+          const sendButton = document.querySelector('button[data-testid="send-button"]');
           const iframes = Array.from(document.querySelectorAll('iframe')).map(frame => ({
             src: frame.getAttribute('src') || '',
             id: frame.id || '',
@@ -1188,32 +1347,37 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
             iframes: iframes.slice(0, 5),
           };
         })()`);
-        await saveDebug('chatgpt', {
-          reason: 'userMessageTimeout',
-          question,
-          ...debugPayload,
-        });
-        throw new Error(`ChatGPT send did not create a new user message: ${String(error)}, fallback also failed: ${String(fallbackError)}`);
-      }
+      await saveDebug('chatgpt', {
+        reason: 'userMessageTimeout',
+        question,
+        ...debugPayload,
+      });
+      throw new Error(
+        `ChatGPT send did not create a new user message: ${String(error)}, fallback also failed: ${String(fallbackError)}`,
+      );
     }
-    // メッセージカウント増加を確認済みなので、テキストマッチングは不要
-    // （ChatGPT UIの構造により、textContentが取得できない場合があるため）
-    console.error('[ChatGPT] Message sent successfully (count increased)');
-    timings.sendMs = nowMs() - tSend;
+  }
+  // メッセージカウント増加を確認済みなので、テキストマッチングは不要
+  // （ChatGPT UIの構造により、textContentが取得できない場合があるため）
+  console.error('[ChatGPT] Message sent successfully (count increased)');
+  timings.sendMs = nowMs() - tSend;
 
-    // 新しいアシスタントメッセージが追加される、または既存メッセージのテキストが変化するまで待つ
-    // 既存チャット再接続時: 新しいDOM要素が追加されず、既存の最後の要素にストリーミング追記される場合がある
-    const initialLastTextLength = await client.evaluate<number>(`
+  // 新しいアシスタントメッセージが追加される、または既存メッセージのテキストが変化するまで待つ
+  // 既存チャット再接続時: 新しいDOM要素が追加されず、既存の最後の要素にストリーミング追記される場合がある
+  const initialLastTextLength = await client.evaluate<number>(`
       (() => {
         const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
         if (msgs.length === 0) return 0;
         return (msgs[msgs.length - 1].textContent || '').length;
       })()
     `);
-    console.error(`[ChatGPT] Initial state: assistantCount=${initialAssistantCount}, lastTextLength=${initialLastTextLength}`);
+  console.error(
+    `[ChatGPT] Initial state: assistantCount=${initialAssistantCount}, lastTextLength=${initialLastTextLength}`,
+  );
 
-    try {
-      await client.waitForFunction(`
+  try {
+    await client.waitForFunction(
+      `
         (() => {
           const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
           if (msgs.length === 0) return false;
@@ -1221,69 +1385,75 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           // カウント増加 OR テキスト長変化（10文字以上の変化で検出）
           return msgs.length > ${initialAssistantCount} || lastText.length > ${initialLastTextLength} + 10;
         })()
-      `, 30000);
-      console.error('[ChatGPT] New response detected (count or text change)');
-    } catch {
-      console.error('[ChatGPT] Timeout waiting for response change, continuing with stop button detection...');
-    }
-
-    const tWaitResp = nowMs();
-    console.error('[ChatGPT] Waiting for response (using stop button detection)...');
-
-    // 60秒 caller deadline を超えないよう、残り予算内で待機する。
-    const maxWaitMs = getResponseWaitBudgetMs(
-      t0,
-      RESPONSE_WAIT_MAX_MS,
-      'chatgpt-response',
-      budgetMs,
+      `,
+      30000,
     );
-    const pollIntervalMs = 1000;
-    const IDLE_TIMEOUT_MS = 60000;  // ストップボタン消失後、60秒間無活動でタイムアウト
-    const startWait = Date.now();
-    let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
-    let lastLoggedState = '';
-    let sawStopButton = false;  // 生成中状態を検出したかどうか
-    let streamingText = '';     // ストリーミング中に取得したテキスト（完了後に折りたたまれる対策）
-    let textStableCount = 0;      // テキスト長が安定した回数（2-poll confirmation）
-    let lastTextLength = -1;      // 前回のテキスト長
-    let stopButtonGoneCount = 0;  // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
-    let textGrowingCount = 0;     // テキストが成長中のポール数（成長中はフォールバック抑止）
+    console.error('[ChatGPT] New response detected (count or text change)');
+  } catch {
+    console.error(
+      '[ChatGPT] Timeout waiting for response change, continuing with stop button detection...',
+    );
+  }
 
-    // ストップボタンが見えている間は maxWaitMs を無視し、IDLE_TIMEOUT のみで判定する。
-    // sawStopButton=false の初期フェーズでは maxWaitMs も併用。
-    while (
-      Date.now() - lastActivityAt < IDLE_TIMEOUT_MS &&
-      (sawStopButton || Date.now() - startWait < maxWaitMs)
-    ) {
-      const state = await client.evaluate<{
-        hasStopButton: boolean;
-        sendButtonFound: boolean;
-        sendButtonDisabled: boolean | null;
-        sendButtonTestId: string | null;
-        assistantMsgCount: number;
-        inputBoxHasText: boolean;
-        isStillGenerating: boolean;
-        hasResponseText: boolean;
-        hasSkipThinkingButton: boolean;
-        // デバッグ情報
-        debug_assistantMsgsCount: number;
-        debug_chatgptArticlesCount: number;
-        debug_markdownsInLast: number;
-        debug_lastAssistantInnerTextLen: number;
-        debug_markdownInfo: string;
-        debug_childInfo: string;
-        debug_fullText: string;
-        debug_articleTexts: string;
-        debug_bodySnippet: string;
-        debug_bodyLen: number;
-        debug_pageUrl: string;
-        debug_pageTitle: string;
-        debug_iframeCount: number;
-        debug_allMarkdownsInfo: string;
-        debug_outerHtml: string;
-        debug_mainContent: string;
-        debug_presentationText: string;
-      }>(`
+  const tWaitResp = nowMs();
+  console.error(
+    '[ChatGPT] Waiting for response (using stop button detection)...',
+  );
+
+  // 60秒 caller deadline を超えないよう、残り予算内で待機する。
+  const maxWaitMs = getResponseWaitBudgetMs(
+    t0,
+    RESPONSE_WAIT_MAX_MS,
+    'chatgpt-response',
+    budgetMs,
+  );
+  const pollIntervalMs = 1000;
+  const IDLE_TIMEOUT_MS = 60000; // ストップボタン消失後、60秒間無活動でタイムアウト
+  const startWait = Date.now();
+  let lastActivityAt = Date.now(); // 最後にストップボタンorテキスト成長を検出した時刻
+  let lastLoggedState = '';
+  let sawStopButton = false; // 生成中状態を検出したかどうか
+  let streamingText = ''; // ストリーミング中に取得したテキスト（完了後に折りたたまれる対策）
+  let textStableCount = 0; // テキスト長が安定した回数（2-poll confirmation）
+  let lastTextLength = -1; // 前回のテキスト長
+  let stopButtonGoneCount = 0; // ストップボタンが連続不在のポール数（Thinkingフェーズ切替誤判定防止）
+  let textGrowingCount = 0; // テキストが成長中のポール数（成長中はフォールバック抑止）
+
+  // ストップボタンが見えている間は maxWaitMs を無視し、IDLE_TIMEOUT のみで判定する。
+  // sawStopButton=false の初期フェーズでは maxWaitMs も併用。
+  while (
+    Date.now() - lastActivityAt < IDLE_TIMEOUT_MS &&
+    (sawStopButton || Date.now() - startWait < maxWaitMs)
+  ) {
+    const state = await client.evaluate<{
+      hasStopButton: boolean;
+      sendButtonFound: boolean;
+      sendButtonDisabled: boolean | null;
+      sendButtonTestId: string | null;
+      assistantMsgCount: number;
+      inputBoxHasText: boolean;
+      isStillGenerating: boolean;
+      hasResponseText: boolean;
+      hasSkipThinkingButton: boolean;
+      // デバッグ情報
+      debug_assistantMsgsCount: number;
+      debug_chatgptArticlesCount: number;
+      debug_markdownsInLast: number;
+      debug_lastAssistantInnerTextLen: number;
+      debug_markdownInfo: string;
+      debug_childInfo: string;
+      debug_fullText: string;
+      debug_articleTexts: string;
+      debug_bodySnippet: string;
+      debug_bodyLen: number;
+      debug_pageUrl: string;
+      debug_pageTitle: string;
+      debug_iframeCount: number;
+      debug_allMarkdownsInfo: string;
+      debug_outerHtml: string;
+      debug_mainContent: string;
+      debug_presentationText: string;
+    }>(`
         (() => {
           ${DOM_UTILS_CODE}
 
@@ -1328,8 +1498,8 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
                                    bodyText.includes('is still generating') ||
                                    bodyText.includes('generating a response');
           // 「思考時間」マーカーがあれば完了（Thinkingモード終了のサイン）
-          const hasThinkingComplete = /思考時間[：:]\s*\d+s?/.test(bodyText) ||
-                                      /Thinking.*\d+s?/.test(bodyText);
+          const hasThinkingComplete = /思考時間[：:]\\s*\\d+s?/.test(bodyText) ||
+                                      /Thinking.*\\d+s?/.test(bodyText);
           // 「今すぐ回答」「Skip thinking」ボタンがある場合はThinking進行中
           const hasSkipThinkingButton = bodyText.includes('今すぐ回答') ||
                                         bodyText.includes('Skip thinking');
@@ -1546,55 +1716,63 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      // stopボタンを検出したらフラグを立てる（生成が始まった証拠）
-      // ストップボタンが見えている間はアクティブとみなし、タイムアウトを延長し続ける
-      if (state.hasStopButton) {
-        sawStopButton = true;
-        lastActivityAt = Date.now();
-      }
+    // stopボタンを検出したらフラグを立てる（生成が始まった証拠）
+    // ストップボタンが見えている間はアクティブとみなし、タイムアウトを延長し続ける
+    if (state.hasStopButton) {
+      sawStopButton = true;
+      lastActivityAt = Date.now();
+    }
 
-      // 状態が変化した場合のみログ出力
-      const currentState = JSON.stringify(state);
-      if (currentState !== lastLoggedState) {
-        const elapsed = Math.round((Date.now() - startWait) / 1000);
-        console.error(`[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}, textGrow=${textGrowingCount}`);
-        lastLoggedState = currentState;
-      }
+    // 状態が変化した場合のみログ出力
+    const currentState = JSON.stringify(state);
+    if (currentState !== lastLoggedState) {
+      const elapsed = Math.round((Date.now() - startWait) / 1000);
+      console.error(
+        `[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}, textGrow=${textGrowingCount}`,
+      );
+      lastLoggedState = currentState;
+    }
 
-      // 応答完了条件（Thinkingモード対応版）:
-      // 1. 停止ボタンを一度でも見た後に消えた
-      // 2. AND 入力欄が空
-      // 3. AND 新しいアシスタントメッセージが増えた
-      // 注: hasResponseText は CDP でテキスト取得できない場合があるため必須条件から外す
-      // テキスト安定性チェック（全完了条件で共通使用）
-      const currentTextLen = state.debug_lastAssistantInnerTextLen;
-      if (currentTextLen === lastTextLength && currentTextLen > 0) {
-        textStableCount++;
-        textGrowingCount = 0;
-      } else if (currentTextLen > lastTextLength) {
-        textStableCount = 0;
-        textGrowingCount++;
-        lastTextLength = currentTextLen;
-        lastActivityAt = Date.now();
-      } else {
-        textStableCount = 0;
-        textGrowingCount = 0;
-        lastTextLength = currentTextLen;
-      }
+    // 応答完了条件（Thinkingモード対応版）:
+    // 1. 停止ボタンを一度でも見た後に消えた
+    // 2. AND 入力欄が空
+    // 3. AND 新しいアシスタントメッセージが増えた
+    // 注: hasResponseText は CDP でテキスト取得できない場合があるため必須条件から外す
+    // テキスト安定性チェック（全完了条件で共通使用）
+    const currentTextLen = state.debug_lastAssistantInnerTextLen;
+    if (currentTextLen === lastTextLength && currentTextLen > 0) {
+      textStableCount++;
+      textGrowingCount = 0;
+    } else if (currentTextLen > lastTextLength) {
+      textStableCount = 0;
+      textGrowingCount++;
+      lastTextLength = currentTextLen;
+      lastActivityAt = Date.now();
+    } else {
+      textStableCount = 0;
+      textGrowingCount = 0;
+      lastTextLength = currentTextLen;
+    }
 
-      // ストップボタン不在の連続カウント（Thinkingフェーズ切替時の一瞬消失を除外）
-      if (sawStopButton && !state.hasStopButton) {
-        stopButtonGoneCount++;
-      } else {
-        stopButtonGoneCount = 0;
-      }
+    // ストップボタン不在の連続カウント（Thinkingフェーズ切替時の一瞬消失を除外）
+    if (sawStopButton && !state.hasStopButton) {
+      stopButtonGoneCount++;
+    } else {
+      stopButtonGoneCount = 0;
+    }
 
-      if (sawStopButton && stopButtonGoneCount >= 3 && !state.inputBoxHasText &&
-          state.assistantMsgCount > initialAssistantCount) {
-        // 2-poll confirmation: テキスト長が2回連続安定してから完了とする
-        if (textStableCount >= 2) {
-          console.error(`[ChatGPT] Response complete - stop gone for ${stopButtonGoneCount} polls, text stable for ${textStableCount} polls (len=${currentTextLen})`);
-          streamingText = await client.evaluate<string>(`
+    if (
+      sawStopButton &&
+      stopButtonGoneCount >= 3 &&
+      !state.inputBoxHasText &&
+      state.assistantMsgCount > initialAssistantCount
+    ) {
+      // 2-poll confirmation: テキスト長が2回連続安定してから完了とする
+      if (textStableCount >= 2) {
+        console.error(
+          `[ChatGPT] Response complete - stop gone for ${stopButtonGoneCount} polls, text stable for ${textStableCount} polls (len=${currentTextLen})`,
+        );
+        streamingText = await client.evaluate<string>(`
             (() => {
               const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
               if (msgs.length === 0) return '';
@@ -1612,46 +1790,69 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
               return (last.innerText || last.textContent || '').trim();
             })()
           `);
-          break;
-        }
-        // まだ安定していない — 次のポールまで待機
-        console.error(`[ChatGPT] Stop button gone (${stopButtonGoneCount} polls) but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
-        await new Promise(r => setTimeout(r, pollIntervalMs));
-        continue;
+        break;
       }
-
-      // フォールバック: 5秒以上待って、stopボタンなし、入力欄空、新しいアシスタントメッセージが増えた
-      // （stopボタンを見逃した場合の救済）
-      const elapsed = Date.now() - startWait;
-      if (elapsed > 5000 && !state.hasStopButton && !state.inputBoxHasText &&
-          state.assistantMsgCount > initialAssistantCount && !state.isStillGenerating &&
-          textGrowingCount === 0) {
-        if (textStableCount >= 2) {
-          console.error(`[ChatGPT] Response complete - fallback after 5s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`);
-          break;
-        }
-        console.error(`[ChatGPT] Fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
-      }
-
-      // Thinkingモード専用フォールバック: stopボタンなしでも、生成完了していれば完了
-      // 重要: 「今すぐ回答」ボタンがある間は、まだThinking中なので待機を継続
-      if (elapsed > 10000 && !state.isStillGenerating && !state.hasSkipThinkingButton &&
-          state.assistantMsgCount > initialAssistantCount && !state.inputBoxHasText) {
-        if (textStableCount >= 2) {
-          console.error(`[ChatGPT] Response complete - Thinking mode fallback after 10s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`);
-          break;
-        }
-        console.error(`[ChatGPT] Thinking fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`);
-      }
-
+      // まだ安定していない — 次のポールまで待機
+      console.error(
+        `[ChatGPT] Stop button gone (${stopButtonGoneCount} polls) but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`,
+      );
       await new Promise(r => setTimeout(r, pollIntervalMs));
+      continue;
     }
 
-    // タイムアウトチェック（IDLE_TIMEOUT で抜けた場合も含む）
-    const loopElapsed = Date.now() - startWait;
-    const loopIdle = Date.now() - lastActivityAt;
-    if (loopIdle >= IDLE_TIMEOUT_MS || (!sawStopButton && loopElapsed >= maxWaitMs)) {
-      const finalState = await client.evaluate<Record<string, unknown>>(`
+    // フォールバック: 5秒以上待って、stopボタンなし、入力欄空、新しいアシスタントメッセージが増えた
+    // （stopボタンを見逃した場合の救済）
+    const elapsed = Date.now() - startWait;
+    if (
+      elapsed > 5000 &&
+      !state.hasStopButton &&
+      !state.inputBoxHasText &&
+      state.assistantMsgCount > initialAssistantCount &&
+      !state.isStillGenerating &&
+      textGrowingCount === 0
+    ) {
+      if (textStableCount >= 2) {
+        console.error(
+          `[ChatGPT] Response complete - fallback after 5s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`,
+        );
+        break;
+      }
+      console.error(
+        `[ChatGPT] Fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`,
+      );
+    }
+
+    // Thinkingモード専用フォールバック: stopボタンなしでも、生成完了していれば完了
+    // 重要: 「今すぐ回答」ボタンがある間は、まだThinking中なので待機を継続
+    if (
+      elapsed > 10000 &&
+      !state.isStillGenerating &&
+      !state.hasSkipThinkingButton &&
+      state.assistantMsgCount > initialAssistantCount &&
+      !state.inputBoxHasText
+    ) {
+      if (textStableCount >= 2) {
+        console.error(
+          `[ChatGPT] Response complete - Thinking mode fallback after 10s, text stable (len=${currentTextLen}, stableCount=${textStableCount})`,
+        );
+        break;
+      }
+      console.error(
+        `[ChatGPT] Thinking fallback conditions met but text not stable yet (len=${currentTextLen}, stableCount=${textStableCount})`,
+      );
+    }
+
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+
+  // タイムアウトチェック（IDLE_TIMEOUT で抜けた場合も含む）
+  const loopElapsed = Date.now() - startWait;
+  const loopIdle = Date.now() - lastActivityAt;
+  if (
+    loopIdle >= IDLE_TIMEOUT_MS ||
+    (!sawStopButton && loopElapsed >= maxWaitMs)
+  ) {
+    const finalState = await client.evaluate<Record<string, unknown>>(`
         (() => {
           // フォールバックセレクター付きの検出
           const stopBtn = document.querySelector('button[data-testid="stop-button"]') ||
@@ -1679,21 +1880,26 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      const elapsedMs = Date.now() - startWait;
-      const idleMs = Date.now() - lastActivityAt;
-      const reason = idleMs >= IDLE_TIMEOUT_MS
+    const elapsedMs = Date.now() - startWait;
+    const idleMs = Date.now() - lastActivityAt;
+    const reason =
+      idleMs >= IDLE_TIMEOUT_MS
         ? `idle for ${Math.round(idleMs / 1000)}s (no stop button or text growth)`
         : `absolute ceiling ${maxWaitMs}ms reached`;
-      console.error(`[ChatGPT] Timeout - ${reason}, elapsed=${Math.round(elapsedMs / 1000)}s, final state: ${JSON.stringify(finalState)}`);
-      await resetConnection('chatgpt');
-      throw new Error(`Timed out waiting for ChatGPT response (${Math.round(elapsedMs / 1000)}s, ${reason}). Final state: ${JSON.stringify(finalState)}`);
-    }
+    console.error(
+      `[ChatGPT] Timeout - ${reason}, elapsed=${Math.round(elapsedMs / 1000)}s, final state: ${JSON.stringify(finalState)}`,
+    );
+    await resetConnection('chatgpt');
+    throw new Error(
+      `Timed out waiting for ChatGPT response (${Math.round(elapsedMs / 1000)}s, ${reason}). Final state: ${JSON.stringify(finalState)}`,
+    );
+  }
 
-    // ChatGPT 5.2 Thinking モデル対応:
-    // 回答が「思考」として折りたたまれている場合は展開してからテキストを取得
-    // 重要: 回答内（article内）のボタンのみを対象にする
-    // 入力欄横の「思考の拡張」ボタンを誤クリックしないよう厳密に検出
-    const clickedExpand = await client.evaluate<boolean>(`
+  // ChatGPT 5.2 Thinking モデル対応:
+  // 回答が「思考」として折りたたまれている場合は展開してからテキストを取得
+  // 重要: 回答内（article内）のボタンのみを対象にする
+  // 入力欄横の「思考の拡張」ボタンを誤クリックしないよう厳密に検出
+  const clickedExpand = await client.evaluate<boolean>(`
       (() => {
         // ChatGPTの回答article内のボタンのみを探す
         const articles = document.querySelectorAll('article');
@@ -1717,41 +1923,41 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         return false;
       })()
     `);
-    if (clickedExpand) {
-      // 展開アニメーションとコンテンツロードを待つ
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.error('[ChatGPT] Expanded thinking content');
-    }
+  if (clickedExpand) {
+    // 展開アニメーションとコンテンツロードを待つ
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.error('[ChatGPT] Expanded thinking content');
+  }
 
-    // 回答完了後、DOM安定化のための追加待機
-    // ChatGPT Thinkingモードでは、停止ボタン消失後も最終回答がレンダリングされるまで遅延がある
-    // 回答テキストが存在するまでポーリングで待機
-    const maxWaitForText = getResponseWaitBudgetMs(
-      t0,
-      15000,
-      'chatgpt-finalize',
-      budgetMs,
-    );
-    const pollInterval = 200;
-    const waitStart = Date.now();
-    let hasResponseText = false;
+  // 回答完了後、DOM安定化のための追加待機
+  // ChatGPT Thinkingモードでは、停止ボタン消失後も最終回答がレンダリングされるまで遅延がある
+  // 回答テキストが存在するまでポーリングで待機
+  const maxWaitForText = getResponseWaitBudgetMs(
+    t0,
+    15000,
+    'chatgpt-finalize',
+    budgetMs,
+  );
+  const pollInterval = 200;
+  const waitStart = Date.now();
+  let hasResponseText = false;
 
-    // 重要: タブをフォアグラウンドに持ってくる
-    // ChatGPTはバックグラウンドタブではテキストをレンダリングしない（パフォーマンス最適化）
-    // Page.bringToFrontでタブをアクティブにすると、Reactがテキストをレンダリングする
-    try {
-      await client.send('Page.enable');
-      await client.send('Page.bringToFront');
-      // タブがフォアグラウンドになった後、Reactがレンダリングを完了するまで待機
-      await new Promise(r => setTimeout(r, 500));
-    } catch {
-      // Page.bringToFrontが失敗しても続行（一部の環境では利用できない場合がある）
-      console.error('[ChatGPT] Page.bringToFront failed, continuing anyway');
-    }
+  // 重要: タブをフォアグラウンドに持ってくる
+  // ChatGPTはバックグラウンドタブではテキストをレンダリングしない（パフォーマンス最適化）
+  // Page.bringToFrontでタブをアクティブにすると、Reactがテキストをレンダリングする
+  try {
+    await client.send('Page.enable');
+    await client.send('Page.bringToFront');
+    // タブがフォアグラウンドになった後、Reactがレンダリングを完了するまで待機
+    await new Promise(r => setTimeout(r, 500));
+  } catch {
+    // Page.bringToFrontが失敗しても続行（一部の環境では利用できない場合がある）
+    console.error('[ChatGPT] Page.bringToFront failed, continuing anyway');
+  }
 
-    while (Date.now() - waitStart < maxWaitForText) {
-      // Step 1: 最後のChatGPT articleを見つけてスクロール
-      await client.evaluate<void>(`
+  while (Date.now() - waitStart < maxWaitForText) {
+    // Step 1: 最後のChatGPT articleを見つけてスクロール
+    await client.evaluate<void>(`
         (() => {
           const articles = document.querySelectorAll('article');
           for (let i = articles.length - 1; i >= 0; i--) {
@@ -1764,11 +1970,19 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      // Step 2: スクロール後、DOMの更新を待つ
-      await new Promise(r => setTimeout(r, 100));
+    // Step 2: スクロール後、DOMの更新を待つ
+    await new Promise(r => setTimeout(r, 100));
 
-      // Step 3: テキストをチェック
-      const checkResult = await client.evaluate<{ hasText: boolean; textLength: number; articleIndex: number; markdownClass: string; hasSkipButton: boolean; isStreaming: boolean; debug?: string }>(`
+    // Step 3: テキストをチェック
+    const checkResult = await client.evaluate<{
+      hasText: boolean;
+      textLength: number;
+      articleIndex: number;
+      markdownClass: string;
+      hasSkipButton: boolean;
+      isStreaming: boolean;
+      debug?: string;
+    }>(`
         (() => {
           const articles = document.querySelectorAll('article');
           // 最後のChatGPT articleを探す（テキストを持つものを優先）
@@ -1852,50 +2066,60 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      // 「今すぐ回答」ボタンがある間はThinking中なので待機を継続
-      if (checkResult.hasSkipButton) {
+    // 「今すぐ回答」ボタンがある間はThinking中なので待機を継続
+    if (checkResult.hasSkipButton) {
+      const elapsed = Date.now() - waitStart;
+      if (elapsed > 0 && elapsed % 3000 < pollInterval) {
+        console.error(
+          `[ChatGPT] Thinking in progress (skip button visible)... (${elapsed}ms)`,
+        );
+      }
+      await new Promise(r => setTimeout(r, pollInterval));
+      continue;
+    }
+
+    if (checkResult.hasText) {
+      // ストリーミング中はまだ完了していないので待機を継続
+      if (checkResult.isStreaming) {
         const elapsed = Date.now() - waitStart;
         if (elapsed > 0 && elapsed % 3000 < pollInterval) {
-          console.error(`[ChatGPT] Thinking in progress (skip button visible)... (${elapsed}ms)`);
+          console.error(
+            `[ChatGPT] Response streaming... (${checkResult.textLength} chars, ${elapsed}ms)`,
+          );
         }
         await new Promise(r => setTimeout(r, pollInterval));
         continue;
       }
-
-      if (checkResult.hasText) {
-        // ストリーミング中はまだ完了していないので待機を継続
-        if (checkResult.isStreaming) {
-          const elapsed = Date.now() - waitStart;
-          if (elapsed > 0 && elapsed % 3000 < pollInterval) {
-            console.error(`[ChatGPT] Response streaming... (${checkResult.textLength} chars, ${elapsed}ms)`);
-          }
-          await new Promise(r => setTimeout(r, pollInterval));
-          continue;
-        }
-        hasResponseText = true;
-        console.error(`[ChatGPT] Response text ready (${checkResult.textLength} chars) in article[${checkResult.articleIndex}] (${checkResult.markdownClass}) after ${Date.now() - waitStart}ms`);
-        break;
-      }
-      // 定期的にデバッグログを出力
-      const elapsed = Date.now() - waitStart;
-      if (elapsed > 0 && elapsed % 2000 < pollInterval) {
-        console.error(`[ChatGPT] Still waiting for response text... (${elapsed}ms, articleIndex=${checkResult.articleIndex}, debug=${checkResult.debug || 'none'})`);
-      }
-      await new Promise(r => setTimeout(r, pollInterval));
+      hasResponseText = true;
+      console.error(
+        `[ChatGPT] Response text ready (${checkResult.textLength} chars) in article[${checkResult.articleIndex}] (${checkResult.markdownClass}) after ${Date.now() - waitStart}ms`,
+      );
+      break;
     }
-
-    if (!hasResponseText) {
-      console.error(`[ChatGPT] Warning: Response text not detected after ${maxWaitForText}ms, proceeding with extraction...`);
+    // 定期的にデバッグログを出力
+    const elapsed = Date.now() - waitStart;
+    if (elapsed > 0 && elapsed % 2000 < pollInterval) {
+      console.error(
+        `[ChatGPT] Still waiting for response text... (${elapsed}ms, articleIndex=${checkResult.articleIndex}, debug=${checkResult.debug || 'none'})`,
+      );
     }
+    await new Promise(r => setTimeout(r, pollInterval));
+  }
 
-    // CDPセッション確認用デバッグログ
-    const cdpDebug = await client.evaluate<{
-      url: string;
-      documentTitle: string;
-      articleCount: number;
-      markdownCount: number;
-      bodyTextLength: number;
-    }>(`
+  if (!hasResponseText) {
+    console.error(
+      `[ChatGPT] Warning: Response text not detected after ${maxWaitForText}ms, proceeding with extraction...`,
+    );
+  }
+
+  // CDPセッション確認用デバッグログ
+  const cdpDebug = await client.evaluate<{
+    url: string;
+    documentTitle: string;
+    articleCount: number;
+    markdownCount: number;
+    bodyTextLength: number;
+  }>(`
       (() => {
         return {
           url: window.location.href,
@@ -1906,15 +2130,15 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         };
       })()
     `);
-    console.error('[ChatGPT] CDP debug:', JSON.stringify(cdpDebug));
+  console.error('[ChatGPT] CDP debug:', JSON.stringify(cdpDebug));
 
-    // 最後のアシスタントメッセージを直接取得
-    // ChatGPT 5.2 Thinking: .result-thinking または .markdown 内のテキスト
-    // リトライロジック: CDPがReactレンダリング完了前に実行される問題に対応
+  // 最後のアシスタントメッセージを直接取得
+  // ChatGPT 5.2 Thinking: .result-thinking または .markdown 内のテキスト
+  // リトライロジック: CDPがReactレンダリング完了前に実行される問題に対応
 
-    // 重要: 最後のarticleにスクロールしてからテキストを抽出
-    // CDPでは、ビューポート外の要素のinnerTextが空になる場合がある
-    await client.evaluate<void>(`
+  // 重要: 最後のarticleにスクロールしてからテキストを抽出
+  // CDPでは、ビューポート外の要素のinnerTextが空になる場合がある
+  await client.evaluate<void>(`
       (() => {
         const articles = document.querySelectorAll('article');
         if (articles.length > 0) {
@@ -1922,34 +2146,42 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         }
       })()
     `);
-    // スクロール後のレンダリング待機
-    await new Promise(resolve => setTimeout(resolve, 300));
+  // スクロール後のレンダリング待機
+  await new Promise(resolve => setTimeout(resolve, 300));
 
-    let answer = '';
-    const extractMaxRetries = 2;  // リトライを2回に削減（body.innerTextフォールバックがあるため）
-    const extractBaseIntervalMs = 500;  // 段階的増加の基本間隔
+  let answer = '';
+  const extractMaxRetries = 2; // リトライを2回に削減（body.innerTextフォールバックがあるため）
+  const extractBaseIntervalMs = 500; // 段階的増加の基本間隔
 
-    for (let retry = 0; retry < extractMaxRetries; retry++) {
-      // 2回目以降は段階的に待機時間を増加（500ms, 750ms, 1000ms, 1250ms）
-      if (retry > 0) {
-        const waitMs = extractBaseIntervalMs + (retry - 1) * 250;
-        console.error(`[ChatGPT] Waiting ${waitMs}ms before retry ${retry}...`);
-        await new Promise(r => setTimeout(r, waitMs));
-      }
-      // デバッグ: 抽出前のDOM状態を確認（最新articleの詳細）
-      const debugInfo = await client.evaluate<{
-        articles: number,
-        chatgptArticles: number,
-        lastArticleDebug: {
-          index: number,
-          markdownCount: number,
-          markdowns: Array<{ className: string, innerTextLength: number, isResultThinking: boolean }>,
-          paragraphCount: number,
-          paragraphs: Array<{ innerTextLength: number, preview: string, inButton: boolean }>,
-          articleInnerTextLength: number,
-          articleInnerTextPreview: string
-        } | null
-      }>(`
+  for (let retry = 0; retry < extractMaxRetries; retry++) {
+    // 2回目以降は段階的に待機時間を増加（500ms, 750ms, 1000ms, 1250ms）
+    if (retry > 0) {
+      const waitMs = extractBaseIntervalMs + (retry - 1) * 250;
+      console.error(`[ChatGPT] Waiting ${waitMs}ms before retry ${retry}...`);
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+    // デバッグ: 抽出前のDOM状態を確認（最新articleの詳細）
+    const debugInfo = await client.evaluate<{
+      articles: number;
+      chatgptArticles: number;
+      lastArticleDebug: {
+        index: number;
+        markdownCount: number;
+        markdowns: Array<{
+          className: string;
+          innerTextLength: number;
+          isResultThinking: boolean;
+        }>;
+        paragraphCount: number;
+        paragraphs: Array<{
+          innerTextLength: number;
+          preview: string;
+          inButton: boolean;
+        }>;
+        articleInnerTextLength: number;
+        articleInnerTextPreview: string;
+      } | null;
+    }>(`
         (() => {
           const articles = Array.from(document.querySelectorAll('article'));
           let chatgptCount = 0;
@@ -2004,11 +2236,14 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      if (retry === 0) {
-        console.error('[ChatGPT] Extract debug:', JSON.stringify(debugInfo.lastArticleDebug));
-      }
+    if (retry === 0) {
+      console.error(
+        '[ChatGPT] Extract debug:',
+        JSON.stringify(debugInfo.lastArticleDebug),
+      );
+    }
 
-      answer = await client.evaluate<string>(`
+    answer = await client.evaluate<string>(`
         (() => {
           const articles = document.querySelectorAll('article');
           let lastAssistantArticle = null;
@@ -2123,24 +2358,26 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      // 有効なテキストが取得できたら終了
-      if (answer && answer.length > 0 && !answer.startsWith('ChatGPT:')) {
-        if (retry > 0) {
-          console.error(`[ChatGPT] Got response on retry ${retry}`);
-        }
-        break;
+    // 有効なテキストが取得できたら終了
+    if (answer && answer.length > 0 && !answer.startsWith('ChatGPT:')) {
+      if (retry > 0) {
+        console.error(`[ChatGPT] Got response on retry ${retry}`);
       }
-
-      // リトライ（待機はループ先頭で実行）
-      if (retry < extractMaxRetries - 1) {
-        console.error(`[ChatGPT] Response empty, will retry (${retry + 1}/${extractMaxRetries})...`);
-      }
+      break;
     }
 
-    // リトライでも取得できない場合、<main>要素から抽出（Thinkingモード対応）
-    if (!answer || answer.length === 0) {
-      console.error('[ChatGPT] Trying main element fallback...');
-      answer = await client.evaluate<string>(`
+    // リトライ（待機はループ先頭で実行）
+    if (retry < extractMaxRetries - 1) {
+      console.error(
+        `[ChatGPT] Response empty, will retry (${retry + 1}/${extractMaxRetries})...`,
+      );
+    }
+  }
+
+  // リトライでも取得できない場合、<main>要素から抽出（Thinkingモード対応）
+  if (!answer || answer.length === 0) {
+    console.error('[ChatGPT] Trying main element fallback...');
+    answer = await client.evaluate<string>(`
         (() => {
           const mainEl = document.querySelector('main');
           if (!mainEl) return '';
@@ -2168,15 +2405,21 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           return result;
         })()
       `);
-      if (answer && answer.length > 0) {
-        console.error(`[ChatGPT] Got response from main element fallback`);
-      }
+    if (answer && answer.length > 0) {
+      console.error(`[ChatGPT] Got response from main element fallback`);
     }
+  }
 
-    // さらにフォールバック: body.innerTextから抽出
-    if (!answer || answer.length === 0) {
-      console.error('[ChatGPT] Trying body.innerText fallback...');
-      const bodyDebug = await client.evaluate<{bodyLen: number; chatgptCount: number; lastPartLen: number; lastPartPreview: string; afterTrim: string}>(`
+  // さらにフォールバック: body.innerTextから抽出
+  if (!answer || answer.length === 0) {
+    console.error('[ChatGPT] Trying body.innerText fallback...');
+    const bodyDebug = await client.evaluate<{
+      bodyLen: number;
+      chatgptCount: number;
+      lastPartLen: number;
+      lastPartPreview: string;
+      afterTrim: string;
+    }>(`
         (() => {
           const bodyText = document.body.innerText || '';
           const parts = bodyText.split('ChatGPT:');
@@ -2198,18 +2441,24 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      console.error(`[ChatGPT] body.innerText debug: bodyLen=${bodyDebug.bodyLen}, chatgptCount=${bodyDebug.chatgptCount}, lastPartLen=${bodyDebug.lastPartLen}`);
-      console.error(`[ChatGPT] body.innerText lastPartPreview: "${bodyDebug.lastPartPreview}"`);
-      console.error(`[ChatGPT] body.innerText afterTrim: "${bodyDebug.afterTrim}"`);
-      // 回答テキストを含む可能性のある要素を広範囲に調査
-      const domDebug = await client.evaluate<{
-        markdownCount: number;
-        proseCount: number;
-        pCount: number;
-        textMessageCount: number;
-        longestP: {len: number; preview: string};
-        longestTextMessage: {len: number; preview: string};
-      }>(`
+    console.error(
+      `[ChatGPT] body.innerText debug: bodyLen=${bodyDebug.bodyLen}, chatgptCount=${bodyDebug.chatgptCount}, lastPartLen=${bodyDebug.lastPartLen}`,
+    );
+    console.error(
+      `[ChatGPT] body.innerText lastPartPreview: "${bodyDebug.lastPartPreview}"`,
+    );
+    console.error(
+      `[ChatGPT] body.innerText afterTrim: "${bodyDebug.afterTrim}"`,
+    );
+    // 回答テキストを含む可能性のある要素を広範囲に調査
+    const domDebug = await client.evaluate<{
+      markdownCount: number;
+      proseCount: number;
+      pCount: number;
+      textMessageCount: number;
+      longestP: {len: number; preview: string};
+      longestTextMessage: {len: number; preview: string};
+    }>(`
         (() => {
           const markdowns = document.querySelectorAll('.markdown');
           const proses = document.querySelectorAll('.prose');
@@ -2244,14 +2493,16 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      console.error(`[ChatGPT] DOM: markdown=${domDebug.markdownCount}, prose=${domDebug.proseCount}, p=${domDebug.pCount}, textMessage=${domDebug.textMessageCount}`);
+    console.error(
+      `[ChatGPT] DOM: markdown=${domDebug.markdownCount}, prose=${domDebug.proseCount}, p=${domDebug.pCount}, textMessage=${domDebug.textMessageCount}`,
+    );
 
-      // 最後のアシスタントメッセージの詳細な構造
-      const assistantDebug = await client.evaluate<{
-        count: number;
-        lastHtml: string;
-        lastChildren: Array<{tag: string; cls: string; len: number}>;
-      }>(`
+    // 最後のアシスタントメッセージの詳細な構造
+    const assistantDebug = await client.evaluate<{
+      count: number;
+      lastHtml: string;
+      lastChildren: Array<{tag: string; cls: string; len: number}>;
+    }>(`
         (() => {
           const assistants = document.querySelectorAll('[data-message-author-role="assistant"]');
           if (assistants.length === 0) return {count: 0, lastHtml: '', lastChildren: []};
@@ -2276,13 +2527,13 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           };
         })()
       `);
-      console.error(`[ChatGPT] Assistant messages: ${assistantDebug.count}`);
-      console.error(`[ChatGPT] Last assistant children:`);
-      assistantDebug.lastChildren.forEach((c, i) => {
-        console.error(`  [${i}] <${c.tag}> cls="${c.cls}" len=${c.len}`);
-      });
+    console.error(`[ChatGPT] Assistant messages: ${assistantDebug.count}`);
+    console.error(`[ChatGPT] Last assistant children:`);
+    assistantDebug.lastChildren.forEach((c, i) => {
+      console.error(`  [${i}] <${c.tag}> cls="${c.cls}" len=${c.len}`);
+    });
 
-      answer = await client.evaluate<string>(`
+    answer = await client.evaluate<string>(`
         (() => {
           const bodyText = document.body.innerText || '';
           // 最後の"ChatGPT:"以降のテキストを抽出
@@ -2306,57 +2557,60 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
           return result;
         })()
       `);
-      if (answer && answer.length > 0) {
-        console.error(`[ChatGPT] Got response from body.innerText fallback`);
-      }
+    if (answer && answer.length > 0) {
+      console.error(`[ChatGPT] Got response from body.innerText fallback`);
     }
+  }
 
-    // streamingTextが有効な場合はそれを優先（ChatGPT 5.2 Thinking対応）
-    // DOMから取得したテキストが空または見出しのみ（"ChatGPT:"など）の場合はstreamingTextを使用
-    const finalAnswer = (answer && answer.length > 0 && !answer.startsWith('ChatGPT:'))
+  // streamingTextが有効な場合はそれを優先（ChatGPT 5.2 Thinking対応）
+  // DOMから取得したテキストが空または見出しのみ（"ChatGPT:"など）の場合はstreamingTextを使用
+  const finalAnswer =
+    answer && answer.length > 0 && !answer.startsWith('ChatGPT:')
       ? answer
-      : (streamingText || answer);
-    console.error(`[ChatGPT] Response extracted: ${finalAnswer.slice(0, 100)}...`);
+      : streamingText || answer;
+  console.error(
+    `[ChatGPT] Response extracted: ${finalAnswer.slice(0, 100)}...`,
+  );
 
-    const finalUrl = await client.evaluate<string>('location.href');
-    if (finalUrl && finalUrl.includes('chatgpt.com')) {
-      await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
-    }
-    timings.waitResponseMs = nowMs() - tWaitResp;
-    timings.totalMs = nowMs() - t0;
-    await appendHistory({
-      provider: 'chatgpt',
-      question,
-      answer: finalAnswer,
-      url: finalUrl || undefined,
-      timings,
-    });
-    // 全てのタイミングフィールドが設定されていることを保証
-    const fullTimings: ChatTimings = {
-      connectMs: timings.connectMs ?? 0,
-      waitInputMs: timings.waitInputMs ?? 0,
-      inputMs: timings.inputMs ?? 0,
-      sendMs: timings.sendMs ?? 0,
-      waitResponseMs: timings.waitResponseMs ?? 0,
-      totalMs: timings.totalMs ?? 0,
-    };
+  const finalUrl = await client.evaluate<string>('location.href');
+  if (finalUrl && finalUrl.includes('chatgpt.com')) {
+    await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
+  }
+  timings.waitResponseMs = nowMs() - tWaitResp;
+  timings.totalMs = nowMs() - t0;
+  await appendHistory({
+    provider: 'chatgpt',
+    question,
+    answer: finalAnswer,
+    url: finalUrl || undefined,
+    timings,
+  });
+  // 全てのタイミングフィールドが設定されていることを保証
+  const fullTimings: ChatTimings = {
+    connectMs: timings.connectMs ?? 0,
+    waitInputMs: timings.waitInputMs ?? 0,
+    inputMs: timings.inputMs ?? 0,
+    sendMs: timings.sendMs ?? 0,
+    waitResponseMs: timings.waitResponseMs ?? 0,
+    totalMs: timings.totalMs ?? 0,
+  };
 
-    // デバッグ情報を収集（debugフラグがtrueの場合のみ）
-    let debugInfo: ChatDebugInfo | undefined;
-    if (debug) {
-      const domDebug = await client.evaluate<{
-        articleCount: number;
-        markdowns: Array<{
-          className: string;
-          innerTextLength: number;
-          innerText: string;
-          isResultThinking: boolean;
-        }>;
-        lastArticleHtml: string;
-        lastArticleInnerText: string;
-        url: string;
-        documentTitle: string;
-      }>(`
+  // デバッグ情報を収集（debugフラグがtrueの場合のみ）
+  let debugInfo: ChatDebugInfo | undefined;
+  if (debug) {
+    const domDebug = await client.evaluate<{
+      articleCount: number;
+      markdowns: Array<{
+        className: string;
+        innerTextLength: number;
+        innerText: string;
+        isResultThinking: boolean;
+      }>;
+      lastArticleHtml: string;
+      lastArticleInnerText: string;
+      url: string;
+      documentTitle: string;
+    }>(`
         (() => {
           const articles = document.querySelectorAll('article');
           let lastChatGPTArticle = null;
@@ -2393,71 +2647,104 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
         })()
       `);
 
-      debugInfo = {
-        dom: {
-          articleCount: domDebug.articleCount,
-          markdowns: domDebug.markdowns,
-          lastArticleHtml: domDebug.lastArticleHtml,
-          lastArticleInnerText: domDebug.lastArticleInnerText,
-        },
-        extraction: {
-          selectorsTried: [
-            {selector: '.markdown:not(.result-thinking)', found: domDebug.markdowns.some(m => !m.isResultThinking && m.innerTextLength > 0), textLength: domDebug.markdowns.filter(m => !m.isResultThinking).reduce((sum, m) => sum + m.innerTextLength, 0)},
-            {selector: '.result-thinking.markdown', found: domDebug.markdowns.some(m => m.isResultThinking && m.innerTextLength > 0), textLength: domDebug.markdowns.filter(m => m.isResultThinking).reduce((sum, m) => sum + m.innerTextLength, 0)},
-            {selector: 'article p', found: domDebug.lastArticleInnerText.length > 0, textLength: domDebug.lastArticleInnerText.length},
-          ],
-          finalSelector: finalAnswer ? (domDebug.markdowns.some(m => !m.isResultThinking && m.innerTextLength > 0) ? '.markdown:not(.result-thinking)' : 'fallback') : undefined,
-          fallbackUsed: (!answer || answer.length === 0) ? 'body.innerText' : undefined,
-        },
-        timings: fullTimings,
-        url: domDebug.url,
-        documentTitle: domDebug.documentTitle,
-      };
-    }
+    debugInfo = {
+      dom: {
+        articleCount: domDebug.articleCount,
+        markdowns: domDebug.markdowns,
+        lastArticleHtml: domDebug.lastArticleHtml,
+        lastArticleInnerText: domDebug.lastArticleInnerText,
+      },
+      extraction: {
+        selectorsTried: [
+          {
+            selector: '.markdown:not(.result-thinking)',
+            found: domDebug.markdowns.some(
+              m => !m.isResultThinking && m.innerTextLength > 0,
+            ),
+            textLength: domDebug.markdowns
+              .filter(m => !m.isResultThinking)
+              .reduce((sum, m) => sum + m.innerTextLength, 0),
+          },
+          {
+            selector: '.result-thinking.markdown',
+            found: domDebug.markdowns.some(
+              m => m.isResultThinking && m.innerTextLength > 0,
+            ),
+            textLength: domDebug.markdowns
+              .filter(m => m.isResultThinking)
+              .reduce((sum, m) => sum + m.innerTextLength, 0),
+          },
+          {
+            selector: 'article p',
+            found: domDebug.lastArticleInnerText.length > 0,
+            textLength: domDebug.lastArticleInnerText.length,
+          },
+        ],
+        finalSelector: finalAnswer
+          ? domDebug.markdowns.some(
+              m => !m.isResultThinking && m.innerTextLength > 0,
+            )
+            ? '.markdown:not(.result-thinking)'
+            : 'fallback'
+          : undefined,
+        fallbackUsed:
+          !answer || answer.length === 0 ? 'body.innerText' : undefined,
+      },
+      timings: fullTimings,
+      url: domDebug.url,
+      documentTitle: domDebug.documentTitle,
+    };
+  }
 
-    // Network interceptor: stop capture and wait for pending response body fetches
-    await interceptor.stopCaptureAndWait();
-    const networkResult = interceptor.getResult();
-    logInfo('chatgpt', 'Network capture result', {
-      frames: networkResult.frames.length,
-      textLength: networkResult.text.length,
-      rawDataSize: networkResult.rawDataSize,
-      captureTimeMs: networkResult.captureTimeMs,
-      summary: interceptor.getSummary(),
-    });
+  // Network interceptor: stop capture and wait for pending response body fetches
+  await interceptor.stopCaptureAndWait();
+  const networkResult = interceptor.getResult();
+  logInfo('chatgpt', 'Network capture result', {
+    frames: networkResult.frames.length,
+    textLength: networkResult.text.length,
+    rawDataSize: networkResult.rawDataSize,
+    captureTimeMs: networkResult.captureTimeMs,
+    summary: interceptor.getSummary(),
+  });
 
-    // Hybrid: prefer network text (primary), DOM as fallback
-    // Use network if it captured anything and is at least 50% of DOM length
-    // (avoids using truncated network text when DOM has the full answer)
-    let hybridAnswer = finalAnswer;
-    let answerSource = 'dom';
-    const netLen = networkResult.text.length;
-    const domLen = finalAnswer.length;
-    if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
-      hybridAnswer = networkResult.text;
-      answerSource = 'network';
-    }
-    logInfo('chatgpt', 'Answer source selected', {
-      source: answerSource,
-      networkLen: netLen,
-      domLen,
-    });
+  // Hybrid: prefer network text (primary), DOM as fallback
+  // Use network if it captured anything and is at least 50% of DOM length
+  // (avoids using truncated network text when DOM has the full answer)
+  let hybridAnswer = finalAnswer;
+  let answerSource = 'dom';
+  const netLen = networkResult.text.length;
+  const domLen = finalAnswer.length;
+  if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
+    hybridAnswer = networkResult.text;
+    answerSource = 'network';
+  }
+  logInfo('chatgpt', 'Answer source selected', {
+    source: answerSource,
+    networkLen: netLen,
+    domLen,
+  });
 
-    return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};
+  return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};
 }
 
 /**
  * Driver経由でChatGPTに質問（実験的）
  * 環境変数 CAI_USE_DRIVERS=1 で有効化
  */
-async function askChatGPTViaDriver(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+async function askChatGPTViaDriver(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
 
   // 接続
   const client = await getClient('chatgpt');
   timings.connectMs = nowMs() - t0;
-  logInfo('chatgpt', '[Driver] getClient completed', {connectMs: timings.connectMs});
+  logInfo('chatgpt', '[Driver] getClient completed', {
+    connectMs: timings.connectMs,
+  });
 
   // Driver取得・設定
   const driver = getDriver('chatgpt');
@@ -2471,7 +2758,7 @@ async function askChatGPTViaDriver(question: string, debug?: boolean, budgetMs?:
   await client.waitForFunction(
     `!!document.querySelector('textarea#prompt-textarea') ||
      !!document.querySelector('.ProseMirror[contenteditable="true"]')`,
-    30000
+    30000,
   );
   timings.waitInputMs = nowMs() - tWaitInput;
 
@@ -2538,14 +2825,20 @@ async function askChatGPTViaDriver(question: string, debug?: boolean, budgetMs?:
 /**
  * Driver経由でGeminiに質問（実験的）
  */
-async function askGeminiViaDriver(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+async function askGeminiViaDriver(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
 
   // 接続
   const client = await getClient('gemini');
   timings.connectMs = nowMs() - t0;
-  logInfo('gemini', '[Driver] getClient completed', {connectMs: timings.connectMs});
+  logInfo('gemini', '[Driver] getClient completed', {
+    connectMs: timings.connectMs,
+  });
 
   // Driver取得・設定
   const driver = getDriver('gemini');
@@ -2560,7 +2853,7 @@ async function askGeminiViaDriver(question: string, debug?: boolean, budgetMs?: 
     `!!document.querySelector('[role="textbox"]') ||
      !!document.querySelector('div[contenteditable="true"]') ||
      !!document.querySelector('textarea')`,
-    15000
+    15000,
   );
   timings.waitInputMs = nowMs() - tWaitInput;
 
@@ -2630,7 +2923,11 @@ const USE_DRIVERS = process.env.CAI_USE_DRIVERS === '1';
 /**
  * ChatGPTに質問して回答を取得（後方互換用）
  */
-export async function askChatGPTFast(question: string, debug?: boolean, budgetMs?: number): Promise<string> {
+export async function askChatGPTFast(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<string> {
   if (USE_DRIVERS) {
     const result = await askChatGPTViaDriver(question, debug, budgetMs);
     return result.answer;
@@ -2642,14 +2939,22 @@ export async function askChatGPTFast(question: string, debug?: boolean, budgetMs
 /**
  * ChatGPTに質問して回答とタイミング情報を取得
  */
-export async function askChatGPTFastWithTimings(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+export async function askChatGPTFastWithTimings(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   if (USE_DRIVERS) {
     return askChatGPTViaDriver(question, debug, budgetMs);
   }
   return askChatGPTFastInternal(question, debug, budgetMs);
 }
 
-async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+async function askGeminiFastInternal(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   const t0 = nowMs();
   const timings: Partial<ChatTimings> = {};
   const client = await getClient('gemini');
@@ -2685,7 +2990,9 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   const geminiCurrentUrl = await client.evaluate<string>('location.href');
   const isExistingGeminiChat = /\/app\/[a-zA-Z0-9]+/.test(geminiCurrentUrl);
   if (isExistingGeminiChat) {
-    console.error('[Gemini] Existing conversation detected, navigating to new chat...');
+    console.error(
+      '[Gemini] Existing conversation detected, navigating to new chat...',
+    );
     await navigate(client, 'https://gemini.google.com/');
     await new Promise(r => setTimeout(r, 500));
     console.error('[Gemini] New chat page loaded');
@@ -2722,9 +3029,17 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 
   // ページ読み込み完了を待ってから初期カウントを取得
   // カウントが安定するまでポーリング（2回連続で同じ値になるまで）
-  const initialGeminiUserCount = await waitForStableCount(client, geminiUserCountExpr);
-  const initialModelResponseCount = await waitForStableCount(client, geminiModelResponseCountExpr);
-  console.error(`[Gemini] Initial counts (stable): user=${initialGeminiUserCount}, modelResponse=${initialModelResponseCount}`);
+  const initialGeminiUserCount = await waitForStableCount(
+    client,
+    geminiUserCountExpr,
+  );
+  const initialModelResponseCount = await waitForStableCount(
+    client,
+    geminiModelResponseCountExpr,
+  );
+  console.error(
+    `[Gemini] Initial counts (stable): user=${initialGeminiUserCount}, modelResponse=${initialModelResponseCount}`,
+  );
 
   const sanitized = JSON.stringify(question);
   const tInput = nowMs();
@@ -2760,12 +3075,18 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 
   // 入力検証: 質問の先頭20文字が含まれているか確認
   const questionPrefix = question.slice(0, 20).replace(/\s+/g, '');
-  let inputOk = inputResult.ok && inputResult.actualText.replace(/\s+/g, '').includes(questionPrefix);
+  let inputOk =
+    inputResult.ok &&
+    inputResult.actualText.replace(/\s+/g, '').includes(questionPrefix);
 
   if (!inputOk && inputResult.ok) {
     // Phase 2: innerTextで失敗した場合、Input.insertText でリトライ
-    console.error('[Gemini] Input verification failed, retrying with Input.insertText...');
-    console.error(`[Gemini] Expected prefix: "${questionPrefix}", actual: "${inputResult.actualText.slice(0, 30)}..."`);
+    console.error(
+      '[Gemini] Input verification failed, retrying with Input.insertText...',
+    );
+    console.error(
+      `[Gemini] Expected prefix: "${questionPrefix}", actual: "${inputResult.actualText.slice(0, 30)}..."`,
+    );
 
     // テキストボックスをクリアしてフォーカス
     await client.evaluate(`
@@ -2804,7 +3125,9 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     `);
 
     inputOk = retryResult.replace(/\s+/g, '').includes(questionPrefix);
-    console.error(`[Gemini] Retry result: inputOk=${inputOk}, text="${retryResult.slice(0, 30)}..."`);
+    console.error(
+      `[Gemini] Retry result: inputOk=${inputOk}, text="${retryResult.slice(0, 30)}..."`,
+    );
   }
   timings.inputMs = nowMs() - tInput;
   if (!inputOk) {
@@ -2819,13 +3142,15 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
         return {
           url: location.href,
           contenteditable: counts('[contenteditable]'),
-          roleTextbox: counts('[role=\"textbox\"]'),
+          roleTextbox: counts('[role="textbox"]'),
           textarea: counts('textarea'),
-          inputText: counts('input[type=\"text\"]'),
+          inputText: counts('input[type="text"]'),
         };
       })()
     `);
-    throw new Error(`Gemini input box not found: ${JSON.stringify(diagnostics)}`);
+    throw new Error(
+      `Gemini input box not found: ${JSON.stringify(diagnostics)}`,
+    );
   }
 
   const normalizedQuestion = question.replace(/\s+/g, '');
@@ -2845,7 +3170,7 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   }
 
   // geminiUserTextExpr: 最後のユーザーメッセージのテキストを取得
-  const geminiUserTextExpr = `(() => {
+  const _geminiUserTextExpr = `(() => {
     ${DOM_UTILS_CODE}
     const results = __collectDeep(${JSON.stringify(geminiUserSelectors)}).nodes;
     const last = results[results.length - 1];
@@ -2857,7 +3182,11 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   console.error('[Gemini] Waited 200ms after input for state update');
 
   // Phase 2: 送信前テキスト確認 - 入力フィールドに正しいテキストがあるか最終確認
-  const preSendCheck = await client.evaluate<{hasText: boolean; textLength: number; textPreview: string}>(`
+  const preSendCheck = await client.evaluate<{
+    hasText: boolean;
+    textLength: number;
+    textPreview: string;
+  }>(`
     (() => {
       ${DOM_UTILS_CODE}
       const textbox = __collectDeep(['[role="textbox"]', 'div[contenteditable="true"]', 'textarea']).nodes[0];
@@ -2873,28 +3202,38 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     })()
   `);
 
-  console.error(`[Gemini] Pre-send check: hasText=${preSendCheck.hasText}, length=${preSendCheck.textLength}, preview="${preSendCheck.textPreview}..."`);
+  console.error(
+    `[Gemini] Pre-send check: hasText=${preSendCheck.hasText}, length=${preSendCheck.textLength}, preview="${preSendCheck.textPreview}..."`,
+  );
 
   if (!preSendCheck.hasText || preSendCheck.textLength < 5) {
-    throw new Error(`[Gemini] Input field empty or too short before send. Expected question but got: "${preSendCheck.textPreview}"`);
+    throw new Error(
+      `[Gemini] Input field empty or too short before send. Expected question but got: "${preSendCheck.textPreview}"`,
+    );
   }
 
   const tSend = nowMs();
 
   // 送信ボタンが有効になるまで待機（応答生成完了まで）
-  let buttonInfo: {found: boolean; disabled: boolean; x: number; y: number; selector: string} | null = null;
+  let buttonInfo: {
+    found: boolean;
+    disabled: boolean;
+    x: number;
+    y: number;
+    selector: string;
+  } | null = null;
   const maxRetries = 120; // 60秒（500ms × 120回）
   const forceNewChatThreshold = 60; // 30秒経過で新規チャットへの切り替えを検討（500ms × 60回）
   let stopButtonConsecutiveCount = 0;
 
   for (let i = 0; i < maxRetries; i++) {
     buttonInfo = await client.evaluate<{
-    found: boolean;
-    disabled: boolean;
-    x: number;
-    y: number;
-    selector: string;
-  }>(`
+      found: boolean;
+      disabled: boolean;
+      x: number;
+      y: number;
+      selector: string;
+    }>(`
     (() => {
       ${DOM_UTILS_CODE}
       const buttons = __collectDeep(['button', '[role="button"]']).nodes
@@ -2965,7 +3304,9 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   `);
 
     if (buttonInfo.found && !buttonInfo.disabled) {
-      console.error(`[Gemini] Send button ready on attempt ${i + 1}: selector="${buttonInfo.selector}"`);
+      console.error(
+        `[Gemini] Send button ready on attempt ${i + 1}: selector="${buttonInfo.selector}"`,
+      );
       break;
     }
 
@@ -2978,13 +3319,17 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 
     // 30秒以上停止ボタンが検出され続けている場合、セッションをクリアして新規チャットに切り替え
     if (stopButtonConsecutiveCount >= forceNewChatThreshold) {
-      console.error(`[Gemini] Stop button detected for ${forceNewChatThreshold * 0.5}s - clearing session and forcing new chat`);
+      console.error(
+        `[Gemini] Stop button detected for ${forceNewChatThreshold * 0.5}s - clearing session and forcing new chat`,
+      );
 
       // 協調クリーンアップ（RelayServer + Client + Session を一括リセット）
       await resetConnection('gemini');
 
       // エラーを投げて再試行を促す
-      throw new Error('GEMINI_STUCK_STOP_BUTTON: Previous response appears stuck. Session cleared, please retry.');
+      throw new Error(
+        'GEMINI_STUCK_STOP_BUTTON: Previous response appears stuck. Session cleared, please retry.',
+      );
     }
 
     if (i < maxRetries - 1) {
@@ -2993,7 +3338,9 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
         : buttonInfo.disabled
           ? `disabled (still generating, stop button count: ${stopButtonConsecutiveCount}/${forceNewChatThreshold})`
           : 'unknown';
-      console.error(`[Gemini] Send button not ready (${reason}) - attempt ${i + 1}/${maxRetries}, waiting 500ms...`);
+      console.error(
+        `[Gemini] Send button not ready (${reason}) - attempt ${i + 1}/${maxRetries}, waiting 500ms...`,
+      );
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
@@ -3002,14 +3349,21 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     throw new Error('Gemini send button check failed (buttonInfo is null)');
   }
   if (!buttonInfo.found) {
-    throw new Error('Gemini send button not found after 60 seconds (page may not be fully loaded).');
+    throw new Error(
+      'Gemini send button not found after 60 seconds (page may not be fully loaded).',
+    );
   }
   if (buttonInfo.disabled) {
-    throw new Error('Gemini send button is disabled after 60 seconds (previous response still generating). Try clearing the chat history or opening a new chat.');
+    throw new Error(
+      'Gemini send button is disabled after 60 seconds (previous response still generating). Try clearing the chat history or opening a new chat.',
+    );
   }
 
   // JavaScript click() で直接クリック（CDP座標クリックは不安定なため）
-  const clickResult = await client.evaluate<{clicked: boolean; selector: string | null}>(`
+  const clickResult = await client.evaluate<{
+    clicked: boolean;
+    selector: string | null;
+  }>(`
     (() => {
       // Gemini送信ボタンのセレクター（優先順）
       const selectors = [
@@ -3039,14 +3393,16 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   `);
 
   if (!clickResult.clicked) {
-    console.error('[Gemini] JavaScript click failed, falling back to CDP click');
+    console.error(
+      '[Gemini] JavaScript click failed, falling back to CDP click',
+    );
     // フォールバック: CDP座標クリック
     await client.send('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       x: buttonInfo.x,
       y: buttonInfo.y,
       button: 'left',
-      clickCount: 1
+      clickCount: 1,
     });
     await new Promise(resolve => setTimeout(resolve, 50));
     await client.send('Input.dispatchMouseEvent', {
@@ -3054,11 +3410,13 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
       x: buttonInfo.x,
       y: buttonInfo.y,
       button: 'left',
-      clickCount: 1
+      clickCount: 1,
     });
   }
 
-  console.error(`[Gemini] Send button clicked (method: ${clickResult.clicked ? 'js-click' : 'cdp'}, selector: ${clickResult.selector || 'cdp-coords'})`);
+  console.error(
+    `[Gemini] Send button clicked (method: ${clickResult.clicked ? 'js-click' : 'cdp'}, selector: ${clickResult.selector || 'cdp-coords'})`,
+  );
   timings.sendMs = nowMs() - tSend;
 
   // 送信成功確認用のダミー変数
@@ -3106,13 +3464,20 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
         };
       })()
     `);
-    throw new Error(`Gemini send action failed: ${JSON.stringify(diagnostics)}`);
+    throw new Error(
+      `Gemini send action failed: ${JSON.stringify(diagnostics)}`,
+    );
   }
   try {
-    await client.waitForFunction(`${geminiUserCountExpr} > ${initialGeminiUserCount}`, 8000);
+    await client.waitForFunction(
+      `${geminiUserCountExpr} > ${initialGeminiUserCount}`,
+      8000,
+    );
     // デバッグ: 送信後のメッセージカウント
     const userCountAfter = await client.evaluate<number>(geminiUserCountExpr);
-    console.error(`[Gemini] User message count after send: ${userCountAfter} (increased: ${userCountAfter > initialGeminiUserCount})`);
+    console.error(
+      `[Gemini] User message count after send: ${userCountAfter} (increased: ${userCountAfter > initialGeminiUserCount})`,
+    );
   } catch (error) {
     // フォールバック: Enterキーイベント
     console.error('[Gemini] Message not sent, trying Enter key fallback');
@@ -3130,10 +3495,15 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
       })()
     `);
     try {
-      await client.waitForFunction(`${geminiUserCountExpr} > ${initialGeminiUserCount}`, 5000);
+      await client.waitForFunction(
+        `${geminiUserCountExpr} > ${initialGeminiUserCount}`,
+        5000,
+      );
       console.error('[Gemini] Enter key fallback succeeded');
     } catch (fallbackError) {
-      throw new Error(`Gemini send did not create a new user message: ${String(error)}, fallback also failed: ${String(fallbackError)}`);
+      throw new Error(
+        `Gemini send did not create a new user message: ${String(error)}, fallback also failed: ${String(fallbackError)}`,
+      );
     }
   }
   // メッセージカウント増加を確認済みなので、テキストマッチングは不要
@@ -3142,14 +3512,21 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 
   // 新しいモデル応答が追加されるまで待つ（既存メッセージとの誤認防止）
   try {
-    await client.waitForFunction(`${geminiModelResponseCountExpr} > ${initialModelResponseCount}`, 30000);
+    await client.waitForFunction(
+      `${geminiModelResponseCountExpr} > ${initialModelResponseCount}`,
+      30000,
+    );
     console.error('[Gemini] New model response element detected');
   } catch {
-    console.error('[Gemini] Timeout waiting for new model response, continuing...');
+    console.error(
+      '[Gemini] Timeout waiting for new model response, continuing...',
+    );
   }
 
   const tWaitResp = nowMs();
-  console.error('[Gemini] Waiting for response completion (polling with diagnostics)...');
+  console.error(
+    '[Gemini] Waiting for response completion (polling with diagnostics)...',
+  );
 
   // ChatGPT側と同様のポーリングループで応答完了を検出
   const maxWaitMs = getResponseWaitBudgetMs(
@@ -3159,13 +3536,13 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     budgetMs,
   );
   const pollIntervalMs = 1000;
-  const IDLE_TIMEOUT_MS = 60000;  // ストップボタン消失後、60秒間無活動でタイムアウト
+  const IDLE_TIMEOUT_MS = 60000; // ストップボタン消失後、60秒間無活動でタイムアウト
   const startWait = Date.now();
-  let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
+  let lastActivityAt = Date.now(); // 最後にストップボタンorテキスト成長を検出した時刻
   let lastLoggedState = '';
-  let sawStopButton = false;  // 停止ボタンを見たかどうか（生成が始まった証拠）
+  let sawStopButton = false; // 停止ボタンを見たかどうか（生成が始まった証拠）
   let lastTextLength = 0;
-  let textStableCount = 0;  // テキスト長が変わらなかった回数
+  let textStableCount = 0; // テキスト長が変わらなかった回数
 
   // ストップボタンが見えている間は maxWaitMs を無視し、IDLE_TIMEOUT のみで判定する。
   while (
@@ -3289,12 +3666,15 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     }
 
     // テキスト長安定化検出
-    if (state.lastResponseTextLength === lastTextLength && state.lastResponseTextLength > 0) {
+    if (
+      state.lastResponseTextLength === lastTextLength &&
+      state.lastResponseTextLength > 0
+    ) {
       textStableCount++;
     } else if (state.lastResponseTextLength > lastTextLength) {
       textStableCount = 0;
       lastTextLength = state.lastResponseTextLength;
-      lastActivityAt = Date.now();  // テキスト成長もアクティビティとみなす
+      lastActivityAt = Date.now(); // テキスト成長もアクティビティとみなす
     } else {
       textStableCount = 0;
       lastTextLength = state.lastResponseTextLength;
@@ -3304,50 +3684,96 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     const currentState = JSON.stringify(state);
     if (currentState !== lastLoggedState) {
       const elapsed = Math.round((Date.now() - startWait) / 1000);
-      console.error(`[Gemini] State @${elapsed}s: stop=${state.hasStopButton}, mic=${state.hasMicButton}, feedback=${state.hasFeedbackButtons}, send=${state.sendButtonEnabled}, responses=${state.modelResponseCount}, textLen=${state.lastResponseTextLength}, inputEmpty=${state.inputBoxEmpty}, sawStop=${sawStopButton}, textStable=${textStableCount}`);
+      console.error(
+        `[Gemini] State @${elapsed}s: stop=${state.hasStopButton}, mic=${state.hasMicButton}, feedback=${state.hasFeedbackButtons}, send=${state.sendButtonEnabled}, responses=${state.modelResponseCount}, textLen=${state.lastResponseTextLength}, inputEmpty=${state.inputBoxEmpty}, sawStop=${sawStopButton}, textStable=${textStableCount}`,
+      );
       lastLoggedState = currentState;
     }
 
     // 応答完了条件0: 停止ボタンを見た後に消えた AND フィードバックボタン表示 AND 新しい回答が増えた
-    if (sawStopButton && !state.hasStopButton && state.hasFeedbackButtons && state.modelResponseCount > initialModelResponseCount) {
-      console.error(`[Gemini] Response complete - stop button disappeared, feedback buttons visible, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`);
+    if (
+      sawStopButton &&
+      !state.hasStopButton &&
+      state.hasFeedbackButtons &&
+      state.modelResponseCount > initialModelResponseCount
+    ) {
+      console.error(
+        `[Gemini] Response complete - stop button disappeared, feedback buttons visible, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`,
+      );
       break;
     }
 
     // 応答完了条件1: 停止ボタンを見た後に消えた AND マイクボタン表示 AND 新しい回答が増えた
-    if (sawStopButton && !state.hasStopButton && state.hasMicButton && state.modelResponseCount > initialModelResponseCount) {
-      console.error(`[Gemini] Response complete - stop button disappeared, mic button visible, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`);
+    if (
+      sawStopButton &&
+      !state.hasStopButton &&
+      state.hasMicButton &&
+      state.modelResponseCount > initialModelResponseCount
+    ) {
+      console.error(
+        `[Gemini] Response complete - stop button disappeared, mic button visible, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`,
+      );
       break;
     }
 
     // 応答完了条件2: 停止ボタンを見た後に消えた AND 送信ボタン有効 AND 入力欄空 AND 新しい回答が増えた
-    if (sawStopButton && !state.hasStopButton && state.sendButtonEnabled && state.inputBoxEmpty && state.modelResponseCount > initialModelResponseCount) {
-      console.error(`[Gemini] Response complete - stop button disappeared, send button enabled, input empty, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`);
+    if (
+      sawStopButton &&
+      !state.hasStopButton &&
+      state.sendButtonEnabled &&
+      state.inputBoxEmpty &&
+      state.modelResponseCount > initialModelResponseCount
+    ) {
+      console.error(
+        `[Gemini] Response complete - stop button disappeared, send button enabled, input empty, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`,
+      );
       break;
     }
 
     // 応答完了条件3: テキスト長が5秒間安定 AND 新しいレスポンスが増えた
-    if (textStableCount >= 5 && state.modelResponseCount > initialModelResponseCount && !state.hasStopButton) {
-      console.error(`[Gemini] Response complete - text stable for ${textStableCount}s, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`);
+    if (
+      textStableCount >= 5 &&
+      state.modelResponseCount > initialModelResponseCount &&
+      !state.hasStopButton
+    ) {
+      console.error(
+        `[Gemini] Response complete - text stable for ${textStableCount}s, response count increased (${initialModelResponseCount} -> ${state.modelResponseCount})`,
+      );
       break;
     }
 
     // 応答完了条件3b: テキスト長が10秒間安定 AND レスポンスがある AND 停止ボタンなし（既存チャット再接続時の救済）
-    if (textStableCount >= 10 && state.modelResponseCount > 0 && !state.hasStopButton) {
-      console.error(`[Gemini] Response complete - text stable for ${textStableCount}s, response exists (count=${state.modelResponseCount}), no stop button (existing chat recovery)`);
+    if (
+      textStableCount >= 10 &&
+      state.modelResponseCount > 0 &&
+      !state.hasStopButton
+    ) {
+      console.error(
+        `[Gemini] Response complete - text stable for ${textStableCount}s, response exists (count=${state.modelResponseCount}), no stop button (existing chat recovery)`,
+      );
       break;
     }
 
     // 応答完了条件3c: テキスト長が30秒間安定 AND レスポンスがある（強制完了 - stopボタン検出失敗の救済）
     if (textStableCount >= 30 && state.modelResponseCount > 0) {
-      console.error(`[Gemini] Response complete - FORCED: text stable for ${textStableCount}s, response exists (count=${state.modelResponseCount})`);
+      console.error(
+        `[Gemini] Response complete - FORCED: text stable for ${textStableCount}s, response exists (count=${state.modelResponseCount})`,
+      );
       break;
     }
 
     // フォールバック: 10秒以上経過 + 停止ボタンを見ていない + 新しいレスポンスが増えた + 停止ボタンなし
     const elapsed = Date.now() - startWait;
-    if (elapsed > 10000 && !sawStopButton && state.modelResponseCount > initialModelResponseCount && !state.hasStopButton && (state.hasMicButton || state.inputBoxEmpty)) {
-      console.error(`[Gemini] Response complete - fallback after 10s (no stop button seen, response count increased ${initialModelResponseCount} -> ${state.modelResponseCount}, mic=${state.hasMicButton})`);
+    if (
+      elapsed > 10000 &&
+      !sawStopButton &&
+      state.modelResponseCount > initialModelResponseCount &&
+      !state.hasStopButton &&
+      (state.hasMicButton || state.inputBoxEmpty)
+    ) {
+      console.error(
+        `[Gemini] Response complete - fallback after 10s (no stop button seen, response count increased ${initialModelResponseCount} -> ${state.modelResponseCount}, mic=${state.hasMicButton})`,
+      );
       break;
     }
 
@@ -3357,10 +3783,14 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   // タイムアウトチェック（IDLE_TIMEOUT で抜けた場合も含む）
   const geminiLoopElapsed = Date.now() - startWait;
   const geminiLoopIdle = Date.now() - lastActivityAt;
-  if (geminiLoopIdle >= IDLE_TIMEOUT_MS || (!sawStopButton && geminiLoopElapsed >= maxWaitMs)) {
-    const reason = geminiLoopIdle >= IDLE_TIMEOUT_MS
-      ? `idle for ${Math.round(geminiLoopIdle / 1000)}s (no stop button or text growth)`
-      : `absolute ceiling ${maxWaitMs}ms reached (stop button never seen)`;
+  if (
+    geminiLoopIdle >= IDLE_TIMEOUT_MS ||
+    (!sawStopButton && geminiLoopElapsed >= maxWaitMs)
+  ) {
+    const reason =
+      geminiLoopIdle >= IDLE_TIMEOUT_MS
+        ? `idle for ${Math.round(geminiLoopIdle / 1000)}s (no stop button or text growth)`
+        : `absolute ceiling ${maxWaitMs}ms reached (stop button never seen)`;
     const finalState = await client.evaluate<Record<string, unknown>>(`
       (() => {
         const textIncludes = (needle) => document.body && document.body.innerText && document.body.innerText.includes(needle);
@@ -3389,9 +3819,13 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
         };
       })()
     `);
-    console.error(`[Gemini] Timeout - ${reason}, elapsed=${Math.round(geminiLoopElapsed / 1000)}s, final state: ${JSON.stringify(finalState)}`);
+    console.error(
+      `[Gemini] Timeout - ${reason}, elapsed=${Math.round(geminiLoopElapsed / 1000)}s, final state: ${JSON.stringify(finalState)}`,
+    );
     await resetConnection('gemini');
-    throw new Error(`Timed out waiting for Gemini response (${Math.round(geminiLoopElapsed / 1000)}s, ${reason}). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`);
+    throw new Error(
+      `Timed out waiting for Gemini response (${Math.round(geminiLoopElapsed / 1000)}s, ${reason}). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`,
+    );
   }
 
   // 重要: タブをフォアグラウンドに持ってくる（バックグラウンドタブ対策）
@@ -3488,7 +3922,7 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     sendMs: timings.sendMs ?? 0,
     waitResponseMs: timings.waitResponseMs ?? 0,
     totalMs: timings.totalMs ?? 0,
-    navigateMs: timings.navigateMs,  // Gemini のみ
+    navigateMs: timings.navigateMs, // Gemini のみ
   };
 
   // デバッグ情報を収集（debugフラグがtrueの場合のみ）
@@ -3540,11 +3974,28 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
       },
       extraction: {
         selectorsTried: [
-          {selector: 'model-response', found: domDebug.articleCount > 0, textLength: domDebug.lastArticleInnerText.length},
-          {selector: '.markdown', found: domDebug.markdowns.length > 0, textLength: domDebug.markdowns.reduce((sum, m) => sum + m.innerTextLength, 0)},
-          {selector: 'img[alt="thumb_up"] parent', found: !!rawText, textLength: rawText.length},
+          {
+            selector: 'model-response',
+            found: domDebug.articleCount > 0,
+            textLength: domDebug.lastArticleInnerText.length,
+          },
+          {
+            selector: '.markdown',
+            found: domDebug.markdowns.length > 0,
+            textLength: domDebug.markdowns.reduce(
+              (sum, m) => sum + m.innerTextLength,
+              0,
+            ),
+          },
+          {
+            selector: 'img[alt="thumb_up"] parent',
+            found: !!rawText,
+            textLength: rawText.length,
+          },
         ],
-        finalSelector: normalized ? 'model-response or thumb_up parent' : undefined,
+        finalSelector: normalized
+          ? 'model-response or thumb_up parent'
+          : undefined,
         fallbackUsed: undefined,
       },
       timings: fullTimings,
@@ -3567,7 +4018,10 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
   // Hybrid: prefer network text (primary), DOM as fallback
   // Normalize network text with same Gemini-specific cleanup as DOM text
   // Use network if it captured anything and is at least 50% of DOM length
-  const networkNormalized = normalizeGeminiResponse(networkResult.text, question);
+  const networkNormalized = normalizeGeminiResponse(
+    networkResult.text,
+    question,
+  );
   let hybridAnswer = normalized;
   let answerSource = 'dom';
   const netLen = networkNormalized.length;
@@ -3588,7 +4042,11 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
 /**
  * Geminiに質問して回答を取得（後方互換用）
  */
-export async function askGeminiFast(question: string, debug?: boolean, budgetMs?: number): Promise<string> {
+export async function askGeminiFast(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<string> {
   if (USE_DRIVERS) {
     const result = await askGeminiViaDriver(question, debug, budgetMs);
     return result.answer;
@@ -3600,7 +4058,11 @@ export async function askGeminiFast(question: string, debug?: boolean, budgetMs?
 /**
  * Geminiに質問して回答とタイミング情報を取得
  */
-export async function askGeminiFastWithTimings(question: string, debug?: boolean, budgetMs?: number): Promise<ChatResult> {
+export async function askGeminiFastWithTimings(
+  question: string,
+  debug?: boolean,
+  budgetMs?: number,
+): Promise<ChatResult> {
   if (USE_DRIVERS) {
     return askGeminiViaDriver(question, debug, budgetMs);
   }
@@ -3649,7 +4111,7 @@ export async function takeCdpSnapshot(
   options?: {
     includeScreenshot?: boolean;
     bodyTextLimit?: number;
-  }
+  },
 ): Promise<CdpSnapshot> {
   const result: CdpSnapshot = {
     kind,
@@ -3784,7 +4246,6 @@ export async function takeCdpSnapshot(
       result.assistantMessageCount = chatgptState.assistantMsgCount;
       result.hasLoginPrompt = chatgptState.hasLoginPrompt;
       result.visibleDialogs = chatgptState.dialogs;
-
     } else {
       // Gemini用の詳細情報取得
       const geminiState = await existing.evaluate<{
@@ -3847,12 +4308,18 @@ export async function takeCdpSnapshot(
     // スクリーンショット（オプション）
     if (options?.includeScreenshot) {
       try {
-        const screenshot = await existing.send('Page.captureScreenshot', {format: 'png'});
-        if (screenshot?.data) {
+        const screenshot = await existing.send('Page.captureScreenshot', {
+          format: 'png',
+        });
+        const screenshotData = screenshot?.data as string | undefined;
+        if (screenshotData) {
           const timestamp = Date.now();
           const screenshotPath = `/tmp/cdp-snapshot-${kind}-${timestamp}.png`;
           const {writeFile} = await import('node:fs/promises');
-          await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+          await writeFile(
+            screenshotPath,
+            Buffer.from(screenshotData, 'base64'),
+          );
           result.screenshotPath = screenshotPath;
         }
       } catch (ssError) {
@@ -3877,8 +4344,9 @@ export interface DomSnapshot {
   timestamp: string;
   connected: boolean;
   error?: string;
-  selectors: {
-    [selector: string]: {
+  selectors: Record<
+    string,
+    {
       count: number;
       elements: Array<{
         tagName: string;
@@ -3886,8 +4354,8 @@ export interface DomSnapshot {
         textContent: string;
         outerHTML: string;
       }>;
-    };
-  };
+    }
+  >;
   messages?: Array<{
     role: 'user' | 'assistant' | 'unknown';
     text: string;
@@ -3937,23 +4405,24 @@ export async function getPageDom(
     result.title = basicInfo.title;
 
     // デフォルトセレクター（指定がない場合）
-    const defaultSelectors = kind === 'chatgpt'
-      ? [
-          '[data-message-author-role]',
-          '[data-testid]',
-          '.ProseMirror',
-          'textarea',
-          'button[data-testid="send-button"]',
-          'button[data-testid="stop-button"]',
-        ]
-      : [
-          'model-response',
-          'user-query',
-          '[role="textbox"]',
-          'div[contenteditable="true"]',
-          'button[aria-label*="Send"]',
-          'button[aria-label*="送信"]',
-        ];
+    const defaultSelectors =
+      kind === 'chatgpt'
+        ? [
+            '[data-message-author-role]',
+            '[data-testid]',
+            '.ProseMirror',
+            'textarea',
+            'button[data-testid="send-button"]',
+            'button[data-testid="stop-button"]',
+          ]
+        : [
+            'model-response',
+            'user-query',
+            '[role="textbox"]',
+            'div[contenteditable="true"]',
+            'button[aria-label*="Send"]',
+            'button[aria-label*="送信"]',
+          ];
 
     const targetSelectors = selectors.length > 0 ? selectors : defaultSelectors;
 
@@ -3994,21 +4463,25 @@ export async function getPageDom(
     }
 
     // メッセージ要素を特別に取得
-    const messageSelectors = kind === 'chatgpt'
-      ? {
-          user: '[data-message-author-role="user"]',
-          assistant: '[data-message-author-role="assistant"]',
-        }
-      : {
-          user: 'user-query, .user-query, [data-message-author-role="user"]',
-          assistant: 'model-response, .model-response, [data-message-author-role="assistant"]',
-        };
+    const messageSelectors =
+      kind === 'chatgpt'
+        ? {
+            user: '[data-message-author-role="user"]',
+            assistant: '[data-message-author-role="assistant"]',
+          }
+        : {
+            user: 'user-query, .user-query, [data-message-author-role="user"]',
+            assistant:
+              'model-response, .model-response, [data-message-author-role="assistant"]',
+          };
 
-    const messages = await existing.evaluate<Array<{
-      role: 'user' | 'assistant' | 'unknown';
-      text: string;
-      attributes: Record<string, string>;
-    }>>(`
+    const messages = await existing.evaluate<
+      Array<{
+        role: 'user' | 'assistant' | 'unknown';
+        text: string;
+        attributes: Record<string, string>;
+      }>
+    >(`
       (() => {
         ${DOM_UTILS_CODE}
 
@@ -4047,7 +4520,6 @@ export async function getPageDom(
     `);
 
     result.messages = messages;
-
   } catch (error) {
     result.error = `Failed to get DOM: ${error instanceof Error ? error.message : String(error)}`;
   }

@@ -51,7 +51,8 @@ async function runTest(kind) {
 
   // Step 3: Send question (using existing fast-chat pipeline)
   console.error(`[3/5] Sending question via existing pipeline...`);
-  const askFn = kind === 'chatgpt' ? askChatGPTFastWithTimings : askGeminiFastWithTimings;
+  const askFn =
+    kind === 'chatgpt' ? askChatGPTFastWithTimings : askGeminiFastWithTimings;
 
   let domResult;
   try {
@@ -97,24 +98,39 @@ function printResults(interceptor, domResult, kind) {
   const tracked = interceptor.getTrackedRequests();
   const apiRequests = tracked.filter(r => {
     const u = r.url;
-    return u.includes('/backend-api/') || u.includes('/backend-anon/') ||
-           u.includes('/api/conversation') || u.includes('/generate_content') ||
-           u.includes('/_/BardChatUi') || u.includes('/stream_generate') ||
-           u.includes('/v1beta/models') || u.includes('/BatchExecute');
+    return (
+      u.includes('/backend-api/') ||
+      u.includes('/backend-anon/') ||
+      u.includes('/api/conversation') ||
+      u.includes('/generate_content') ||
+      u.includes('/_/BardChatUi') ||
+      u.includes('/stream_generate') ||
+      u.includes('/v1beta/models') ||
+      u.includes('/BatchExecute')
+    );
   });
-  console.error(`\nTracked requests: ${tracked.length} total, ${apiRequests.length} API-matching`);
+  console.error(
+    `\nTracked requests: ${tracked.length} total, ${apiRequests.length} API-matching`,
+  );
   if (apiRequests.length > 0) {
     console.error('API-matching requests:');
     for (const r of apiRequests) {
-      console.error(`  [${r.type}] ${r.contentType.slice(0, 40)} ${r.url.slice(0, 120)}`);
+      console.error(
+        `  [${r.type}] ${r.contentType.slice(0, 40)} ${r.url.slice(0, 120)}`,
+      );
     }
   } else if (tracked.length > 0) {
     // Show top 10 most interesting URLs for debugging
     console.error('No API-matching requests found. Top tracked URLs:');
     const sorted = tracked
-      .filter(r => !r.url.includes('.js') && !r.url.includes('.css') &&
-                   !r.url.includes('.png') && !r.url.includes('.svg') &&
-                   !r.url.includes('.woff'))
+      .filter(
+        r =>
+          !r.url.includes('.js') &&
+          !r.url.includes('.css') &&
+          !r.url.includes('.png') &&
+          !r.url.includes('.svg') &&
+          !r.url.includes('.woff'),
+      )
       .slice(0, 15);
     for (const r of sorted) {
       console.error(`  [${r.type}] ${r.url.slice(0, 120)}`);
@@ -136,20 +152,28 @@ function printResults(interceptor, domResult, kind) {
     console.error('='.repeat(70));
     for (let i = 0; i < frames.length; i++) {
       const f = frames[i];
-      const dataPreview = f.data.length > 500 ? f.data.slice(0, 500) + '...' : f.data;
-      console.error(`\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`);
+      const dataPreview =
+        f.data.length > 500 ? f.data.slice(0, 500) + '...' : f.data;
+      console.error(
+        `\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`,
+      );
       console.error(`URL: ${f.url || 'unknown'}`);
       console.error(`Data: ${dataPreview}`);
     }
   } else {
     // Show first 5 and last 5 frames
     console.error(`\n${'='.repeat(70)}`);
-    console.error(`RAW FRAMES (showing first 5 and last 5 of ${frames.length})`);
+    console.error(
+      `RAW FRAMES (showing first 5 and last 5 of ${frames.length})`,
+    );
     console.error('='.repeat(70));
     for (let i = 0; i < Math.min(5, frames.length); i++) {
       const f = frames[i];
-      const dataPreview = f.data.length > 300 ? f.data.slice(0, 300) + '...' : f.data;
-      console.error(`\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`);
+      const dataPreview =
+        f.data.length > 300 ? f.data.slice(0, 300) + '...' : f.data;
+      console.error(
+        `\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`,
+      );
       console.error(`URL: ${f.url || 'unknown'}`);
       console.error(`Data: ${dataPreview}`);
     }
@@ -158,8 +182,11 @@ function printResults(interceptor, domResult, kind) {
     }
     for (let i = Math.max(5, frames.length - 5); i < frames.length; i++) {
       const f = frames[i];
-      const dataPreview = f.data.length > 300 ? f.data.slice(0, 300) + '...' : f.data;
-      console.error(`\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`);
+      const dataPreview =
+        f.data.length > 300 ? f.data.slice(0, 300) + '...' : f.data;
+      console.error(
+        `\n--- Frame ${i} [${f.type}] (${f.data.length} bytes) ---`,
+      );
       console.error(`URL: ${f.url || 'unknown'}`);
       console.error(`Data: ${dataPreview}`);
     }
@@ -170,8 +197,12 @@ function printResults(interceptor, domResult, kind) {
     console.error(`\n${'='.repeat(70)}`);
     console.error('COMPARISON: Network vs DOM');
     console.error('='.repeat(70));
-    console.error(`DOM answer (${domResult.answer.length} chars): ${domResult.answer.slice(0, 200)}`);
-    console.error(`Network text (${result.text.length} chars): ${result.text.slice(0, 200)}`);
+    console.error(
+      `DOM answer (${domResult.answer.length} chars): ${domResult.answer.slice(0, 200)}`,
+    );
+    console.error(
+      `Network text (${result.text.length} chars): ${result.text.slice(0, 200)}`,
+    );
     console.error(`DOM timings: ${JSON.stringify(domResult.timings)}`);
 
     if (result.text.length > 50 && domResult.answer.length > 50) {
@@ -180,21 +211,29 @@ function printResults(interceptor, domResult, kind) {
       const domWords = new Set(domResult.answer.toLowerCase().split(/\s+/));
       const overlap = [...networkWords].filter(w => domWords.has(w)).length;
       const similarity = overlap / Math.max(networkWords.size, domWords.size);
-      console.error(`Word overlap similarity: ${(similarity * 100).toFixed(1)}%`);
+      console.error(
+        `Word overlap similarity: ${(similarity * 100).toFixed(1)}%`,
+      );
     }
   }
 
   // Dump large fetch-body frames to files for analysis
-  const fetchBodies = frames.filter(f => f.type === 'fetch-body' && f.data.length > 500);
+  const fetchBodies = frames.filter(
+    f => f.type === 'fetch-body' && f.data.length > 500,
+  );
   if (fetchBodies.length > 0) {
     console.error(`\n${'='.repeat(70)}`);
-    console.error(`DUMP: ${fetchBodies.length} large fetch-body frame(s) saved to /tmp/`);
+    console.error(
+      `DUMP: ${fetchBodies.length} large fetch-body frame(s) saved to /tmp/`,
+    );
     console.error('='.repeat(70));
     for (let i = 0; i < fetchBodies.length; i++) {
       const f = fetchBodies[i];
       const filename = `/tmp/network-frame-${kind}-${i}.txt`;
       writeFileSync(filename, f.data);
-      console.error(`  ${filename} (${f.data.length} bytes) ${(f.url || 'unknown').slice(0, 100)}`);
+      console.error(
+        `  ${filename} (${f.data.length} bytes) ${(f.url || 'unknown').slice(0, 100)}`,
+      );
     }
   }
 

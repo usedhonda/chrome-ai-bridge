@@ -37,16 +37,12 @@ function getCurrentNamespace() {
 
 function detectScopePath() {
   try {
-    return execFileSync(
-      'git',
-      ['rev-parse', '--show-toplevel'],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 1500,
-      },
-    ).trim();
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1500,
+    }).trim();
   } catch {
     return path.resolve(process.cwd());
   }
@@ -194,8 +190,9 @@ async function main() {
       removeLock(lockFile);
       return;
     }
-    targets = [primaryPid, ...listChildren(primaryPid)]
-      .filter(pid => pid !== process.pid);
+    targets = [primaryPid, ...listChildren(primaryPid)].filter(
+      pid => pid !== process.pid,
+    );
     console.log(
       `[cleanup] Namespace=${namespace} primary=${primaryPid} descendants=${Math.max(0, targets.length - 1)}`,
     );
@@ -263,7 +260,9 @@ function removeLock(lockFile) {
     console.log(`[cleanup] Removed lock file: ${lockFile}`);
   } catch (err) {
     if (err.code !== 'ENOENT') {
-      console.log(`[cleanup] Could not remove lock file (${lockFile}): ${err.message}`);
+      console.log(
+        `[cleanup] Could not remove lock file (${lockFile}): ${err.message}`,
+      );
     }
   }
 }

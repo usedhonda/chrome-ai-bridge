@@ -21,12 +21,7 @@ const mainPath = path.join(__dirname, '..', 'build', 'src', 'main.js');
 
 const child = spawn(
   process.execPath,
-  [
-    '--import',
-    mockPath,
-    mainPath,
-    ...process.argv.slice(2),
-  ],
+  ['--import', mockPath, mainPath, ...process.argv.slice(2)],
   {
     stdio: 'inherit',
     env: process.env,

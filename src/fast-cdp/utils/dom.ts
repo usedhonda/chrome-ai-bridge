@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * DOM Utilities for Shadow DOM traversal
  *
  * This module provides browser-side utilities for deep DOM querying
@@ -173,7 +178,7 @@ export const DomUtils = {
    */
   generateCollectDeepCode(
     selectorList: string[],
-    options: DeepQueryOptions = {}
+    options: DeepQueryOptions = {},
   ): string {
     const optionsStr = JSON.stringify(options);
     const selectorsStr = JSON.stringify(selectorList);
@@ -191,7 +196,7 @@ export const DomUtils = {
    */
   generateCollectDeepWithStatsCode(
     selectorList: string[],
-    options: Omit<DeepQueryOptions, 'debug'> = {}
+    options: Omit<DeepQueryOptions, 'debug'> = {},
   ): string {
     const optionsStr = JSON.stringify({...options, debug: true});
     const selectorsStr = JSON.stringify(selectorList);

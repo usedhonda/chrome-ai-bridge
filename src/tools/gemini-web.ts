@@ -6,7 +6,8 @@
 
 import z from 'zod';
 
-import {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import type {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+
 import {askAI} from './ai-helpers.js';
 import {ToolCategories} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
@@ -26,15 +27,23 @@ function formatDebugInfo(debug: ChatDebugInfo): string {
   lines.push(`#### Markdowns (${debug.dom.markdowns.length})`);
   debug.dom.markdowns.forEach((md, i) => {
     lines.push(`[${i}] class="${md.className}"`);
-    lines.push(`    innerText (${md.innerTextLength} chars): "${md.innerText.slice(0, 200)}${md.innerText.length > 200 ? '...' : ''}"`);
+    lines.push(
+      `    innerText (${md.innerTextLength} chars): "${md.innerText.slice(0, 200)}${md.innerText.length > 200 ? '...' : ''}"`,
+    );
   });
   lines.push('');
   lines.push('#### Last Response');
   lines.push('innerHTML:');
-  lines.push(debug.dom.lastArticleHtml.slice(0, 2000) + (debug.dom.lastArticleHtml.length > 2000 ? '...' : ''));
+  lines.push(
+    debug.dom.lastArticleHtml.slice(0, 2000) +
+      (debug.dom.lastArticleHtml.length > 2000 ? '...' : ''),
+  );
   lines.push('');
   lines.push('innerText:');
-  lines.push(debug.dom.lastArticleInnerText.slice(0, 1000) + (debug.dom.lastArticleInnerText.length > 1000 ? '...' : ''));
+  lines.push(
+    debug.dom.lastArticleInnerText.slice(0, 1000) +
+      (debug.dom.lastArticleInnerText.length > 1000 ? '...' : ''),
+  );
   lines.push('');
   lines.push('### Extraction');
   lines.push('Selectors tried:');
@@ -49,7 +58,9 @@ function formatDebugInfo(debug: ChatDebugInfo): string {
   lines.push('### Timings');
   const t = debug.timings;
   const nav = t.navigateMs ? ` | navigate: ${t.navigateMs}ms` : '';
-  lines.push(`connect: ${t.connectMs}ms${nav} | input: ${t.waitInputMs}ms | send: ${t.sendMs}ms | response: ${t.waitResponseMs}ms | total: ${t.totalMs}ms`);
+  lines.push(
+    `connect: ${t.connectMs}ms${nav} | input: ${t.waitInputMs}ms | send: ${t.sendMs}ms | response: ${t.waitResponseMs}ms | total: ${t.totalMs}ms`,
+  );
 
   return lines.join('\n');
 }
@@ -71,8 +82,13 @@ export const askGeminiWeb = defineTool({
     debug: z
       .boolean()
       .optional()
-      .describe('Return detailed debug info (DOM structure, extraction attempts, timings)'),
-    projectName: z.string().optional().describe('Unused (kept for compatibility)'),
+      .describe(
+        'Return detailed debug info (DOM structure, extraction attempts, timings)',
+      ),
+    projectName: z
+      .string()
+      .optional()
+      .describe('Unused (kept for compatibility)'),
     createNewChat: z
       .boolean()
       .optional()

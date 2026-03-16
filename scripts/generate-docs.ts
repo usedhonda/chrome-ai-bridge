@@ -19,7 +19,7 @@ interface ToolWithAnnotations {
   name: string;
   description?: string;
   inputSchema?: {
-    properties?: Record<string, any>;
+    properties?: Record<string, unknown>;
     required?: string[];
   };
   annotations?: {
@@ -74,7 +74,9 @@ function generateToolsTOC(
     toc += `- **${categoryName}** (${categoryTools.length} tools)\n`;
 
     // Sort tools within category for TOC
-    categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
+    categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) =>
+      a.name.localeCompare(b.name),
+    );
     for (const tool of categoryTools) {
       const anchorLink = tool.name.toLowerCase();
       toc += `  - [\`${tool.name}\`](docs/tool-reference.md#${anchorLink})\n`;
@@ -183,7 +185,9 @@ async function queryToolsViaJsonRpc(): Promise<ToolWithAnnotations[]> {
     function send(method: string, params: Record<string, unknown> = {}) {
       const id = ++msgId;
       const msg = JSON.stringify({jsonrpc: '2.0', id, method, params});
-      child.stdin!.write(`Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`);
+      child.stdin!.write(
+        `Content-Length: ${Buffer.byteLength(msg)}\r\n\r\n${msg}`,
+      );
       return id;
     }
 
@@ -219,7 +223,7 @@ async function queryToolsViaJsonRpc(): Promise<ToolWithAnnotations[]> {
     });
 
     child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on('exit', code => {
       if (code !== null && code !== 0) {
         reject(new Error(`Server exited with code ${code}`));
       }
@@ -250,7 +254,19 @@ async function generateToolDocumentation(): Promise<void> {
   console.log('Starting server to query tool definitions...');
 
   try {
-    const tools = await queryToolsViaJsonRpc();
+    let tools: ToolWithAnnotations[];
+    try {
+      tools = await queryToolsViaJsonRpc();
+    } catch (rpcError) {
+      // In CI or environments without Chrome, server cannot list tools.
+      // Skip tool doc generation and only update config options / README.
+      console.warn(
+        `Warning: Could not query tools from server (${rpcError instanceof Error ? rpcError.message : String(rpcError)}). Skipping tool reference generation.`,
+      );
+      const optionsMarkdown = generateConfigOptionsMarkdown();
+      updateReadmeWithOptionsMarkdown(optionsMarkdown);
+      process.exit(0);
+    }
     const toolsWithAnnotations = tools;
     console.log(`Found ${tools.length} tools`);
 
@@ -291,7 +307,9 @@ async function generateToolDocumentation(): Promise<void> {
       markdown += `- **[${categoryName}](#${anchorName})** (${categoryTools.length} tools)\n`;
 
       // Sort tools within category for TOC
-      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
+      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) =>
+        a.name.localeCompare(b.name),
+      );
       for (const tool of categoryTools) {
         // Generate proper markdown anchor link: backticks are removed, keep underscores, lowercase
         const anchorLink = tool.name.toLowerCase();
@@ -306,7 +324,9 @@ async function generateToolDocumentation(): Promise<void> {
       markdown += `## ${category}\n\n`;
 
       // Sort tools within category
-      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) => a.name.localeCompare(b.name));
+      categoryTools.sort((a: ToolWithAnnotations, b: ToolWithAnnotations) =>
+        a.name.localeCompare(b.name),
+      );
 
       for (const tool of categoryTools) {
         markdown += `### \`${tool.name}\`\n\n`;

@@ -17,7 +17,10 @@ async function main() {
       timeoutMs: 10000,
     });
 
-    console.log('[2] 接続成功。targetInfo:', JSON.stringify(result.targetInfo, null, 2));
+    console.log(
+      '[2] 接続成功。targetInfo:',
+      JSON.stringify(result.targetInfo, null, 2),
+    );
 
     const client = new CdpClient(result.relay);
     await client.send('Runtime.enable');
@@ -35,7 +38,9 @@ async function main() {
     console.log('  Title:', title);
 
     // Body の最初の500文字
-    const bodyText = await client.evaluate('document.body?.innerText?.slice(0, 500) || "(empty)"');
+    const bodyText = await client.evaluate(
+      'document.body?.innerText?.slice(0, 500) || "(empty)"',
+    );
     console.log('  Body (first 500 chars):', bodyText);
 
     // 入力欄の有無
@@ -52,7 +57,9 @@ async function main() {
     console.log('  Has send button:', hasSendButton);
 
     console.log('\n[4] スクリーンショットを撮影...');
-    const screenshot = await client.send('Page.captureScreenshot', {format: 'png'});
+    const screenshot = await client.send('Page.captureScreenshot', {
+      format: 'png',
+    });
     if (screenshot?.data) {
       const fs = await import('fs');
       const path = '/tmp/cdp-debug-screenshot.png';
@@ -61,7 +68,6 @@ async function main() {
     }
 
     console.log('\n=== Debug Complete ===');
-
   } catch (error) {
     console.error('Error:', error.message);
     console.error(error.stack);

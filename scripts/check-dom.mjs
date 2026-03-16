@@ -23,7 +23,9 @@ async function main() {
   try {
     browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
   } catch (error) {
-    console.error('Failed to connect to Chrome. Make sure Chrome is running with --remote-debugging-port=9222');
+    console.error(
+      'Failed to connect to Chrome. Make sure Chrome is running with --remote-debugging-port=9222',
+    );
     process.exit(1);
   }
 
@@ -54,7 +56,9 @@ async function main() {
   }
 
   if (!found) {
-    console.error(`\nNo ${target.toUpperCase()} page found. Please open ${targetDomain} in Chrome.`);
+    console.error(
+      `\nNo ${target.toUpperCase()} page found. Please open ${targetDomain} in Chrome.`,
+    );
   }
 
   await browser.close();
@@ -65,7 +69,9 @@ async function analyzeChatGPT(page) {
   const stats = await page.evaluate(() => {
     return {
       articles: document.querySelectorAll('article').length,
-      assistantMsgs: document.querySelectorAll('[data-message-author-role="assistant"]').length,
+      assistantMsgs: document.querySelectorAll(
+        '[data-message-author-role="assistant"]',
+      ).length,
       markdowns: document.querySelectorAll('.markdown').length,
       resultThinking: document.querySelectorAll('.result-thinking').length,
       prose: document.querySelectorAll('.prose').length,
@@ -82,8 +88,12 @@ async function analyzeChatGPT(page) {
         bodyText.includes('回答を生成しています') ||
         bodyText.includes('is still generating') ||
         bodyText.includes('generating a response'),
-      hasThinkingComplete: /思考時間[：:]\s*\d+s?/.test(bodyText) || /Thinking.*\d+s?/.test(bodyText),
-      hasStopButton: !!document.querySelector('button[data-testid="stop-button"]'),
+      hasThinkingComplete:
+        /思考時間[：:]\s*\d+s?/.test(bodyText) ||
+        /Thinking.*\d+s?/.test(bodyText),
+      hasStopButton: !!document.querySelector(
+        'button[data-testid="stop-button"]',
+      ),
     };
   });
   console.log('\n--- Thinking Mode State ---');
@@ -91,7 +101,9 @@ async function analyzeChatGPT(page) {
 
   // 最後のアシスタントメッセージの詳細
   const lastAssistant = await page.evaluate(() => {
-    const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+    const msgs = document.querySelectorAll(
+      '[data-message-author-role="assistant"]',
+    );
     if (msgs.length === 0) return null;
 
     const last = msgs[msgs.length - 1];
@@ -133,7 +145,9 @@ async function analyzeChatGPT(page) {
 
   // セレクター別テキスト取得テスト
   const selectorTest = await page.evaluate(() => {
-    const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+    const msgs = document.querySelectorAll(
+      '[data-message-author-role="assistant"]',
+    );
     if (msgs.length === 0) return {};
 
     const last = msgs[msgs.length - 1];
@@ -158,7 +172,10 @@ async function analyzeChatGPT(page) {
             found: true,
             innerTextLength: (elem.innerText || '').length,
             textContentLength: (elem.textContent || '').length,
-            preview: (elem.innerText || elem.textContent || '').substring(0, 80),
+            preview: (elem.innerText || elem.textContent || '').substring(
+              0,
+              80,
+            ),
           };
         } else {
           results[sel] = {found: false};
@@ -172,7 +189,11 @@ async function analyzeChatGPT(page) {
   });
   console.log('\n--- Selector Test Results ---');
   for (const [sel, result] of Object.entries(selectorTest)) {
-    const status = result.found ? (result.innerTextLength > 0 ? 'OK' : 'EMPTY') : 'NOT_FOUND';
+    const status = result.found
+      ? result.innerTextLength > 0
+        ? 'OK'
+        : 'EMPTY'
+      : 'NOT_FOUND';
     console.log(`  ${sel}: ${status}`);
     if (result.found && result.preview) {
       console.log(`    Preview: "${result.preview}..."`);
@@ -197,7 +218,8 @@ async function analyzeChatGPT(page) {
 
     return {
       heading:
-        lastChatGPT.querySelector('h6, h5, [role="heading"]')?.textContent || '',
+        lastChatGPT.querySelector('h6, h5, [role="heading"]')?.textContent ||
+        '',
       innerTextLength: (lastChatGPT.innerText || '').length,
       innerTextPreview: (lastChatGPT.innerText || '').substring(0, 200),
       childDivs: lastChatGPT.querySelectorAll(':scope > div').length,
@@ -210,8 +232,11 @@ async function analyzeChatGPT(page) {
 async function analyzeGemini(page) {
   const stats = await page.evaluate(() => {
     return {
-      modelResponses: document.querySelectorAll('[data-test-id="model-response"]').length,
-      messageContents: document.querySelectorAll('[data-message-content]').length,
+      modelResponses: document.querySelectorAll(
+        '[data-test-id="model-response"]',
+      ).length,
+      messageContents: document.querySelectorAll('[data-message-content]')
+        .length,
       markdowns: document.querySelectorAll('.markdown').length,
     };
   });
@@ -219,7 +244,9 @@ async function analyzeGemini(page) {
   console.log(JSON.stringify(stats, null, 2));
 
   const lastResponse = await page.evaluate(() => {
-    const responses = document.querySelectorAll('[data-test-id="model-response"]');
+    const responses = document.querySelectorAll(
+      '[data-test-id="model-response"]',
+    );
     if (responses.length === 0) return null;
 
     const last = responses[responses.length - 1];

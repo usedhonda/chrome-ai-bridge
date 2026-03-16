@@ -31,14 +31,14 @@ npm run test:smoke # 3. Basic operation check (recommended)
 
 ### Document Structure
 
-| Section | Content | When to Read |
-|---------|---------|--------------|
-| 1. Architecture | Component structure | First read |
-| 2. Connection Flow | getClient/createConnection | Connection issues |
+| Section              | Content                                        | When to Read           |
+| -------------------- | ---------------------------------------------- | ---------------------- |
+| 1. Architecture      | Component structure                            | First read             |
+| 2. Connection Flow   | getClient/createConnection                     | Connection issues      |
 | 3. ChatGPT Operation | Selectors, completion detection, Thinking mode | ChatGPT implementation |
-| 4. Gemini Operation | Selectors, completion detection, Shadow DOM | Gemini implementation |
-| 10. Testing | Test commands, scenarios | Test execution |
-| 13. Troubleshooting | Problems and solutions | When issues occur |
+| 4. Gemini Operation  | Selectors, completion detection, Shadow DOM    | Gemini implementation  |
+| 10. Testing          | Test commands, scenarios                       | Test execution         |
+| 13. Troubleshooting  | Problems and solutions                         | When issues occur      |
 
 ---
 
@@ -91,6 +91,7 @@ npx chrome-ai-bridge
 > v2.0.0 switched to Chrome extension mode. CLI options from v1.x (`--headless`, `--loadExtension`, etc.) are **no longer supported**.
 
 **Setup steps:**
+
 1. Build and load the extension from `build/extension/` in Chrome
 2. Open ChatGPT/Gemini tabs and log in
 3. Configure your AI assistant (see README.md)
@@ -149,6 +150,7 @@ npx chrome-ai-bridge@latest
 ```
 
 **Internal flow:**
+
 ```
 scripts/cli.mjs
   ↓
@@ -158,6 +160,7 @@ Daemon starts (single process)
 ```
 
 **Features:**
+
 - `--import` flag used internally (transparent to user)
 - `browser-globals-mock.mjs` ensures chrome-devtools-frontend Node.js compatibility
 - Simple and fast
@@ -169,6 +172,7 @@ npm run dev
 ```
 
 **Internal flow:**
+
 ```
 scripts/daemon-wrapper.mjs (CAI_ENV=development)
   ↓
@@ -180,6 +184,7 @@ File change detected → build/src/main.js auto-restart
 ```
 
 **Features:**
+
 - TypeScript edit → 2-5 seconds to reflect
 - No VSCode Reload Window needed
 - 3-7x development speed improvement
@@ -198,16 +203,19 @@ npm run restart      # Restart daemon
 ### browser-globals-mock Explained
 
 **Problem:**
+
 - chrome-devtools-frontend expects browser globals: `location`, `self`, `localStorage`
 - Node.js environment lacks these
 - Import error: `ReferenceError: location is not defined`
 
 **Solution:**
+
 - `scripts/browser-globals-mock.mjs` mocks browser globals
 - `node --import browser-globals-mock.mjs` loads before main.js
 - chrome-devtools-frontend import succeeds
 
 **File:**
+
 ```javascript
 // scripts/browser-globals-mock.mjs
 globalThis.location = { search: '', href: '', ... };
@@ -216,6 +224,7 @@ globalThis.localStorage = { getItem: () => null, ... };
 ```
 
 **Integration:**
+
 - Distribution: `scripts/cli.mjs` auto-invokes with `--import`
 - Development: `scripts/daemon-wrapper.mjs` not needed (fallback built into build/src/main.js)
 - Transparent to users
@@ -296,29 +305,30 @@ chrome-ai-bridge is a CLI tool / daemon that automates ChatGPT / Gemini Web UI f
 
 ### Main Components
 
-| Component | File | Role |
-|-----------|------|------|
-| Daemon / REST API | `src/main.ts` | Implements HTTP REST API, handles tool calls |
-| Discovery Server | `src/extension/relay-server.ts` | Notifies extension of connection info (port 8766) |
-| Relay Server | `src/extension/relay-server.ts` | Mediates WebSocket communication with extension |
-| CDP Client | `src/fast-cdp/cdp-client.ts` | Sends Chrome DevTools Protocol commands |
-| Fast Chat | `src/fast-cdp/fast-chat.ts` | ChatGPT/Gemini operation logic |
-| NetworkInterceptor | `src/fast-cdp/network-interceptor.ts` | Network response capture and protocol parsing |
-| Chrome Extension | `src/extension/background.mjs` | Executes CDP commands in browser |
+| Component          | File                                  | Role                                              |
+| ------------------ | ------------------------------------- | ------------------------------------------------- |
+| Daemon / REST API  | `src/main.ts`                         | Implements HTTP REST API, handles tool calls      |
+| Discovery Server   | `src/extension/relay-server.ts`       | Notifies extension of connection info (port 8766) |
+| Relay Server       | `src/extension/relay-server.ts`       | Mediates WebSocket communication with extension   |
+| CDP Client         | `src/fast-cdp/cdp-client.ts`          | Sends Chrome DevTools Protocol commands           |
+| Fast Chat          | `src/fast-cdp/fast-chat.ts`           | ChatGPT/Gemini operation logic                    |
+| NetworkInterceptor | `src/fast-cdp/network-interceptor.ts` | Network response capture and protocol parsing     |
+| Chrome Extension   | `src/extension/background.mjs`        | Executes CDP commands in browser                  |
 
 ### Multi-Session Design Constraints
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Max connected sessions | 12 | Typical team setup (multiple Claude Code instances) |
-| Max concurrent queries | 3 | Actual simultaneous usage pattern |
-| Discovery ports | 38765-38775 (11 ports) | Sufficient for concurrent connection phase only |
+| Parameter              | Value                  | Rationale                                           |
+| ---------------------- | ---------------------- | --------------------------------------------------- |
+| Max connected sessions | 12                     | Typical team setup (multiple Claude Code instances) |
+| Max concurrent queries | 3                      | Actual simultaneous usage pattern                   |
+| Discovery ports        | 38765-38775 (11 ports) | Sufficient for concurrent connection phase only     |
 
 **Design Rule**: Discovery ports are a **transient resource** — needed only during the WebSocket handshake phase (~2 seconds). After WebSocket connection is established, the discovery port MUST be released immediately. This ensures 12+ sessions can coexist with only 11 ports.
 
 **Implementation**: `RelayServer.stopDiscoveryServer()` is called automatically after the `ready` event fires. If reconnection is needed, `restartDiscoveryServer()` re-acquires a port.
 
 **Port lifecycle**:
+
 ```
 Session starts → startDiscoveryServer() → port acquired
 Extension polls → WebSocket handshake → ready event
@@ -346,12 +356,14 @@ Connection is established in the following flow:
 **Function**: `getClient()` in `src/fast-cdp/fast-chat.ts`
 
 ```typescript
-export async function getClient(kind: 'chatgpt' | 'gemini'): Promise<CdpClient> {
+export async function getClient(
+  kind: 'chatgpt' | 'gemini',
+): Promise<CdpClient> {
   // 1. Check health if existing connection exists
   const existing = kind === 'chatgpt' ? chatgptClient : geminiClient;
   if (existing) {
     const healthy = await isConnectionHealthy(existing, kind);
-    if (healthy) return existing;  // Reuse
+    if (healthy) return existing; // Reuse
     // Clear if disconnected
   }
 
@@ -397,13 +409,14 @@ Common to ChatGPT/Gemini:
 
 **File**: `src/extension/relay-server.ts`
 
-| Item | Value |
-|------|-------|
-| Port | 8766 (fixed) |
-| Endpoint | `GET /mcp-discovery` |
-| Role | Notifies extension of WebSocket URL and target tab info |
+| Item     | Value                                                   |
+| -------- | ------------------------------------------------------- |
+| Port     | 8766 (fixed)                                            |
+| Endpoint | `GET /mcp-discovery`                                    |
+| Role     | Notifies extension of WebSocket URL and target tab info |
 
 **Response example**:
+
 ```json
 {
   "wsUrl": "ws://127.0.0.1:52431",
@@ -426,6 +439,7 @@ Common to ChatGPT/Gemini:
 **Problem**: Chrome throttles DOM updates in background tabs. When users switch to another tab during AI response generation, the response extraction may fail or return incomplete/empty text.
 
 **Root cause analysis**:
+
 - Chrome's Page Visibility API marks background tabs as `hidden`
 - `document.visibilityState === 'hidden'` triggers throttling
 - `requestAnimationFrame` callbacks are paused
@@ -433,24 +447,25 @@ Common to ChatGPT/Gemini:
 
 #### Approaches Considered
 
-| Approach | Description | Verdict |
-|----------|-------------|---------|
-| `Emulation.setFocusEmulationEnabled` | CDP command to emulate focused page | **Adopted** |
-| `Page.bringToFront` | Bring tab to foreground before extraction | Kept as fallback |
-| JS injection (visibilityState override) | Override `document.visibilityState` via `defineProperty` | Rejected |
-| JS injection (rAF polyfill) | Replace `requestAnimationFrame` with `setTimeout` | Rejected |
+| Approach                                | Description                                              | Verdict          |
+| --------------------------------------- | -------------------------------------------------------- | ---------------- |
+| `Emulation.setFocusEmulationEnabled`    | CDP command to emulate focused page                      | **Adopted**      |
+| `Page.bringToFront`                     | Bring tab to foreground before extraction                | Kept as fallback |
+| JS injection (visibilityState override) | Override `document.visibilityState` via `defineProperty` | Rejected         |
+| JS injection (rAF polyfill)             | Replace `requestAnimationFrame` with `setTimeout`        | Rejected         |
 
 #### Decision Rationale (from ChatGPT/Gemini/Claude discussion)
 
 **Summary**:
 
-| Topic | ChatGPT | Gemini | Adopted |
-|-------|---------|--------|---------|
+| Topic                           | ChatGPT                                                   | Gemini                | Adopted |
+| ------------------------------- | --------------------------------------------------------- | --------------------- | ------- |
 | setFocusEmulationEnabled effect | Fixes visibilityState to visible (documented in DevTools) | No effect (incorrect) | ChatGPT |
-| JS injection | High risk, not recommended | Recommended | ChatGPT |
-| Final recommendation | Layered fallback approach | JS injection | ChatGPT |
+| JS injection                    | High risk, not recommended                                | Recommended           | ChatGPT |
+| Final recommendation            | Layered fallback approach                                 | JS injection          | ChatGPT |
 
 **Key evidence**:
+
 1. **Chrome DevTools documentation** explicitly states: "When Emulate a focused page is enabled, `document.visibilityState` is set to `visible`"
 2. JS injection replacing rAF with setTimeout is ineffective because **setTimeout itself is throttled** in background tabs (max 1 call/second)
 3. `document.visibilityState` is read-only; `defineProperty` may fail
@@ -462,32 +477,39 @@ Common to ChatGPT/Gemini:
 ```typescript
 // After Runtime.enable, DOM.enable, Page.enable
 try {
-  await client.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+  await client.send('Emulation.setFocusEmulationEnabled', {enabled: true});
   logInfo('fast-chat', 'Focus emulation enabled');
 } catch (e) {
-  logWarn('fast-chat', 'setFocusEmulationEnabled failed (non-critical)', { error: String(e) });
+  logWarn('fast-chat', 'setFocusEmulationEnabled failed (non-critical)', {
+    error: String(e),
+  });
 }
 ```
 
 **Locations**:
+
 - Existing tab reuse path (line ~480)
 - New tab creation path (line ~540)
 
 #### Rejected Approaches
 
 **1. JS injection - visibilityState override**
+
 ```javascript
 // REJECTED: visibilityState is read-only, defineProperty may fail
-Object.defineProperty(document, 'visibilityState', { value: 'visible' });
+Object.defineProperty(document, 'visibilityState', {value: 'visible'});
 ```
 
 **2. JS injection - rAF polyfill**
+
 ```javascript
 // REJECTED: setTimeout is also throttled in background (max 1/sec)
-window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 16);
+window.requestAnimationFrame = cb =>
+  window.setTimeout(() => cb(performance.now()), 16);
 ```
 
 **Rejection reasons**:
+
 1. `document.visibilityState` is a read-only property on the Document prototype
 2. `setTimeout` in background tabs is throttled to max 1 call per second by Chrome
 3. Modifying global APIs (rAF) may break React or other framework internals
@@ -499,6 +521,7 @@ window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.no
 Even with focus emulation enabled, `Page.bringToFront` is called before DOM-based text extraction as a defense-in-depth measure.
 
 **Technical basis**:
+
 - From Chrome DevTools Protocol documentation: "Emulation.setFocusEmulationEnabled - Enables or disables simulating a focused and active page."
 - Reference: https://chromedevtools.github.io/devtools-protocol/tot/Emulation/#method-setFocusEmulationEnabled
 
@@ -507,6 +530,7 @@ Even with focus emulation enabled, `Page.bringToFront` is called before DOM-base
 ## 3. ChatGPT Operation Flow
 
 **Related sections**:
+
 - [Selector List](#32-chatgpt-selector-list)
 - [Response Completion Detection](#33-chatgpt-response-completion-detection)
 - [Thinking Mode Details](#36-chatgpt-thinking-mode-details)
@@ -541,23 +565,24 @@ Even with focus emulation enabled, `Page.bringToFront` is called before DOM-base
 ```
 
 **Preventing misidentification on existing chat reconnection** (added in v2.0.10):
+
 - Steps 2-3 prevent misidentifying existing responses as new responses when reconnecting to existing chats
 - Response detection starts only after accurately obtaining `initialAssistantCount`
 
 ### 3.2 ChatGPT Selector List
 
-| Purpose | Selector | Notes |
-|---------|----------|-------|
-| Input field | `textarea#prompt-textarea` | Primary |
-| Input field | `textarea[data-testid="prompt-textarea"]` | Fallback |
-| Input field | `.ProseMirror[contenteditable="true"]` | contenteditable version |
-| Send button | `button[data-testid="send-button"]` | Primary |
-| Send button | `button[aria-label*="送信"]` | Japanese UI |
-| Send button | `button[aria-label*="Send"]` | English UI |
-| Stop button | text/aria-label contains "Stop generating" or "生成を停止" | - |
-| User message | `[data-message-author-role="user"]` | - |
-| Assistant message | `[data-message-author-role="assistant"]` | - |
-| Response content | `.markdown`, `.prose`, `.markdown.prose` | - |
+| Purpose           | Selector                                                   | Notes                   |
+| ----------------- | ---------------------------------------------------------- | ----------------------- |
+| Input field       | `textarea#prompt-textarea`                                 | Primary                 |
+| Input field       | `textarea[data-testid="prompt-textarea"]`                  | Fallback                |
+| Input field       | `.ProseMirror[contenteditable="true"]`                     | contenteditable version |
+| Send button       | `button[data-testid="send-button"]`                        | Primary                 |
+| Send button       | `button[aria-label*="送信"]`                               | Japanese UI             |
+| Send button       | `button[aria-label*="Send"]`                               | English UI              |
+| Stop button       | text/aria-label contains "Stop generating" or "生成を停止" | -                       |
+| User message      | `[data-message-author-role="user"]`                        | -                       |
+| Assistant message | `[data-message-author-role="assistant"]`                   | -                       |
+| Response content  | `.markdown`, `.prose`, `.markdown.prose`                   | -                       |
 
 ### 3.3 ChatGPT Response Completion Detection
 
@@ -577,6 +602,7 @@ Even with focus emulation enabled, `Page.bringToFront` is called before DOM-base
 **Background**: In ChatGPT Thinking mode, button text ("Thinking time XX seconds", etc.) may be mixed into the response.
 
 **Filtering targets**:
+
 - Text within `<button>` elements
 - Patterns containing "思考時間", "秒" (Japanese time markers)
 
@@ -591,6 +617,7 @@ v2.1 introduces network-level response extraction as the primary path. This capt
 **Protocol**: ChatGPT Web uses `delta_encoding v1` SSE format via `/backend-api/f/conversation` endpoint.
 
 **SSE format**:
+
 ```
 event: delta_encoding
 data: "v1"
@@ -626,6 +653,7 @@ data: [DONE]
 Since ChatGPT 5.2, the DOM structure has changed. Regardless of Thinking mode, responses are stored in a single `.markdown` element.
 
 **Common structure**:
+
 ```
 article[data-turn="assistant"]
   └── div[data-message-author-role="assistant"]
@@ -635,6 +663,7 @@ article[data-turn="assistant"]
 ```
 
 > ⚠️ **Important changes**:
+>
 > - `data-message-author-role` is on the inner `div` element, not `article`
 > - `.result-thinking` class is not used in current UI
 > - Even in Thinking mode, there is only one `.markdown` (containing response text)
@@ -643,13 +672,13 @@ article[data-turn="assistant"]
 
 **Function**: `extractChatGPTResponse()` in `src/fast-cdp/fast-chat.ts`
 
-| Priority | Step | Selector/Method | Reason |
-|----------|------|-----------------|--------|
-| 1 | `.markdown` | `article .markdown` | Main response text |
-| 2 | `.prose`, `[class*="markdown"]` | Generic markdown selectors | Fallback for UI changes |
-| 3 | `p` elements | `article p` | When markdown class is missing |
-| 4 | `article.innerText` | Full element text | Fallback for DOM structure changes |
-| 5 | `main` + `body.innerText` | Full page text | Final fallback |
+| Priority | Step                            | Selector/Method            | Reason                             |
+| -------- | ------------------------------- | -------------------------- | ---------------------------------- |
+| 1        | `.markdown`                     | `article .markdown`        | Main response text                 |
+| 2        | `.prose`, `[class*="markdown"]` | Generic markdown selectors | Fallback for UI changes            |
+| 3        | `p` elements                    | `article p`                | When markdown class is missing     |
+| 4        | `article.innerText`             | Full element text          | Fallback for DOM structure changes |
+| 5        | `main` + `body.innerText`       | Full page text             | Final fallback                     |
 
 > ⚠️ **body.innerText fallback note**: When truncating by end markers ("あなた:", "You:", etc.), ignore matches within first 10 characters (`idx > 10` condition). This prevents response text from being erroneously truncated at the beginning.
 
@@ -661,8 +690,8 @@ article[data-turn="assistant"]
 
 ```typescript
 // Inside extractChatGPTResponse()
-const maxWaitForText = 120000;  // 120s (Thinking mode support)
-const pollInterval = 200;       // 200ms interval
+const maxWaitForText = 120000; // 120s (Thinking mode support)
+const pollInterval = 200; // 200ms interval
 
 while (Date.now() - waitStart < maxWaitForText) {
   const checkResult = await checkForResponseText();
@@ -686,21 +715,21 @@ while (Date.now() - waitStart < maxWaitForText) {
 
 > ⚠️ **Important**: Thinking mode only activates with **complex questions**.
 
-| Question Type | Activates | Example |
-|---------------|-----------|---------|
-| Simple questions | ❌ | "What's 2+2?", "What are the three primary colors?" |
-| Complex questions | ✅ | "Design a shortest path algorithm for a graph", "Explain recursion in detail" |
+| Question Type     | Activates | Example                                                                       |
+| ----------------- | --------- | ----------------------------------------------------------------------------- |
+| Simple questions  | ❌        | "What's 2+2?", "What are the three primary colors?"                           |
+| Complex questions | ✅        | "Design a shortest path algorithm for a graph", "Explain recursion in detail" |
 
 **Testing note**: DOM structure differs when Thinking mode doesn't activate with simple questions. Always use complex questions when testing Thinking mode related features.
 
 #### Thinking Mode Characteristics
 
-| Item | Description |
-|------|-------------|
-| Display | "Thinking time: Xm Xs" button is shown |
-| Thinking content | Expandable by clicking button (collapsed by default) |
-| DOM structure | Same as normal mode (only one `.markdown`) |
-| Response location | Stored in `.markdown.prose` element |
+| Item              | Description                                          |
+| ----------------- | ---------------------------------------------------- |
+| Display           | "Thinking time: Xm Xs" button is shown               |
+| Thinking content  | Expandable by clicking button (collapsed by default) |
+| DOM structure     | Same as normal mode (only one `.markdown`)           |
+| Response location | Stored in `.markdown.prose` element                  |
 
 #### DOM Structure Diagram (Updated 2026-02)
 
@@ -735,22 +764,25 @@ while (Date.now() - waitStart < maxWaitForText) {
 
 ```typescript
 // Detect from body.innerText
-const hasGeneratingText = bodyText.includes('回答を生成しています') ||
-                         bodyText.includes('is still generating') ||
-                         bodyText.includes('generating a response');
+const hasGeneratingText =
+  bodyText.includes('回答を生成しています') ||
+  bodyText.includes('is still generating') ||
+  bodyText.includes('generating a response');
 
 // Complete if "Thinking time: Xs" marker exists
-const hasThinkingComplete = /思考時間[：:]\s*\d+s?/.test(bodyText) ||
-                            /Thinking.*\d+s?/.test(bodyText);
+const hasThinkingComplete =
+  /思考時間[：:]\s*\d+s?/.test(bodyText) || /Thinking.*\d+s?/.test(bodyText);
 
 // Thinking in progress if "Skip thinking" button exists
-const hasSkipThinkingButton = bodyText.includes('今すぐ回答') ||
-                              bodyText.includes('Skip thinking');
+const hasSkipThinkingButton =
+  bodyText.includes('今すぐ回答') || bodyText.includes('Skip thinking');
 
-const isStillGenerating = (hasGeneratingText && !hasThinkingComplete) || hasSkipThinkingButton;
+const isStillGenerating =
+  (hasGeneratingText && !hasThinkingComplete) || hasSkipThinkingButton;
 ```
 
 **Processing flow**:
+
 1. `hasSkipThinkingButton` is true → Thinking in progress, continue waiting
 2. `isStillGenerating` is true → Response generating, continue waiting
 3. Both false AND `hasThinkingComplete` → Complete, proceed to text extraction
@@ -762,12 +794,15 @@ const isStillGenerating = (hasGeneratingText && !hasThinkingComplete) || hasSkip
 **Caution**: The thinking expansion button may also exist next to the input field as "Expand thinking".
 
 **Correct target**:
+
 - Only buttons inside `article[data-message-author-role="assistant"]`
 - Detect and click buttons with `aria-expanded="false"`
 
 ```javascript
 // Detect thinking expansion button (limited to inside article)
-const article = document.querySelector('article[data-message-author-role="assistant"]:last-of-type');
+const article = document.querySelector(
+  'article[data-message-author-role="assistant"]:last-of-type',
+);
 const expandButton = article?.querySelector('button[aria-expanded="false"]');
 if (expandButton) {
   expandButton.click();
@@ -781,6 +816,7 @@ if (expandButton) {
 ## 4. Gemini Operation Flow
 
 **Related sections**:
+
 - [Selector List (Language-independent)](#42-gemini-selector-list-language-independent)
 - [Response Completion Detection](#43-gemini-response-completion-detection-5-conditions--fallback)
 - [Shadow DOM Support](#53-shadow-dom-support)
@@ -817,30 +853,32 @@ if (expandButton) {
 ```
 
 **Preventing misidentification on existing chat reconnection** (added in v2.0.10):
+
 - Steps 3-4 prevent misidentifying existing responses as new responses when reconnecting to existing chats
 - Response detection starts only after accurately obtaining `initialModelResponseCount`
 
 ### 4.2 Gemini Selector List (Language-independent)
 
-| Purpose | Selector | Notes |
-|---------|----------|-------|
-| Input field | `[role="textbox"]` | Primary |
-| Input field | `div[contenteditable="true"]` | Fallback |
-| Input field | `textarea` | Fallback |
-| Send button | `mat-icon[data-mat-icon-name="send"]` parent button | Primary |
-| Send button | text contains "プロンプトを送信" / "送信" | Japanese UI |
-| Send button | aria-label contains "送信" / "Send" | - |
-| Stop button | text/aria-label contains "停止" / "Stop" | - |
-| **Mic button** | `img[alt="mic"]` closest button | **Language-independent** |
-| **Feedback** | `img[alt="thumb_up"]`, `img[alt="thumb_down"]` | **Language-independent, most important** |
-| User message | `user-query`, `.user-query` | Inside Shadow DOM |
-| Response | `model-response` | Inside Shadow DOM (not in direct DOM) |
+| Purpose        | Selector                                            | Notes                                    |
+| -------------- | --------------------------------------------------- | ---------------------------------------- |
+| Input field    | `[role="textbox"]`                                  | Primary                                  |
+| Input field    | `div[contenteditable="true"]`                       | Fallback                                 |
+| Input field    | `textarea`                                          | Fallback                                 |
+| Send button    | `mat-icon[data-mat-icon-name="send"]` parent button | Primary                                  |
+| Send button    | text contains "プロンプトを送信" / "送信"           | Japanese UI                              |
+| Send button    | aria-label contains "送信" / "Send"                 | -                                        |
+| Stop button    | text/aria-label contains "停止" / "Stop"            | -                                        |
+| **Mic button** | `img[alt="mic"]` closest button                     | **Language-independent**                 |
+| **Feedback**   | `img[alt="thumb_up"]`, `img[alt="thumb_down"]`      | **Language-independent, most important** |
+| User message   | `user-query`, `.user-query`                         | Inside Shadow DOM                        |
+| Response       | `model-response`                                    | Inside Shadow DOM (not in direct DOM)    |
 
 ### 4.3 Gemini Response Completion Detection (5 conditions + fallback)
 
 **Method**: Polling (1s interval, max **8min**)
 
 **State fields**:
+
 - `hasStopButton`: Presence of stop button
 - `hasMicButton`: Presence of mic button
 - `hasFeedbackButtons`: Presence of feedback buttons (thumb_up/down)
@@ -851,13 +889,13 @@ if (expandButton) {
 
 **Completion conditions (by priority)**:
 
-| Condition | Description | Reliability |
-|-----------|-------------|-------------|
-| 0 | sawStopButton AND !hasStopButton AND hasFeedbackButtons AND modelResponseCount > initialModelResponseCount | ★★★ Most reliable |
-| 1 | sawStopButton AND !hasStopButton AND hasMicButton AND modelResponseCount > initialModelResponseCount | ★★☆ |
-| 2 | sawStopButton AND !hasStopButton AND sendButtonEnabled AND inputBoxEmpty AND modelResponseCount > initialModelResponseCount | ★★☆ |
-| 3 | textStableCount >= 5 AND modelResponseCount > initialModelResponseCount AND !hasStopButton | ★☆☆ |
-| FB | elapsed > 10s AND !sawStopButton AND modelResponseCount > initialModelResponseCount AND !hasStopButton | Fallback |
+| Condition | Description                                                                                                                 | Reliability       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 0         | sawStopButton AND !hasStopButton AND hasFeedbackButtons AND modelResponseCount > initialModelResponseCount                  | ★★★ Most reliable |
+| 1         | sawStopButton AND !hasStopButton AND hasMicButton AND modelResponseCount > initialModelResponseCount                        | ★★☆               |
+| 2         | sawStopButton AND !hasStopButton AND sendButtonEnabled AND inputBoxEmpty AND modelResponseCount > initialModelResponseCount | ★★☆               |
+| 3         | textStableCount >= 5 AND modelResponseCount > initialModelResponseCount AND !hasStopButton                                  | ★☆☆               |
+| FB        | elapsed > 10s AND !sawStopButton AND modelResponseCount > initialModelResponseCount AND !hasStopButton                      | Fallback          |
 
 **Important**: `initialModelResponseCount` is the initial count obtained before sending the question. This prevents misidentifying existing responses as new ones.
 
@@ -870,6 +908,7 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 **Protocol**: Gemini Web uses StreamGenerate chunked format via `/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate` endpoint.
 
 **Response format**:
+
 ```
 )]}'
 
@@ -881,6 +920,7 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 ```
 
 **Parsing flow** (`parseGeminiStreamBody()`):
+
 1. Strip `)]}'` prefix
 2. Skip byte count lines (lines matching `/^\d+$/`)
 3. Parse outer JSON array: `outer[0][2]` is a JSON string
@@ -889,6 +929,7 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 **Key characteristic**: Each streaming chunk contains the **full accumulated text** (not deltas). The parser keeps the longest text found across all chunks.
 
 **Post-processing**:
+
 - `stripFormatting()` removes LaTeX math notation, image references (`[Image of ...]`), and Markdown formatting
 - `normalizeGeminiResponse()` is applied to the final text for consistency with DOM-extracted text
 
@@ -915,11 +956,13 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 ```typescript
 // Check if first 20 characters of question are included in input field
 const questionPrefix = question.slice(0, 20).replace(/\s+/g, '');
-let inputOk = inputResult.ok &&
+let inputOk =
+  inputResult.ok &&
   inputResult.actualText.replace(/\s+/g, '').includes(questionPrefix);
 ```
 
 If failed:
+
 1. Retry with `Input.insertText`
 2. Re-verify
 
@@ -971,10 +1014,10 @@ Standard `document.querySelector` cannot access internal elements.
 Recursively searches inside Shadow DOM:
 
 ```javascript
-const collectDeep = (selectorList) => {
+const collectDeep = selectorList => {
   const results = [];
   const seen = new Set();
-  const visit = (root) => {
+  const visit = root => {
     if (!root) return;
     for (const sel of selectorList) {
       root.querySelectorAll?.(sel)?.forEach(el => {
@@ -1008,6 +1051,7 @@ const collectDeep = (selectorList) => {
 ### Background
 
 Gemini's UI changes based on user's language setting:
+
 - Japanese: "良い回答", "悪い回答", "マイク"
 - English: "Good response", "Bad response", "Microphone"
 
@@ -1016,6 +1060,7 @@ Depending on `aria-label` or `textContent` requires language-specific branching.
 ### Solution: img alt Attribute
 
 Gemini's icons are implemented as img elements, and alt attributes are language-independent:
+
 - `img[alt="mic"]` - Mic icon
 - `img[alt="thumb_up"]` - Good response icon
 - `img[alt="thumb_down"]` - Bad response icon
@@ -1028,7 +1073,9 @@ const micImg = document.querySelector('img[alt="mic"]');
 const micButton = micImg?.closest('button');
 
 // Detect feedback button
-const hasFeedback = !!document.querySelector('img[alt="thumb_up"], img[alt="thumb_down"]');
+const hasFeedback = !!document.querySelector(
+  'img[alt="thumb_up"], img[alt="thumb_down"]',
+);
 ```
 
 ---
@@ -1044,9 +1091,10 @@ const buttons = collectDeep(['button', '[role="button"]'])
   .filter(el => !isDisabled(el));
 
 // 2. If stop button exists, treat as "generating" (disabled)
-const hasStopButton = buttons.some(b =>
-  b.textContent.includes('Stop generating') ||
-  b.getAttribute('aria-label').includes('停止')
+const hasStopButton = buttons.some(
+  b =>
+    b.textContent.includes('Stop generating') ||
+    b.getAttribute('aria-label').includes('停止'),
 );
 
 // 3. Search for send button by priority
@@ -1068,7 +1116,7 @@ await client.send('Input.dispatchMouseEvent', {
   x: buttonInfo.x,
   y: buttonInfo.y,
   button: 'left',
-  clickCount: 1
+  clickCount: 1,
 });
 
 await new Promise(resolve => setTimeout(resolve, 50));
@@ -1079,7 +1127,7 @@ await client.send('Input.dispatchMouseEvent', {
   x: buttonInfo.x,
   y: buttonInfo.y,
   button: 'left',
-  clickCount: 1
+  clickCount: 1,
 });
 ```
 
@@ -1090,6 +1138,7 @@ await client.send('Input.dispatchMouseEvent', {
 For detailed response completion detection for ChatGPT and Gemini, see sections 3.3 and 4.3.
 
 **Common design principles**:
+
 - Polling method (1s interval)
 - Max wait time: **8min** (480s) - supports long/complex responses
 - Evaluate multiple completion conditions by priority
@@ -1099,19 +1148,19 @@ For detailed response completion detection for ChatGPT and Gemini, see sections 
 
 ## 7.1 ChatGPT vs Gemini Implementation Comparison
 
-| Item | ChatGPT | Gemini |
-|------|---------|--------|
-| Input field wait | 30s | 15s |
-| Response wait | **8min** | **8min** |
-| Polling interval | 1s | 1s |
-| Shadow DOM | Not needed | **Required** (uses collectDeep) |
+| Item                      | ChatGPT                                               | Gemini                                                 |
+| ------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| Input field wait          | 30s                                                   | 15s                                                    |
+| Response wait             | **8min**                                              | **8min**                                               |
+| Polling interval          | 1s                                                    | 1s                                                     |
+| Shadow DOM                | Not needed                                            | **Required** (uses collectDeep)                        |
 | Main completion indicator | **Count increase detection** + stop button disappears | **Count increase detection** + feedback button appears |
-| Count tracking method | `assistantCount > initialAssistantCount` | `modelResponseCount > initialModelResponseCount` |
-| Text extraction method | Network (SSE delta parser) primary, DOM fallback | Network (chunked parser) primary, DOM fallback |
-| Network protocol | delta_encoding v1 SSE | StreamGenerate chunked |
-| DOM text extraction basis | `data-message-author-role` | **`img[alt="thumb_up"]`** |
-| Navigation | Not needed (resolved at connection) | Sometimes needed (measure navigateMs) |
-| Language support | aria-label branching | **img alt attribute (language-independent)** |
+| Count tracking method     | `assistantCount > initialAssistantCount`              | `modelResponseCount > initialModelResponseCount`       |
+| Text extraction method    | Network (SSE delta parser) primary, DOM fallback      | Network (chunked parser) primary, DOM fallback         |
+| Network protocol          | delta_encoding v1 SSE                                 | StreamGenerate chunked                                 |
+| DOM text extraction basis | `data-message-author-role`                            | **`img[alt="thumb_up"]`**                              |
+| Navigation                | Not needed (resolved at connection)                   | Sometimes needed (measure navigateMs)                  |
+| Language support          | aria-label branching                                  | **img alt attribute (language-independent)**           |
 
 ---
 
@@ -1163,40 +1212,40 @@ V2 format introduces agent-based session isolation for Agent Teams support.
 
 Agent IDs are generated using a hybrid strategy:
 
-| Source | Example | Priority |
-|--------|---------|----------|
-| `CAI_AGENT_ID` environment variable | `my-agent-12345` | 1 (highest) |
-| API client name | `claude-code-12345` | 2 |
-| Auto-generated | `agent-12345-1707123456789` | 3 (fallback) |
+| Source                              | Example                     | Priority     |
+| ----------------------------------- | --------------------------- | ------------ |
+| `CAI_AGENT_ID` environment variable | `my-agent-12345`            | 1 (highest)  |
+| API client name                     | `claude-code-12345`         | 2            |
+| Auto-generated                      | `agent-12345-1707123456789` | 3 (fallback) |
 
 ### 8.3 Session Configuration
 
 **Environment Variables**:
 
-| Variable | Default | Validation | Description |
-|----------|---------|------------|-------------|
-| `CAI_SESSION_TTL_MINUTES` | 30 | `> 0` or fallback to default | Session expiration time |
-| `CAI_MAX_AGENTS` | 20 | `> 0` or fallback to default | Maximum concurrent agents |
-| `CAI_CLEANUP_INTERVAL_MINUTES` | 5 | `> 0` or fallback to default | Stale session cleanup interval |
+| Variable                       | Default | Validation                   | Description                    |
+| ------------------------------ | ------- | ---------------------------- | ------------------------------ |
+| `CAI_SESSION_TTL_MINUTES`      | 30      | `> 0` or fallback to default | Session expiration time        |
+| `CAI_MAX_AGENTS`               | 20      | `> 0` or fallback to default | Maximum concurrent agents      |
+| `CAI_CLEANUP_INTERVAL_MINUTES` | 5       | `> 0` or fallback to default | Stale session cleanup interval |
 
 **IPC overload protection**:
 
-| Variable | Default | Validation | Description |
-|----------|---------|------------|-------------|
-| `CAI_IPC_MAX_SESSIONS` | 20 | `> 0` or fallback to default | Maximum active IPC sessions in Primary |
-| `CAI_IPC_RESERVED_INIT_SLOTS` | 2 | `>= 0` or fallback to default | Number of queued initialize waiters allowed when capacity is full |
-| `CAI_IPC_MAX_QUEUE` | 64 | `> 0` or fallback to default | Maximum queued initialize requests |
-| `CAI_IPC_QUEUE_WAIT_TIMEOUT_MS` | 45000 | `> 0` or fallback to default | Queue wait timeout before `SERVER_BUSY_TIMEOUT` |
-| `CAI_IPC_SESSION_IDLE_MS` | 1800000 | `>= 0` or fallback to default | Idle session close timeout (`0` disables idle close) |
-| `CAI_STARTUP_PROCESS_THRESHOLD` | 8 | `> 0` or fallback to default | Startup process-count threshold that enables jitter |
-| `CAI_STARTUP_DELAY_JITTER_MS` | 1500 | `> 0` or fallback to default | Max startup jitter delay when threshold is exceeded |
-| `CAI_EXEC_MAX_CONCURRENCY` | 3 | `> 0` or fallback to default | Maximum concurrent tool executions in Primary |
+| Variable                        | Default | Validation                    | Description                                                       |
+| ------------------------------- | ------- | ----------------------------- | ----------------------------------------------------------------- |
+| `CAI_IPC_MAX_SESSIONS`          | 20      | `> 0` or fallback to default  | Maximum active IPC sessions in Primary                            |
+| `CAI_IPC_RESERVED_INIT_SLOTS`   | 2       | `>= 0` or fallback to default | Number of queued initialize waiters allowed when capacity is full |
+| `CAI_IPC_MAX_QUEUE`             | 64      | `> 0` or fallback to default  | Maximum queued initialize requests                                |
+| `CAI_IPC_QUEUE_WAIT_TIMEOUT_MS` | 45000   | `> 0` or fallback to default  | Queue wait timeout before `SERVER_BUSY_TIMEOUT`                   |
+| `CAI_IPC_SESSION_IDLE_MS`       | 1800000 | `>= 0` or fallback to default | Idle session close timeout (`0` disables idle close)              |
+| `CAI_STARTUP_PROCESS_THRESHOLD` | 8       | `> 0` or fallback to default  | Startup process-count threshold that enables jitter               |
+| `CAI_STARTUP_DELAY_JITTER_MS`   | 1500    | `> 0` or fallback to default  | Max startup jitter delay when threshold is exceeded               |
+| `CAI_EXEC_MAX_CONCURRENCY`      | 3       | `> 0` or fallback to default  | Maximum concurrent tool executions in Primary                     |
 
 **Idle auto-exit** (process lifecycle):
 
-| Variable | Default | Validation | Description |
-|----------|---------|------------|-------------|
-| `CAI_PRIMARY_IDLE_MS` | 0 | `>= 0` or fallback to default | Primary process idle timeout (`0` disables auto-exit) |
+| Variable              | Default | Validation                    | Description                                           |
+| --------------------- | ------- | ----------------------------- | ----------------------------------------------------- |
+| `CAI_PRIMARY_IDLE_MS` | 0       | `>= 0` or fallback to default | Primary process idle timeout (`0` disables auto-exit) |
 
 **How idle auto-exit works:**
 
@@ -1209,7 +1258,22 @@ Agent IDs are generated using a hybrid strategy:
 **Path**: `.local/chrome-ai-bridge/history.jsonl`
 
 ```jsonl
-{"ts":"2026-01-30T10:30:00.000Z","project":"chrome-ai-bridge","provider":"chatgpt","question":"...","answer":"...","url":"https://chatgpt.com/c/xxx","timings":{"connectMs":120,"waitInputMs":500,"inputMs":50,"sendMs":100,"waitResponseMs":5000,"totalMs":5770}}
+{
+  "ts": "2026-01-30T10:30:00.000Z",
+  "project": "chrome-ai-bridge",
+  "provider": "chatgpt",
+  "question": "...",
+  "answer": "...",
+  "url": "https://chatgpt.com/c/xxx",
+  "timings": {
+    "connectMs": 120,
+    "waitInputMs": 500,
+    "inputMs": 50,
+    "sendMs": 100,
+    "waitResponseMs": 5000,
+    "totalMs": 5770
+  }
+}
 ```
 
 ### 8.5 Session Reuse Logic (V2)
@@ -1235,11 +1299,11 @@ Agent sessions are stored in V2 format (`sessions.json`):
   "agents": {
     "claude-code-12345": {
       "lastAccess": "2026-02-07T10:00:00.000Z",
-      "chatgpt": { "url": "https://chatgpt.com/c/xxx", "tabId": 123 },
+      "chatgpt": {"url": "https://chatgpt.com/c/xxx", "tabId": 123},
       "gemini": null
     }
   },
-  "config": { "sessionTtlMinutes": 30, "maxAgents": 10 }
+  "config": {"sessionTtlMinutes": 30, "maxAgents": 10}
 }
 ```
 
@@ -1252,34 +1316,38 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 ### 9.1 Timeout List
 
 **Legend**:
+
 - **Max**: Proceeds immediately on success. Timeout is the failure threshold
 - **Fixed**: Always waits this duration
 
-| Operation | ChatGPT | Gemini | Type | Description |
-|-----------|---------|--------|------|-------------|
-| Existing tab reuse | 3s | 3s | Max | Attempt connection with tabId from sessions.json. Reuse immediately if responsive, otherwise create new tab |
-| New tab creation | 5s | 5s | Max | Create tab + establish CDP via extension. Proceed immediately on success. Retry after 1s on failure (max 2x) |
-| Extension connection | 10s | 10s | Max | Discovery Server (port 8766) waits for extension connection. Usually connects in 2-3s |
-| **Page load complete** | 30s | 30s | Max | Wait until `readyState === 'complete'`. Important for preventing misidentification on existing chat reconnection |
-| **SPA rendering stabilization** | 500ms | 500ms | **Fixed** | Wait for SPA async rendering stabilization. Required before getting initial count |
-| Input field wait | 30s | 15s | Max | Wait for input field (textarea/contenteditable) to appear. Longer for ChatGPT due to slow ProseMirror init |
-| **Post-input wait** | 200ms | 200ms | **Fixed** | Wait for internal state update after input. Required before sending |
-| Send button wait | 60s | 60s | Max | Poll at 500ms intervals until send button is enabled. Disabled while generating (stop button shown) |
-| Message send confirmation | 15s | 8s | Max | Wait for user message element to appear after click. Send failed if not |
-| **New response DOM addition** | 30s | 30s | Max | Wait for new assistant/model response element after sending. Used to distinguish from existing responses |
-| **Response completion wait** | **8min** | **8min** | Max | Poll at 1s intervals until response completion detected. Supports long/complex responses |
-| **Text extraction wait** | **120s** | - | Max | Poll at 200ms intervals until text is rendered in DOM after completion. Thinking mode support |
-| Health check | 4s | 4s | Max | Verify existence with `client.evaluate('1')` before reusing existing connection |
+| Operation                       | ChatGPT  | Gemini   | Type      | Description                                                                                                      |
+| ------------------------------- | -------- | -------- | --------- | ---------------------------------------------------------------------------------------------------------------- |
+| Existing tab reuse              | 3s       | 3s       | Max       | Attempt connection with tabId from sessions.json. Reuse immediately if responsive, otherwise create new tab      |
+| New tab creation                | 5s       | 5s       | Max       | Create tab + establish CDP via extension. Proceed immediately on success. Retry after 1s on failure (max 2x)     |
+| Extension connection            | 10s      | 10s      | Max       | Discovery Server (port 8766) waits for extension connection. Usually connects in 2-3s                            |
+| **Page load complete**          | 30s      | 30s      | Max       | Wait until `readyState === 'complete'`. Important for preventing misidentification on existing chat reconnection |
+| **SPA rendering stabilization** | 500ms    | 500ms    | **Fixed** | Wait for SPA async rendering stabilization. Required before getting initial count                                |
+| Input field wait                | 30s      | 15s      | Max       | Wait for input field (textarea/contenteditable) to appear. Longer for ChatGPT due to slow ProseMirror init       |
+| **Post-input wait**             | 200ms    | 200ms    | **Fixed** | Wait for internal state update after input. Required before sending                                              |
+| Send button wait                | 60s      | 60s      | Max       | Poll at 500ms intervals until send button is enabled. Disabled while generating (stop button shown)              |
+| Message send confirmation       | 15s      | 8s       | Max       | Wait for user message element to appear after click. Send failed if not                                          |
+| **New response DOM addition**   | 30s      | 30s      | Max       | Wait for new assistant/model response element after sending. Used to distinguish from existing responses         |
+| **Response completion wait**    | **8min** | **8min** | Max       | Poll at 1s intervals until response completion detected. Supports long/complex responses                         |
+| **Text extraction wait**        | **120s** | -        | Max       | Poll at 200ms intervals until text is rendered in DOM after completion. Thinking mode support                    |
+| Health check                    | 4s       | 4s       | Max       | Verify existence with `client.evaluate('1')` before reusing existing connection                                  |
 
 ### 9.2 Retry Logic
 
 **Connection retry** (`createConnection()`):
+
 - New tab creation: max 2x (1s interval)
 
 **Send retry**:
+
 - Enter key fallback (when mouse click fails)
 
 **Gemini Stuck State retry**:
+
 - Max 2 retries in tool handlers (`src/tools/gemini-web.ts`, `src/tools/chatgpt-gemini-web.ts`)
 - Auto retry on `GEMINI_STUCK_*` error detection
 - Cache cleared via `clearGeminiClient()` inside `fast-chat.ts`
@@ -1289,6 +1357,7 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 **Background**: Phenomenon where Gemini stops during response generation and UI updates halt. Occurs when previous session hangs.
 
 **Detection method** (`checkGeminiStuckState()` in `src/fast-cdp/fast-chat.ts`):
+
 ```typescript
 // Poll at 500ms intervals for max 5 seconds
 // Check if stop button disappears
@@ -1296,10 +1365,12 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 ```
 
 **Detected errors**:
+
 - `GEMINI_STUCK_STOP_BUTTON`: Stop button doesn't disappear
 - `GEMINI_STUCK_NO_RESPONSE`: Response doesn't start
 
 **Handling flow**:
+
 1. Detect stuck state in `askGeminiFast()`
 2. Clear connection cache with `clearGeminiClient()` (in `fast-chat.ts`)
 3. Throw `GEMINI_STUCK_*` error
@@ -1311,10 +1382,12 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 **Path**: `.local/chrome-ai-bridge/debug/`
 
 Auto-saved on anomalies:
+
 - `chatgpt-{timestamp}.json`
 - `gemini-{timestamp}.json`
 
 **Saved cases**:
+
 - User message send timeout
 - Suspicious answer (`isSuspiciousAnswer()` returns true)
 
@@ -1322,16 +1395,16 @@ Auto-saved on anomalies:
 
 State fields obtained in response completion detection loop:
 
-| Field | Description | Purpose |
-|-------|-------------|---------|
-| `debug_assistantMsgsCount` | Assistant message count | Detect new responses |
-| `debug_chatgptArticlesCount` | ChatGPT article count | Detect responses in new UI |
-| `debug_markdownsInLast` | .markdown count in last article | Locate text extraction point |
-| `debug_lastAssistantInnerTextLen` | Text length | Confirm response was obtained |
-| `debug_bodySnippet` | First 200 chars of body.innerText | Page state overview |
-| `debug_bodyLen` | Length of body.innerText | Confirm content amount |
-| `debug_pageUrl` | Current URL | Verify correct page |
-| `debug_pageTitle` | Page title | Verify login status |
+| Field                             | Description                       | Purpose                       |
+| --------------------------------- | --------------------------------- | ----------------------------- |
+| `debug_assistantMsgsCount`        | Assistant message count           | Detect new responses          |
+| `debug_chatgptArticlesCount`      | ChatGPT article count             | Detect responses in new UI    |
+| `debug_markdownsInLast`           | .markdown count in last article   | Locate text extraction point  |
+| `debug_lastAssistantInnerTextLen` | Text length                       | Confirm response was obtained |
+| `debug_bodySnippet`               | First 200 chars of body.innerText | Page state overview           |
+| `debug_bodyLen`                   | Length of body.innerText          | Confirm content amount        |
+| `debug_pageUrl`                   | Current URL                       | Verify correct page           |
+| `debug_pageTitle`                 | Page title                        | Verify login status           |
 
 ---
 
@@ -1372,31 +1445,31 @@ npm run test:suite -- --help       # Show help
 
 ### 10.2 Test Scenario List
 
-| ID | Name | Tags | Description |
-|----|------|------|-------------|
-| `chatgpt-new-chat` | ChatGPT New Chat | smoke, chatgpt | Basic operation check with new chat |
-| `chatgpt-existing-chat` | ChatGPT Existing Chat Reconnection | regression, chatgpt | Reconnect to existing chat and ask question |
-| `chatgpt-thinking-mode` | ChatGPT Thinking Mode | regression, chatgpt, thinking | Verify Thinking behavior with complex question |
-| `chatgpt-code-block` | ChatGPT Code Block Response | smoke, chatgpt, code | Verify code generation response extraction |
-| `chatgpt-long-response` | ChatGPT Long Response | chatgpt | Verify timeout with long response |
-| `gemini-new-chat` | Gemini New Chat | smoke, gemini | Basic operation check with new chat |
-| `gemini-existing-chat` | Gemini Existing Chat Reconnection | regression, gemini | Stuck State detection and retry |
-| `gemini-code-block` | Gemini Code Block Response | smoke, gemini, code | Verify code generation response extraction |
-| `network-extraction` | Network Extraction | network, chatgpt, gemini | Verify network vs DOM text overlap |
-| `parallel-query` | Parallel Query | smoke, parallel | ChatGPT+Gemini simultaneous query |
+| ID                      | Name                               | Tags                          | Description                                    |
+| ----------------------- | ---------------------------------- | ----------------------------- | ---------------------------------------------- |
+| `chatgpt-new-chat`      | ChatGPT New Chat                   | smoke, chatgpt                | Basic operation check with new chat            |
+| `chatgpt-existing-chat` | ChatGPT Existing Chat Reconnection | regression, chatgpt           | Reconnect to existing chat and ask question    |
+| `chatgpt-thinking-mode` | ChatGPT Thinking Mode              | regression, chatgpt, thinking | Verify Thinking behavior with complex question |
+| `chatgpt-code-block`    | ChatGPT Code Block Response        | smoke, chatgpt, code          | Verify code generation response extraction     |
+| `chatgpt-long-response` | ChatGPT Long Response              | chatgpt                       | Verify timeout with long response              |
+| `gemini-new-chat`       | Gemini New Chat                    | smoke, gemini                 | Basic operation check with new chat            |
+| `gemini-existing-chat`  | Gemini Existing Chat Reconnection  | regression, gemini            | Stuck State detection and retry                |
+| `gemini-code-block`     | Gemini Code Block Response         | smoke, gemini, code           | Verify code generation response extraction     |
+| `network-extraction`    | Network Extraction                 | network, chatgpt, gemini      | Verify network vs DOM text overlap             |
+| `parallel-query`        | Parallel Query                     | smoke, parallel               | ChatGPT+Gemini simultaneous query              |
 
 ### 10.3 Test Suite Tag List
 
-| Tag | Description | Usage |
-|-----|-------------|-------|
-| `smoke` | Basic operation check (new chat, parallel query, code block) | `--tag=smoke` |
+| Tag          | Description                                                                 | Usage              |
+| ------------ | --------------------------------------------------------------------------- | ------------------ |
+| `smoke`      | Basic operation check (new chat, parallel query, code block)                | `--tag=smoke`      |
 | `regression` | Check for past issue recurrence (existing chat reconnection, Thinking mode) | `--tag=regression` |
-| `chatgpt` | ChatGPT related only | `--tag=chatgpt` |
-| `gemini` | Gemini related only | `--tag=gemini` |
-| `thinking` | Thinking mode related | `--tag=thinking` |
-| `parallel` | Parallel query related | `--tag=parallel` |
-| `code` | Code block response related | `--tag=code` |
-| `network` | Network extraction related | `--tag=network` |
+| `chatgpt`    | ChatGPT related only                                                        | `--tag=chatgpt`    |
+| `gemini`     | Gemini related only                                                         | `--tag=gemini`     |
+| `thinking`   | Thinking mode related                                                       | `--tag=thinking`   |
+| `parallel`   | Parallel query related                                                      | `--tag=parallel`   |
+| `code`       | Code block response related                                                 | `--tag=code`       |
+| `network`    | Network extraction related                                                  | `--tag=network`    |
 
 **Scenario definition**: `scripts/test-scenarios.json`
 **Report location**: `.local/chrome-ai-bridge/test-reports/`
@@ -1405,14 +1478,14 @@ npm run test:suite -- --help       # Show help
 
 Assertions available in `test-scenarios.json`:
 
-| Assertion | Description | Example |
-|-----------|-------------|---------|
-| `bothMustSucceed` | Both must succeed in parallel query | `"bothMustSucceed": true` |
-| `minAnswerLength` | Minimum answer character count | `"minAnswerLength": 50` |
-| `relevanceThreshold` | Relevance score threshold (0-1) | `"relevanceThreshold": 0.5` |
-| `maxTotalMs` | Maximum execution time (ms) | `"maxTotalMs": 60000` |
-| `noFallback` | No fallback used | `"noFallback": true` |
-| `noEmptyMarkdown` | Empty markdown check | `"noEmptyMarkdown": true` |
+| Assertion            | Description                         | Example                     |
+| -------------------- | ----------------------------------- | --------------------------- |
+| `bothMustSucceed`    | Both must succeed in parallel query | `"bothMustSucceed": true`   |
+| `minAnswerLength`    | Minimum answer character count      | `"minAnswerLength": 50`     |
+| `relevanceThreshold` | Relevance score threshold (0-1)     | `"relevanceThreshold": 0.5` |
+| `maxTotalMs`         | Maximum execution time (ms)         | `"maxTotalMs": 60000`       |
+| `noFallback`         | No fallback used                    | `"noFallback": true`        |
+| `noEmptyMarkdown`    | Empty markdown check                | `"noEmptyMarkdown": true`   |
 
 ### 10.5 Relevance Check Feature
 
@@ -1434,11 +1507,13 @@ function isSuspiciousAnswer(answer: string, question: string): boolean {
 ### 10.6 Test Question Recommendations
 
 **Forbidden** (AI detection/BAN targets):
+
 - `What's 1+1?`
 - `Connection test`
 - `Hello` / `OK`
 
 **Recommended** (natural technical questions):
+
 - `Tell me one way to deep copy an object in JavaScript. Include a code example.`
 - `How do I read files asynchronously in Python?`
 - `Explain how to use generic types in TypeScript briefly.`
@@ -1474,11 +1549,11 @@ Controls when connect.html (connection UI) opens to prevent tab spam.
 
 #### Opening Conditions
 
-| Condition | connect.html |
-|-----------|--------------|
-| User clicks extension icon | Opens |
-| **New** daemon detected (`startedAt >= extensionStartTime`) | Opens |
-| **Existing** daemon on Chrome startup | Doesn't open |
+| Condition                                                   | connect.html |
+| ----------------------------------------------------------- | ------------ |
+| User clicks extension icon                                  | Opens        |
+| **New** daemon detected (`startedAt >= extensionStartTime`) | Opens        |
+| **Existing** daemon on Chrome startup                       | Doesn't open |
 
 #### Implementation
 
@@ -1512,10 +1587,10 @@ When multiple daemon instances were detected on Chrome restart, connect.html tab
 
 **Solution**: Periodic wake-up via Chrome Alarms API.
 
-| Item | Value |
-|------|-------|
-| Alarm interval | 30 seconds |
-| Alarm name | `keepalive` |
+| Item                | Value                                                      |
+| ------------------- | ---------------------------------------------------------- |
+| Alarm interval      | 30 seconds                                                 |
+| Alarm name          | `keepalive`                                                |
 | Additional handling | Auto-restart Discovery polling if stopped when alarm fires |
 
 **File**: `src/extension/background.mjs`
@@ -1523,6 +1598,7 @@ When multiple daemon instances were detected on Chrome restart, connect.html tab
 ### 11.5 Version Management
 
 Update version in `src/extension/manifest.json` with every change:
+
 - Always increment version when extension files change
 - Example: `2.0.0` → `2.0.1`
 
@@ -1533,17 +1609,20 @@ Update version in `src/extension/manifest.json` with every change:
 The extension supports a `getVersion` command via WebSocket relay.
 
 **Request**:
+
 ```json
 {"method": "getVersion", "id": 1}
 ```
 
 **Response**:
+
 ```json
 {"id": 1, "result": {"version": "2.0.15", "name": "chrome-ai-bridge Extension"}}
 ```
 
 **Auto-logging on connection**:
 When CDP connection is established, the daemon automatically queries and logs the extension version:
+
 ```
 [fast-cdp] Extension version: 2.0.15
 ```
@@ -1556,20 +1635,20 @@ When CDP connection is established, the daemon automatically queries and logs th
 
 ### 12.1 Provided Tools (REST API)
 
-| Tool Name | Description |
-|-----------|-------------|
-| `ask_chatgpt_web` | Send question to ChatGPT |
-| `ask_gemini_web` | Send question to Gemini |
+| Tool Name                | Description                                     |
+| ------------------------ | ----------------------------------------------- |
+| `ask_chatgpt_web`        | Send question to ChatGPT                        |
+| `ask_gemini_web`         | Send question to Gemini                         |
 | `ask_chatgpt_gemini_web` | Send question to both in parallel (recommended) |
-| `take_cdp_snapshot` | Snapshot of page CDP is viewing |
-| `get_page_dom` | Get page DOM elements |
+| `take_cdp_snapshot`      | Snapshot of page CDP is viewing                 |
+| `get_page_dom`           | Get page DOM elements                           |
 
 **Common Parameters for AI Tools**:
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `question` | string | Yes | Question to ask |
-| `debug` | boolean | No | Return detailed debug info (DOM structure, extraction attempts, timings) |
+| Parameter  | Type    | Required | Description                                                              |
+| ---------- | ------- | -------- | ------------------------------------------------------------------------ |
+| `question` | string  | Yes      | Question to ask                                                          |
+| `debug`    | boolean | No       | Return detailed debug info (DOM structure, extraction attempts, timings) |
 
 ### 12.2 Internal Functions (for testing/debugging)
 
@@ -1591,17 +1670,18 @@ takeCdpSnapshot(target: 'chatgpt' | 'gemini'): Promise<CdpSnapshot>
 ```
 
 **ChatResultWithTimings structure**:
+
 ```typescript
 interface ChatResultWithTimings {
   answer: string;
   url: string;
   timings: {
-    connectMs: number;      // Connection establishment time
-    waitInputMs: number;    // Input field wait time
-    inputMs: number;        // Input processing time
-    sendMs: number;         // Send processing time
+    connectMs: number; // Connection establishment time
+    waitInputMs: number; // Input field wait time
+    inputMs: number; // Input processing time
+    sendMs: number; // Send processing time
     waitResponseMs: number; // Response wait time
-    totalMs: number;        // Total time
+    totalMs: number; // Total time
   };
 }
 ```
@@ -1620,6 +1700,7 @@ For specific AI only: ask_chatgpt_web or ask_gemini_web
 ### Problem 1: Gemini Response Times Out
 
 **Symptom**:
+
 ```
 Timed out waiting for Gemini response (8min). sawStopButton=true, textStableCount=XXX
 ```
@@ -1627,11 +1708,13 @@ Timed out waiting for Gemini response (8min). sawStopButton=true, textStableCoun
 **Cause**: Feedback button not detected
 
 **Verification**:
+
 ```bash
 npm run cdp:gemini  # Get snapshot
 ```
 
 **Solution**:
+
 1. Verify `img[alt="thumb_up"]` selector is correct
 2. Check if DOM structure has changed with Playwright
 
@@ -1645,6 +1728,7 @@ npm run cdp:gemini  # Get snapshot
 Check if "Input verification: OK" appears in logs
 
 **Solution**:
+
 1. Verify Input.insertText fallback is working
 2. Verify focus setting (element.focus()) is executed
 
@@ -1658,6 +1742,7 @@ Check if "Input verification: OK" appears in logs
 Check tabId in `.local/chrome-ai-bridge/sessions.json`
 
 **Solution**:
+
 1. Verify tab still exists
 2. Verify extension is working properly
 
@@ -1666,6 +1751,7 @@ Check tabId in `.local/chrome-ai-bridge/sessions.json`
 > **Note**: With v2.1 network extraction, this issue is largely mitigated. Network extraction captures responses at the protocol level, unaffected by DOM throttling in background tabs. The issue below only affects the DOM fallback extraction path.
 
 **Symptom**:
+
 - ChatGPT response generation completes (stop button disappears)
 - But `innerText` / `textContent` returns empty
 - `innerHTML` has `<p>` tags but content is empty
@@ -1676,12 +1762,14 @@ ChatGPT's React app **doesn't render text in background tabs** (performance opti
 When tab connected via CDP is in background, DOM nodes exist but text nodes are not rendered.
 
 **Technical details**:
+
 - `data-start="0" data-end="X"` indicates text range, but actual text node doesn't exist
 - Exists in React's virtual DOM but not rendered in actual DOM
 - Viewing the same page with Playwright shows text normally (Playwright operates in foreground)
 
 **Solution**:
 Bring tab to foreground with `Page.bringToFront` CDP command:
+
 ```javascript
 await client.send('Page.enable');
 await client.send('Page.bringToFront');
@@ -1711,6 +1799,7 @@ Return response text
 **Cause**: Session has expired
 
 **Solution**:
+
 1. Manually log in via browser
 2. Verify new session is saved to sessions.json
 
@@ -1721,11 +1810,13 @@ Return response text
 **Cause**: Communication issue between Discovery Server and extension
 
 **Verification**:
+
 ```bash
 curl http://127.0.0.1:8766/mcp-discovery
 ```
 
 **Solution**:
+
 1. Verify extension is enabled in Chrome
 2. Check if port 8766 is used by another process
 3. Restart Chrome to reload extension
@@ -1737,16 +1828,19 @@ curl http://127.0.0.1:8766/mcp-discovery
 **Cause**: `Network.enable` was not called before capture started, or the API endpoint URL pattern has changed.
 
 **Verification**:
+
 ```bash
 npm run test:network -- chatgpt   # Check tracked requests and text extraction
 npm run test:network -- gemini
 ```
 
 Look for:
+
 - `Tracked requests` section: verify API URLs are being captured
 - `Extracted text` section: verify text is non-empty
 
 **Solution**:
+
 1. Ensure `Network.enable` is called in both tab reuse and new tab paths in `fast-chat.ts`
 2. Check URL patterns in `network-interceptor.ts` (`CHATGPT_API_PATTERNS`, `GEMINI_API_PATTERNS`)
 3. If ChatGPT endpoint changed from `/backend-api/f/conversation`, update the pattern
@@ -1792,6 +1886,7 @@ scripts/
 **Problem**: Daemon processes remained as zombies after Claude Code sessions ended.
 
 **Cause**: Missing cleanup for:
+
 - stdin close/end events (most reliable on Windows)
 - SIGTERM/SIGINT signals
 - RelayServer connections
@@ -1803,15 +1898,25 @@ scripts/
 ```typescript
 let isShuttingDown = false;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${label} timed out after ${ms}ms`));
     }, ms);
-    timer.unref();  // Don't keep process alive
+    timer.unref(); // Don't keep process alive
     promise.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (error) => { clearTimeout(timer); reject(error); }
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      },
     );
   });
 }
@@ -1848,14 +1953,18 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 export async function cleanupAllConnections(): Promise<void> {
   // ChatGPT
   if (chatgptRelay) {
-    try { await chatgptRelay.stop(); } catch {}
+    try {
+      await chatgptRelay.stop();
+    } catch {}
     chatgptRelay = null;
   }
   chatgptClient = null;
 
   // Gemini
   if (geminiRelay) {
-    try { await geminiRelay.stop(); } catch {}
+    try {
+      await geminiRelay.stop();
+    } catch {}
     geminiRelay = null;
   }
   geminiClient = null;
@@ -1864,13 +1973,13 @@ export async function cleanupAllConnections(): Promise<void> {
 
 ### 14.4 Key Design Decisions
 
-| Decision | Reason |
-|----------|--------|
-| `timer.unref()` | Prevents timers from keeping process alive |
-| Force exit after 5s | Ensures process dies even if cleanup hangs |
-| Cleanup timeout 3s | Gives enough time for graceful close, but not too long |
-| stdin events primary | Most reliable on Windows (SIGTERM may not be sent) |
-| Double-call prevention | `isShuttingDown` flag prevents race conditions |
+| Decision               | Reason                                                 |
+| ---------------------- | ------------------------------------------------------ |
+| `timer.unref()`        | Prevents timers from keeping process alive             |
+| Force exit after 5s    | Ensures process dies even if cleanup hangs             |
+| Cleanup timeout 3s     | Gives enough time for graceful close, but not too long |
+| stdin events primary   | Most reliable on Windows (SIGTERM may not be sent)     |
+| Double-call prevention | `isShuttingDown` flag prevents race conditions         |
 
 ### 14.5 Verification
 
@@ -1925,20 +2034,20 @@ npm run test:bg -- --target=chatgpt --skip-background --duration=30
 
 ### 15.4 Result Interpretation
 
-| Result | Condition | Conclusion |
-|--------|-----------|------------|
+| Result                  | Condition                                                | Conclusion                |
+| ----------------------- | -------------------------------------------------------- | ------------------------- |
 | ✅ Hypothesis A correct | `hidden` state detected AND `textLen` increased 3+ times | Current implementation OK |
-| ❌ Hypothesis B | `hidden` state detected AND `textLen` change < 3 times | Countermeasure needed |
-| ⚠️ Inconclusive | `hidden` state not detected | Manual test required |
+| ❌ Hypothesis B         | `hidden` state detected AND `textLen` change < 3 times   | Countermeasure needed     |
+| ⚠️ Inconclusive         | `hidden` state not detected                              | Manual test required      |
 
 ### 15.5 Implementation Details
 
 **Background tab creation method**:
 
-| Method | Reliability | Notes |
-|--------|-------------|-------|
-| `Target.createTarget` | High | CDP-level, bypasses popup blocker |
-| `window.open` | Medium | May be blocked by popup blocker |
+| Method                | Reliability | Notes                             |
+| --------------------- | ----------- | --------------------------------- |
+| `Target.createTarget` | High        | CDP-level, bypasses popup blocker |
+| `window.open`         | Medium      | May be blocked by popup blocker   |
 
 **Early exit**: Monitoring stops 2 samples after completion detection (feedback buttons appear).
 
@@ -1950,11 +2059,11 @@ npm run test:bg -- --target=chatgpt --skip-background --duration=30
 
 **Test scenario**: Complex question (BST/AVL/Red-Black/B-Tree tutorial), delay=5s
 
-| Phase | textLen | Notes |
-|-------|---------|-------|
-| Before background | 1009 | Growing normally in foreground |
-| Background @15s | 349 | **Decreased** (-660) |
-| After bringToFront | 1852 | **Jumped** (+1503) |
+| Phase              | textLen | Notes                          |
+| ------------------ | ------- | ------------------------------ |
+| Before background  | 1009    | Growing normally in foreground |
+| Background @15s    | 349     | **Decreased** (-660)           |
+| After bringToFront | 1852    | **Jumped** (+1503)             |
 
 **Key Findings**:
 
@@ -1965,6 +2074,7 @@ npm run test:bg -- --target=chatgpt --skip-background --duration=30
 **Conclusion**: **Hypothesis B confirmed with nuance** - Background tabs stop DOM **updates**, but generation continues. Content accumulates and is reflected when focus returns.
 
 **Implications**:
+
 - Calling `Page.bringToFront` at send time is NOT sufficient
 - However, calling it before text extraction IS sufficient
 - Generation runs independently of DOM visibility
@@ -1998,16 +2108,19 @@ npm run test:bg -- --long --delay=10 --min-textlen=1000 --duration=90
 **A**: Chrome throttles DOM updates in background tabs. The AI generation continues, but the DOM doesn't reflect the new content until the tab is brought to foreground.
 
 **Current behavior**:
+
 - Generation continues in background (server-side)
 - DOM updates are paused or batched
 - Content appears instantly when tab regains focus
 
 **How chrome-ai-bridge handles this**:
+
 - **v2.1 network extraction**: Responses are captured at the network level, independent of DOM rendering. Background tab issues are largely mitigated.
 - **DOM fallback**: `Page.bringToFront` is called before text extraction, forcing Chrome to render all accumulated content.
 - No user action required - handled automatically
 
 **If you still see empty responses**:
+
 1. Check if the tab was closed during generation
 2. Verify extension is running (`chrome://extensions`)
 3. Run `npm run cdp:chatgpt` or `npm run cdp:gemini` to debug
@@ -2020,25 +2133,26 @@ npm run test:bg -- --long --delay=10 --min-textlen=1000 --duration=90
 
 **A**: UI updates from ChatGPT/Gemini can break selectors. Here's a stability ranking:
 
-| Stability | ChatGPT Selectors | Notes |
-|-----------|-------------------|-------|
-| High | `[data-message-author-role]` | Semantic, rarely changes |
-| High | `textarea#prompt-textarea` | ID-based, stable |
-| Medium | `.markdown`, `.prose` | Class-based, may change |
-| Medium | `button[data-testid="send-button"]` | Test ID, semi-stable |
-| Low | `button[aria-label*="送信"]` | Language-dependent |
+| Stability | ChatGPT Selectors                   | Notes                    |
+| --------- | ----------------------------------- | ------------------------ |
+| High      | `[data-message-author-role]`        | Semantic, rarely changes |
+| High      | `textarea#prompt-textarea`          | ID-based, stable         |
+| Medium    | `.markdown`, `.prose`               | Class-based, may change  |
+| Medium    | `button[data-testid="send-button"]` | Test ID, semi-stable     |
+| Low       | `button[aria-label*="送信"]`        | Language-dependent       |
 
-| Stability | Gemini Selectors | Notes |
-|-----------|------------------|-------|
-| High | `img[alt="thumb_up"]` | Image alt, language-independent |
-| High | `img[alt="mic"]` | Image alt, language-independent |
-| High | `[role="textbox"]` | ARIA role, stable |
-| Medium | `model-response` | Custom element, may change |
-| Low | Text-based selectors | Language-dependent |
+| Stability | Gemini Selectors      | Notes                           |
+| --------- | --------------------- | ------------------------------- |
+| High      | `img[alt="thumb_up"]` | Image alt, language-independent |
+| High      | `img[alt="mic"]`      | Image alt, language-independent |
+| High      | `[role="textbox"]`    | ARIA role, stable               |
+| Medium    | `model-response`      | Custom element, may change      |
+| Low       | Text-based selectors  | Language-dependent              |
 
 **v2.1 impact**: With network extraction as the primary path, selector breakage is less impactful. Selectors are only used for input field interaction, send button detection, and as a fallback for response extraction. Network extraction does not depend on selectors at all.
 
 **Best practices**:
+
 1. Prefer `data-*` attributes and ARIA roles
 2. Use `img[alt="..."]` for Gemini (language-independent)
 3. Avoid text content matching when possible
@@ -2051,17 +2165,20 @@ npm run test:bg -- --long --delay=10 --min-textlen=1000 --duration=90
 #### Q: How do I diagnose connection issues?
 
 **Step 1: Check extension status**
+
 ```bash
 # Verify Discovery Server is running
 curl http://127.0.0.1:8766/mcp-discovery
 ```
 
 Expected response:
+
 ```json
 {"wsUrl": "ws://127.0.0.1:XXXXX", ...}
 ```
 
 **Step 2: Get CDP snapshot**
+
 ```bash
 npm run cdp:chatgpt  # or npm run cdp:gemini
 ```
@@ -2069,6 +2186,7 @@ npm run cdp:chatgpt  # or npm run cdp:gemini
 This saves a snapshot to `.local/chrome-ai-bridge/debug/`
 
 **Step 3: Check session state**
+
 ```bash
 cat .local/chrome-ai-bridge/sessions.json
 ```
@@ -2076,6 +2194,7 @@ cat .local/chrome-ai-bridge/sessions.json
 Verify `tabId` exists and matches an open tab.
 
 **Step 4: Run smoke test**
+
 ```bash
 npm run test:smoke
 ```
@@ -2083,6 +2202,7 @@ npm run test:smoke
 #### Q: How do I diagnose response extraction issues?
 
 **Step 1: Enable debug mode**
+
 ```typescript
 // In tool call
 { "question": "...", "debug": true }
@@ -2090,11 +2210,13 @@ npm run test:smoke
 
 **Step 2: Check debug output**
 Look for:
+
 - `debug_assistantMsgsCount` / `debug_modelResponseCount`
 - `debug_lastAssistantInnerTextLen`
 - `debug_markdownsInLast`
 
 **Step 3: Manual DOM inspection**
+
 1. Open DevTools in the ChatGPT/Gemini tab
 2. Run: `document.querySelectorAll('[data-message-author-role="assistant"]')`
 3. Check if elements exist and have content
@@ -2103,13 +2225,13 @@ Look for:
 
 ### 16.4 Common Error Messages
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `Extension not connected` | Extension not running or port blocked | Check `chrome://extensions`, restart Chrome |
-| `Timed out waiting for response` | Response took > 8 minutes | Increase timeout or simplify question |
-| `GEMINI_STUCK_*` | Gemini session hung | Auto-retry (up to 2x), or clear session |
-| `Input verification failed` | Text not entered correctly | Auto-fallback to `Input.insertText` |
-| `Login required` | Session expired | Log in manually via browser |
+| Error                            | Cause                                 | Solution                                    |
+| -------------------------------- | ------------------------------------- | ------------------------------------------- |
+| `Extension not connected`        | Extension not running or port blocked | Check `chrome://extensions`, restart Chrome |
+| `Timed out waiting for response` | Response took > 8 minutes             | Increase timeout or simplify question       |
+| `GEMINI_STUCK_*`                 | Gemini session hung                   | Auto-retry (up to 2x), or clear session     |
+| `Input verification failed`      | Text not entered correctly            | Auto-fallback to `Input.insertText`         |
+| `Login required`                 | Session expired                       | Log in manually via browser                 |
 
 ---
 
@@ -2133,20 +2255,20 @@ Track selector changes for debugging regressions.
 
 ### 17.1 ChatGPT
 
-| Date | Selector / Feature | Change | Notes |
-|------|----------|--------|-------|
-| 2026-02 | Network interception | Added | Primary response extraction via CDP Network domain |
-| 2026-02 | `.result-thinking` | Deprecated | No longer used in Thinking mode |
-| 2026-02 | `article[data-turn]` | Added | New article structure |
-| 2026-01 | `.ProseMirror` | Added | contenteditable input variant |
+| Date    | Selector / Feature   | Change     | Notes                                              |
+| ------- | -------------------- | ---------- | -------------------------------------------------- |
+| 2026-02 | Network interception | Added      | Primary response extraction via CDP Network domain |
+| 2026-02 | `.result-thinking`   | Deprecated | No longer used in Thinking mode                    |
+| 2026-02 | `article[data-turn]` | Added      | New article structure                              |
+| 2026-01 | `.ProseMirror`       | Added      | contenteditable input variant                      |
 
 ### 17.2 Gemini
 
-| Date | Selector / Feature | Change | Notes |
-|------|----------|--------|-------|
-| 2026-02 | Network interception | Added | Primary response extraction via CDP Network domain |
-| 2026-01 | `img[alt="thumb_up"]` | Adopted | Language-independent feedback detection |
-| 2026-01 | `img[alt="mic"]` | Adopted | Language-independent mic button |
+| Date    | Selector / Feature    | Change  | Notes                                              |
+| ------- | --------------------- | ------- | -------------------------------------------------- |
+| 2026-02 | Network interception  | Added   | Primary response extraction via CDP Network domain |
+| 2026-01 | `img[alt="thumb_up"]` | Adopted | Language-independent feedback detection            |
+| 2026-01 | `img[alt="mic"]`      | Adopted | Language-independent mic button                    |
 
 ---
 
@@ -2154,18 +2276,18 @@ Track selector changes for debugging regressions.
 
 Quick reference for test filtering:
 
-| Tag | Description | Command |
-|-----|-------------|---------|
-| `smoke` | Basic operation (new chat, parallel) | `npm run test:suite -- --tag=smoke` |
-| `regression` | Past issue prevention | `npm run test:suite -- --tag=regression` |
-| `chatgpt` | ChatGPT only | `npm run test:suite -- --tag=chatgpt` |
-| `gemini` | Gemini only | `npm run test:suite -- --tag=gemini` |
-| `thinking` | Thinking mode | `npm run test:suite -- --tag=thinking` |
-| `parallel` | Both AI parallel | `npm run test:suite -- --tag=parallel` |
-| `code` | Code generation | `npm run test:suite -- --tag=code` |
-| `sequential` | Consecutive prompts | `npm run test:suite -- --tag=sequential` |
-| `extraction` | Text extraction | `npm run test:suite -- --tag=extraction` |
-| `network` | Network extraction | `npm run test:suite -- --tag=network` |
+| Tag          | Description                          | Command                                  |
+| ------------ | ------------------------------------ | ---------------------------------------- |
+| `smoke`      | Basic operation (new chat, parallel) | `npm run test:suite -- --tag=smoke`      |
+| `regression` | Past issue prevention                | `npm run test:suite -- --tag=regression` |
+| `chatgpt`    | ChatGPT only                         | `npm run test:suite -- --tag=chatgpt`    |
+| `gemini`     | Gemini only                          | `npm run test:suite -- --tag=gemini`     |
+| `thinking`   | Thinking mode                        | `npm run test:suite -- --tag=thinking`   |
+| `parallel`   | Both AI parallel                     | `npm run test:suite -- --tag=parallel`   |
+| `code`       | Code generation                      | `npm run test:suite -- --tag=code`       |
+| `sequential` | Consecutive prompts                  | `npm run test:suite -- --tag=sequential` |
+| `extraction` | Text extraction                      | `npm run test:suite -- --tag=extraction` |
+| `network`    | Network extraction                   | `npm run test:suite -- --tag=network`    |
 
 **Recommended test sequences**:
 

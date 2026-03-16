@@ -19,9 +19,12 @@ import {
 // --- コマンドライン引数解析 ---
 const args = process.argv.slice(2);
 const target = args.find(a => !a.startsWith('-')) || 'chatgpt';
-const numRuns = parseInt(args.find(a => a === '-n' || a === '--runs')
-  ? args[args.findIndex(a => a === '-n' || a === '--runs') + 1]
-  : '5', 10);
+const numRuns = parseInt(
+  args.find(a => a === '-n' || a === '--runs')
+    ? args[args.findIndex(a => a === '-n' || a === '--runs') + 1]
+    : '5',
+  10,
+);
 const customQuestion = args.find(a => a === '-q' || a === '--question')
   ? args[args.findIndex(a => a === '-q' || a === '--question') + 1]
   : null;
@@ -52,7 +55,7 @@ function generateUniqueQuestion() {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   });
   const randomId = Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -75,7 +78,8 @@ function generateUniqueQuestion() {
 
 // --- 統計計算 ---
 function calcStats(values) {
-  if (values.length === 0) return {min: 0, max: 0, avg: 0, median: 0, stdDev: 0};
+  if (values.length === 0)
+    return {min: 0, max: 0, avg: 0, median: 0, stdDev: 0};
 
   const sorted = [...values].sort((a, b) => a - b);
   const min = sorted[0];
@@ -85,12 +89,13 @@ function calcStats(values) {
 
   // 中央値
   const mid = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  const median =
+    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 
   // 標準偏差
-  const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length;
+  const variance =
+    values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) /
+    values.length;
   const stdDev = Math.sqrt(variance);
 
   return {min, max, avg, median, stdDev};
@@ -131,7 +136,9 @@ async function measureTimings(provider, askFn, runs) {
       allTimings.push(timings);
 
       // 簡易結果表示
-      console.error(`  -> OK: total=${formatMs(timings.totalMs)}ms (connect=${formatMs(timings.connectMs)}ms, response=${formatMs(timings.waitResponseMs)}ms)`);
+      console.error(
+        `  -> OK: total=${formatMs(timings.totalMs)}ms (connect=${formatMs(timings.connectMs)}ms, response=${formatMs(timings.waitResponseMs)}ms)`,
+      );
     } catch (err) {
       console.error(`  -> ERROR: ${err.message}`);
       errors.push({run: i + 1, error: err.message});
@@ -187,18 +194,24 @@ function printReport(provider, allTimings, errors) {
 
   // --- 統計テーブル ---
   console.error('## 統計サマリー\n');
-  console.error('| フェーズ         |    最小 |    最大 |    平均 |   中央値 |   標準偏差 |');
-  console.error('|------------------|---------|---------|---------|----------|------------|');
+  console.error(
+    '| フェーズ         |    最小 |    最大 |    平均 |   中央値 |   標準偏差 |',
+  );
+  console.error(
+    '|------------------|---------|---------|---------|----------|------------|',
+  );
 
   for (const phase of phases) {
     const s = stats[phase.key];
     console.error(
-      `| ${phase.name.padEnd(16)} | ${formatMs(s.min)} | ${formatMs(s.max)} | ${formatMs(s.avg)} | ${formatMs(s.median)} | ${formatMs(s.stdDev)} |`
+      `| ${phase.name.padEnd(16)} | ${formatMs(s.min)} | ${formatMs(s.max)} | ${formatMs(s.avg)} | ${formatMs(s.median)} | ${formatMs(s.stdDev)} |`,
     );
   }
-  console.error('|------------------|---------|---------|---------|----------|------------|');
   console.error(
-    `| ${'合計'.padEnd(16)} | ${formatMs(totalStats.min)} | ${formatMs(totalStats.max)} | ${formatMs(totalStats.avg)} | ${formatMs(totalStats.median)} | ${formatMs(totalStats.stdDev)} |`
+    '|------------------|---------|---------|---------|----------|------------|',
+  );
+  console.error(
+    `| ${'合計'.padEnd(16)} | ${formatMs(totalStats.min)} | ${formatMs(totalStats.max)} | ${formatMs(totalStats.avg)} | ${formatMs(totalStats.median)} | ${formatMs(totalStats.stdDev)} |`,
   );
 
   // --- 時間比率分析 ---
@@ -209,7 +222,9 @@ function printReport(provider, allTimings, errors) {
     const s = stats[phase.key];
     const pct = (s.avg / avgTotal) * 100;
     const bar = createBar(pct);
-    console.error(`  ${phase.name.padEnd(14)}: ${formatMs(s.avg)} ms (${formatPct(pct)}) ${bar}`);
+    console.error(
+      `  ${phase.name.padEnd(14)}: ${formatMs(s.avg)} ms (${formatPct(pct)}) ${bar}`,
+    );
   }
   console.error(`  ${'─'.repeat(50)}`);
   console.error(`  ${'合計'.padEnd(14)}: ${formatMs(avgTotal)} ms (100.0%)`);
@@ -219,27 +234,35 @@ function printReport(provider, allTimings, errors) {
 
   // 回答待機を除いた「改善可能な」フェーズを分析
   const improvablePhases = phases.filter(p => p.key !== 'waitResponseMs');
-  const improvableTotal = improvablePhases.reduce((sum, p) => sum + (stats[p.key]?.avg || 0), 0);
+  const improvableTotal = improvablePhases.reduce(
+    (sum, p) => sum + (stats[p.key]?.avg || 0),
+    0,
+  );
 
-  const bottlenecks = improvablePhases.map(phase => {
-    const s = stats[phase.key];
-    const pct = (s.avg / avgTotal) * 100;
-    const improvablePct = improvableTotal > 0 ? (s.avg / improvableTotal) * 100 : 0;
-    return {
-      name: phase.name,
-      key: phase.key,
-      avg: s.avg,
-      stdDev: s.stdDev,
-      pct,
-      improvablePct,
-    };
-  }).sort((a, b) => b.avg - a.avg);
+  const bottlenecks = improvablePhases
+    .map(phase => {
+      const s = stats[phase.key];
+      const pct = (s.avg / avgTotal) * 100;
+      const improvablePct =
+        improvableTotal > 0 ? (s.avg / improvableTotal) * 100 : 0;
+      return {
+        name: phase.name,
+        key: phase.key,
+        avg: s.avg,
+        stdDev: s.stdDev,
+        pct,
+        improvablePct,
+      };
+    })
+    .sort((a, b) => b.avg - a.avg);
 
   console.error('改善可能なフェーズ（回答待機を除く）:\n');
   for (const b of bottlenecks) {
     const severity = b.avg > 2000 ? '🔴' : b.avg > 1000 ? '🟡' : '🟢';
     const variability = b.stdDev > b.avg * 0.5 ? ' (ばらつき大)' : '';
-    console.error(`  ${severity} ${b.name}: 平均 ${formatMs(b.avg)}ms (全体の${formatPct(b.pct)})${variability}`);
+    console.error(
+      `  ${severity} ${b.name}: 平均 ${formatMs(b.avg)}ms (全体の${formatPct(b.pct)})${variability}`,
+    );
   }
 
   // --- 改善提案 ---
@@ -290,7 +313,10 @@ function printReport(provider, allTimings, errors) {
   }
 
   if (suggestions.length === 0) {
-    suggestions.push({severity: '🟢', text: '特になし（パフォーマンスは良好です）'});
+    suggestions.push({
+      severity: '🟢',
+      text: '特になし（パフォーマンスは良好です）',
+    });
   }
 
   for (const s of suggestions) {
@@ -327,10 +353,18 @@ async function main() {
   console.error(`質問: ${customQuestion ? customQuestion : '(自動生成)'}`);
 
   if (target === 'chatgpt') {
-    const {allTimings, errors} = await measureTimings('ChatGPT', askChatGPTFastWithTimings, numRuns);
+    const {allTimings, errors} = await measureTimings(
+      'ChatGPT',
+      askChatGPTFastWithTimings,
+      numRuns,
+    );
     printReport('ChatGPT', allTimings, errors);
   } else if (target === 'gemini') {
-    const {allTimings, errors} = await measureTimings('Gemini', askGeminiFastWithTimings, numRuns);
+    const {allTimings, errors} = await measureTimings(
+      'Gemini',
+      askGeminiFastWithTimings,
+      numRuns,
+    );
     printReport('Gemini', allTimings, errors);
   } else {
     console.error(`\n不明なターゲット: ${target}`);

@@ -1,18 +1,24 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * RelayServer - WebSocket server for Extension communication
  */
 
-import WebSocket, { WebSocketServer } from 'ws';
-import { EventEmitter } from 'events';
-import crypto from 'crypto';
-import http from 'http';
-import fs from 'fs';
+import crypto from 'node:crypto';
+import {EventEmitter} from 'node:events';
+import fs from 'node:fs';
+import http from 'node:http';
+
+import WebSocket, {WebSocketServer} from 'ws';
 
 // デバッグログをファイルに出力
 const DEBUG_LOG_PATH = '/tmp/relay-server-debug.log';
-function debugLog(...args: any[]) {
+function debugLog(...args: unknown[]) {
   const timestamp = new Date().toISOString();
-  const message = `[${timestamp}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
+  const message = `[${timestamp}] ${args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}\n`;
   fs.appendFileSync(DEBUG_LOG_PATH, message);
 }
 
@@ -26,32 +32,35 @@ export interface RelayServerOptions {
 export interface CDPCommand {
   id: number;
   method: string;
-  params?: any;
+  params?: Record<string, unknown>;
 }
 
 export interface CDPEvent {
   method: string;
-  params?: any;
+  params?: Record<string, unknown>;
 }
 
 export class RelayServer extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private ws: WebSocket | null = null; // Single connection (1 tab per server)
-  private port: number = 0;
+  private port = 0;
   private host: string;
   private token: string;
   private sessionId: string;
   private instanceId: string;
   private startedAt: number;
   private tabId: number | null = null;
-  private ready: boolean = false;
+  private ready = false;
   private nextId = 1;
-  private pending = new Map<number, {
-    resolve: (value: any) => void;
-    reject: (err: Error) => void;
-    method: string;
-    startedAt: number;
-  }>();
+  private pending = new Map<
+    number,
+    {
+      resolve: (value: Record<string, unknown>) => void;
+      reject: (err: Error) => void;
+      method: string;
+      startedAt: number;
+    }
+  >();
   private discoveryServer: http.Server | null = null;
   private discoveryPort: number | null = null;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
@@ -79,7 +88,7 @@ export class RelayServer extends EventEmitter {
     return new Promise((resolve, reject) => {
       this.wss = new WebSocketServer({
         host: this.host,
-        port: this.port
+        port: this.port,
       });
 
       this.wss.on('listening', () => {
@@ -89,7 +98,7 @@ export class RelayServer extends EventEmitter {
         resolve(this.port);
       });
 
-      this.wss.on('error', (error) => {
+      this.wss.on('error', error => {
         debugLog('[RelayServer] Server error:', error);
         reject(error);
       });
@@ -103,7 +112,7 @@ export class RelayServer extends EventEmitter {
   /**
    * Handle WebSocket connection from Extension
    */
-  private handleConnection(ws: WebSocket, req: any) {
+  private handleConnection(ws: WebSocket, req: http.IncomingMessage) {
     debugLog('[RelayServer] New connection from Extension');
 
     // Validate token
@@ -117,7 +126,10 @@ export class RelayServer extends EventEmitter {
       return;
     }
     if (clientSessionId && clientSessionId !== this.sessionId) {
-      debugLog('[RelayServer] Invalid session id', {expected: this.sessionId, received: clientSessionId});
+      debugLog('[RelayServer] Invalid session id', {
+        expected: this.sessionId,
+        received: clientSessionId,
+      });
       ws.close(1008, 'Invalid session id');
       return;
     }
@@ -132,7 +144,7 @@ export class RelayServer extends EventEmitter {
     this.ws = ws;
     this.startKeepAlive();
 
-    ws.on('message', (data) => {
+    ws.on('message', data => {
       this.handleMessage(data.toString());
     });
 
@@ -140,20 +152,24 @@ export class RelayServer extends EventEmitter {
     // Prevents a stale socket's close event from corrupting a newer connection.
     ws.on('close', () => {
       if (this.ws !== ws) {
-        debugLog('[RelayServer] Stale socket closed (ignored — already replaced)');
+        debugLog(
+          '[RelayServer] Stale socket closed (ignored — already replaced)',
+        );
         return;
       }
       debugLog('[RelayServer] Extension disconnected');
       this.stopKeepAlive();
       this.rejectPendingRequests(
-        new Error('RELAY_DISCONNECTED: Extension socket closed before request completion'),
+        new Error(
+          'RELAY_DISCONNECTED: Extension socket closed before request completion',
+        ),
       );
       this.ws = null;
       this.ready = false;
       this.emit('disconnected');
     });
 
-    ws.on('error', (error) => {
+    ws.on('error', error => {
       debugLog('[RelayServer] WebSocket error:', error);
     });
 
@@ -182,7 +198,10 @@ export class RelayServer extends EventEmitter {
     try {
       const message = JSON.parse(data);
 
-      if (typeof message.id === 'number' && (message.result !== undefined || message.error !== undefined)) {
+      if (
+        typeof message.id === 'number' &&
+        (message.result !== undefined || message.error !== undefined)
+      ) {
         const pending = this.pending.get(message.id);
         if (pending) {
           this.pending.delete(message.id);
@@ -203,9 +222,9 @@ export class RelayServer extends EventEmitter {
             typeof message.error === 'string'
               ? message.error
               : message.error.message || 'Unknown error';
-          this.emit('cdp-error', { id: message.id, error });
+          this.emit('cdp-error', {id: message.id, error});
         } else {
-          this.emit('cdp-result', { id: message.id, result: message.result });
+          this.emit('cdp-result', {id: message.id, result: message.result});
         }
         return;
       }
@@ -234,22 +253,24 @@ export class RelayServer extends EventEmitter {
           break;
 
         case 'forwardCDPResult':
-          this.emit('cdp-result', { id: message.id, result: message.result });
+          this.emit('cdp-result', {id: message.id, result: message.result});
           break;
 
         case 'forwardCDPError':
-          this.emit('cdp-error', { id: message.id, error: message.error });
+          this.emit('cdp-error', {id: message.id, error: message.error});
           break;
 
         case 'forwardCDPEvent':
           this.emit('cdp-event', {
             method: message.method,
-            params: message.params
+            params: message.params,
           });
           break;
 
         case 'detached':
-          debugLog(`[RelayServer] Tab ${message.tabId} detached: ${message.reason}`);
+          debugLog(
+            `[RelayServer] Tab ${message.tabId} detached: ${message.reason}`,
+          );
           this.emit('detached', message.reason);
           break;
 
@@ -264,20 +285,26 @@ export class RelayServer extends EventEmitter {
   /**
    * Send CDP command to Extension
    */
-  sendCDPCommand(id: number, method: string, params?: any): void {
+  sendCDPCommand(
+    id: number,
+    method: string,
+    params?: Record<string, unknown>,
+  ): void {
     if (!this.ws || !this.ready) {
       throw new Error('Extension not connected or not ready');
     }
 
-    this.ws.send(JSON.stringify({
-      type: 'forwardCDPCommand',
-      id,
-      method,
-      params
-    }));
+    this.ws.send(
+      JSON.stringify({
+        type: 'forwardCDPCommand',
+        id,
+        method,
+        params,
+      }),
+    );
   }
 
-  sendMessage(message: any): void {
+  sendMessage(message: unknown): void {
     if (!this.ws || !this.ready) {
       throw new Error(
         `Extension not connected or not ready (connected=${Boolean(this.ws)}, ready=${this.ready})`,
@@ -289,7 +316,11 @@ export class RelayServer extends EventEmitter {
     this.ws.send(JSON.stringify(message));
   }
 
-  async sendRequest(method: string, params?: any, timeoutMs = 30000): Promise<any> {
+  async sendRequest(
+    method: string,
+    params?: Record<string, unknown>,
+    timeoutMs = 30000,
+  ): Promise<Record<string, unknown>> {
     if (!this.ws || !this.ready) {
       throw new Error(
         `Extension not connected or not ready (method=${method}, connected=${Boolean(this.ws)}, ready=${this.ready})`,
@@ -301,21 +332,32 @@ export class RelayServer extends EventEmitter {
     const id = this.nextId++;
     const payload = {id, method, params};
     const startedAt = Date.now();
-    const response = new Promise<any>((resolve, reject) => {
+    const response = new Promise<Record<string, unknown>>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`RELAY_REQUEST_TIMEOUT: method=${method} timeoutMs=${timeoutMs}`));
+        reject(
+          new Error(
+            `RELAY_REQUEST_TIMEOUT: method=${method} timeoutMs=${timeoutMs}`,
+          ),
+        );
       }, timeoutMs);
       timeoutId.unref();
       this.pending.set(id, {
-        resolve: (value: any) => {
+        resolve: (value: Record<string, unknown>) => {
           clearTimeout(timeoutId);
-          debugLog(`[RelayServer] Request success: ${method}`, {id, elapsedMs: Date.now() - startedAt});
+          debugLog(`[RelayServer] Request success: ${method}`, {
+            id,
+            elapsedMs: Date.now() - startedAt,
+          });
           resolve(value);
         },
         reject: (err: Error) => {
           clearTimeout(timeoutId);
-          debugLog(`[RelayServer] Request failed: ${method}`, {id, elapsedMs: Date.now() - startedAt, error: err.message});
+          debugLog(`[RelayServer] Request failed: ${method}`, {
+            id,
+            elapsedMs: Date.now() - startedAt,
+            error: err.message,
+          });
           reject(err);
         },
         method,
@@ -336,34 +378,41 @@ export class RelayServer extends EventEmitter {
    * Start simple discovery HTTP server for extension to find relay URL.
    * Extension polls this endpoint when user clicks the extension icon.
    */
-  async startDiscoveryServer(options: {
-    tabUrl?: string;
-    tabId?: number;
-    newTab?: boolean;
-    allowTabTakeover?: boolean;
-  } = {}): Promise<number | null> {
+  async startDiscoveryServer(
+    options: {
+      tabUrl?: string;
+      tabId?: number;
+      newTab?: boolean;
+      allowTabTakeover?: boolean;
+    } = {},
+  ): Promise<number | null> {
     this._lastDiscoveryOptions = options;
-    const ports = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
+    const ports = [
+      38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774,
+      38775,
+    ];
     const wsUrl = this.getConnectionURL();
 
     for (const port of ports) {
-      const started = await new Promise<boolean>((resolve) => {
+      const started = await new Promise<boolean>(resolve => {
         const server = http.createServer(async (req, res) => {
           res.setHeader('Access-Control-Allow-Origin', '*');
 
           if (req.method === 'GET' && req.url === '/relay-info') {
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({
-              wsUrl,
-              tabUrl: options.tabUrl || null,
-              tabId: options.tabId ?? null,
-              newTab: Boolean(options.newTab),
-              allowTabTakeover: Boolean(options.allowTabTakeover),
-              sessionId: this.sessionId,
-              startedAt: this.startedAt,
-              instanceId: this.instanceId,
-              expiresAt: Date.now() + 60000,
-            }));
+            res.end(
+              JSON.stringify({
+                wsUrl,
+                tabUrl: options.tabUrl || null,
+                tabId: options.tabId ?? null,
+                newTab: Boolean(options.newTab),
+                allowTabTakeover: Boolean(options.allowTabTakeover),
+                sessionId: this.sessionId,
+                startedAt: this.startedAt,
+                instanceId: this.instanceId,
+                expiresAt: Date.now() + 60000,
+              }),
+            );
             return;
           }
 
@@ -371,15 +420,17 @@ export class RelayServer extends EventEmitter {
             res.setHeader('Content-Type', 'application/json');
             if (!this.ws || !this.ready) {
               res.statusCode = 503;
-              res.end(JSON.stringify({ error: 'Extension not connected' }));
+              res.end(JSON.stringify({error: 'Extension not connected'}));
               return;
             }
             try {
               await this.sendRequest('reloadExtension');
-              res.end(JSON.stringify({ success: true }));
-            } catch (err: any) {
+              res.end(JSON.stringify({success: true}));
+            } catch {
               // Extension reloads and drops connection - this is expected
-              res.end(JSON.stringify({ success: true, note: 'Extension reloading' }));
+              res.end(
+                JSON.stringify({success: true, note: 'Extension reloading'}),
+              );
             }
             return;
           }
@@ -388,7 +439,7 @@ export class RelayServer extends EventEmitter {
           res.end('Not Found');
         });
 
-        server.on('error', (error: any) => {
+        server.on('error', (error: NodeJS.ErrnoException) => {
           if (error?.code === 'EADDRINUSE') {
             resolve(false);
             return;
@@ -400,7 +451,9 @@ export class RelayServer extends EventEmitter {
         server.listen(port, this.host, () => {
           this.discoveryServer = server;
           this.discoveryPort = port;
-          debugLog(`[RelayServer] Discovery available on http://${this.host}:${port}/relay-info`);
+          debugLog(
+            `[RelayServer] Discovery available on http://${this.host}:${port}/relay-info`,
+          );
           resolve(true);
         });
       });
@@ -422,7 +475,9 @@ export class RelayServer extends EventEmitter {
   stopDiscoveryServer(): void {
     if (this.discoveryServer) {
       this.discoveryServer.close();
-      debugLog(`[RelayServer] Discovery server released (port ${this.discoveryPort})`);
+      debugLog(
+        `[RelayServer] Discovery server released (port ${this.discoveryPort})`,
+      );
       this.discoveryServer = null;
       this.discoveryPort = null;
     }
@@ -470,13 +525,23 @@ export class RelayServer extends EventEmitter {
       const wss = this.wss;
       this.wss = null;
 
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         const timeout = setTimeout(() => {
-          debugLog('[RelayServer] stop() timed out after 5s — force-terminating remaining clients');
+          debugLog(
+            '[RelayServer] stop() timed out after 5s — force-terminating remaining clients',
+          );
           for (const client of wss.clients) {
-            try { client.terminate(); } catch { /* ignore */ }
+            try {
+              client.terminate();
+            } catch {
+              /* ignore */
+            }
           }
-          try { wss.close(); } catch { /* ignore */ }
+          try {
+            wss.close();
+          } catch {
+            /* ignore */
+          }
           debugLog('[RelayServer] Server stopped (forced)');
           resolve();
         }, 5000);
@@ -497,7 +562,7 @@ export class RelayServer extends EventEmitter {
     this.stopKeepAlive();
     this.keepAliveTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        this.ws.send(JSON.stringify({type: 'ping'}));
         debugLog('[RelayServer] Sent keep-alive ping');
       }
     }, 30000); // 30 seconds
@@ -537,7 +602,6 @@ export class RelayServer extends EventEmitter {
   isReady(): boolean {
     return this.ready;
   }
-
 
   getConnectionURL(): string {
     return `ws://${this.host}:${this.port}?token=${this.token}&sid=${encodeURIComponent(this.sessionId)}`;

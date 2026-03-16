@@ -179,7 +179,9 @@ async function killChromeFromPidFile() {
         process.kill(pid, 0);
         // Process exists, kill it
         process.kill(pid, 'SIGKILL');
-        console.error(`[daemon-wrapper] Killed orphaned Chrome process: ${pid}`);
+        console.error(
+          `[daemon-wrapper] Killed orphaned Chrome process: ${pid}`,
+        );
       } catch (err) {
         // Process doesn't exist (already dead)
       }

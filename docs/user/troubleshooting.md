@@ -3,6 +3,7 @@
 ## Extension Not Loading
 
 ### Symptoms
+
 - Extension icon not visible in Chrome toolbar
 - MCP server cannot connect to extension
 
@@ -33,11 +34,13 @@
 ## MCP Server Not Starting
 
 ### Check version
+
 ```bash
 npx chrome-ai-bridge@latest --version
 ```
 
 ### Clear npx cache
+
 ```bash
 npx clear-npx-cache
 # or
@@ -45,6 +48,7 @@ rm -rf ~/.npm/_npx
 ```
 
 ### Verify MCP configuration
+
 ```bash
 cat ~/.claude.json | jq '.mcpServers'
 ```
@@ -67,21 +71,26 @@ cat ~/.claude.json | jq '.mcpServers'
 ## Extension Connection Issues
 
 ### Symptoms
+
 - "Extension not connected" error
 - MCP tools not responding
 
 ### Solutions
 
 1. **Verify Discovery Server is running**
+
    ```bash
    curl http://127.0.0.1:8766/mcp-discovery
    ```
+
    Expected response:
+
    ```json
    {"wsUrl": "ws://127.0.0.1:XXXXX", ...}
    ```
 
 2. **Check port 8766 availability**
+
    ```bash
    lsof -i :8766 | grep LISTEN
    ```
@@ -95,16 +104,19 @@ cat ~/.claude.json | jq '.mcpServers'
 ## Hot-Reload Not Working (Developers)
 
 ### Verify development mode
+
 ```bash
 ps aux | grep daemon-wrapper | grep CAI_ENV=development
 ```
 
 ### Check tsc -w is running
+
 ```bash
 ps aux | grep 'tsc -w'
 ```
 
 ### Manually restart wrapper
+
 ```bash
 pkill -f daemon-wrapper
 # Then restart AI client (Cmd+R)
@@ -113,17 +125,20 @@ pkill -f daemon-wrapper
 ## ChatGPT/Gemini Integration Issues
 
 ### Login required
+
 - First use requires manual login in browser
 - MCP will prompt when login is needed
 - Credentials are saved in browser profile
 
 ### Response not captured
+
 - Wait for response to complete
 - Check network connectivity
 - Verify ChatGPT/Gemini service is available
 - Try running with debug mode: `{ "question": "...", "debug": true }`
 
 ### Empty response (background tab)
+
 - v2.1+ uses network extraction which is unaffected by background tab throttling
 - If DOM fallback is used, `Page.bringToFront` handles this automatically
 - See SPEC.md Section 13 Problem 4 for details
@@ -131,10 +146,12 @@ pkill -f daemon-wrapper
 ## Network Extraction Issues
 
 ### Symptoms
+
 - Network interceptor captures frames but text is empty
 - Falling back to DOM extraction when network should work
 
 ### Diagnosis
+
 ```bash
 # Test network extraction directly
 npm run test:network -- chatgpt
@@ -142,6 +159,7 @@ npm run test:network -- gemini
 ```
 
 Check the output for:
+
 - **Tracked requests**: Verify API URLs are being captured
 - **Extracted text**: Verify text is non-empty
 - **Frame count**: Should be > 0 for API responses
@@ -157,10 +175,12 @@ Check the output for:
 ## Performance Issues
 
 ### Slow startup
+
 - First connection requires extension handshake (~2-3s)
 - Subsequent connections reuse existing tabs (faster)
 
 ### Memory usage
+
 - Close unused browser tabs
 - Restart MCP server periodically
 - Kill stale processes (namespace-safe): `npm run cleanup`
@@ -182,28 +202,33 @@ export CAI_PRIMARY_IDLE_MS=0
 ```
 
 Expected overload errors:
+
 - `SERVER_CAPACITY_EXCEEDED`: session capacity is full and no initialize waiter slot is available
 - `SERVER_QUEUE_FULL`: initialize queue is full
 - `SERVER_BUSY_TIMEOUT`: queued initialize request waited too long
 
 Recommended startup sequence for large tmux workspaces:
+
 1. Start 2 panes -> verify basic tool call
 2. Scale to 4 panes -> verify health
 3. Scale to 8 panes -> verify no repeated reconnect loops
 4. Scale to 20 panes
 
 If you still see intermittent `Transport closed` after long idle time, verify:
+
 - `CAI_PRIMARY_IDLE_MS=0` (prevents Primary auto-exit while clients are still open)
 - `CAI_IPC_SESSION_IDLE_MS` is not too short for your usage pattern
 
 ## Debug Mode
 
 Enable verbose logging:
+
 ```bash
 DEBUG=mcp:* npx chrome-ai-bridge@latest
 ```
 
 Or check debug files:
+
 ```bash
 ls .local/chrome-ai-bridge/debug/
 ```
@@ -237,6 +262,7 @@ export CAI_PRIMARY_SELF_HEAL_MIN_AGE_MS=20000
 ```
 
 Cross-project isolation:
+
 - Lock namespace is now derived from project scope (git root/cwd) automatically.
 - You can force explicit isolation with:
 

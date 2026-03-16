@@ -28,8 +28,7 @@ export const cliOptions = {
   },
   daemon: {
     type: 'boolean' as const,
-    description:
-      'Run as HTTP-only daemon. Used by cab CLI.',
+    description: 'Run as HTTP-only daemon. Used by cab CLI.',
     default: true,
   },
 };
@@ -39,7 +38,10 @@ export function parseArguments(version: string, argv = process.argv) {
     .scriptName('npx chrome-ai-bridge@latest')
     .options(cliOptions)
     .example([
-      ['$0', 'Start Chrome AI Bridge daemon (requires chrome-ai-bridge extension)'],
+      [
+        '$0',
+        'Start Chrome AI Bridge daemon (requires chrome-ai-bridge extension)',
+      ],
       ['$0 --logFile /tmp/log.txt', 'Save logs to a file'],
       ['$0 --help', 'Print CLI options'],
     ]);

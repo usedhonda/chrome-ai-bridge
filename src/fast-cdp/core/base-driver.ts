@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Base Driver
  *
  * Abstract base class for site drivers using the Template Method pattern.
@@ -47,7 +52,9 @@ export abstract class BaseDriver implements SiteDriver {
    */
   protected getClient(): CdpClient {
     if (!this.client) {
-      throw new Error(`${this.name} driver: CDP client not set. Call setClient() first.`);
+      throw new Error(
+        `${this.name} driver: CDP client not set. Call setClient() first.`,
+      );
     }
     return this.client;
   }
@@ -108,7 +115,9 @@ export abstract class BaseDriver implements SiteDriver {
       await this.sleep(pollIntervalMs);
     }
 
-    throw new Error(`${this.name}: Timed out waiting for response (${maxWaitMs}ms)`);
+    throw new Error(
+      `${this.name}: Timed out waiting for response (${maxWaitMs}ms)`,
+    );
   }
 
   /**

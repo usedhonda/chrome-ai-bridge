@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * ChatGPT Selectors
  *
  * Centralized selector definitions for ChatGPT UI elements.
@@ -16,10 +21,7 @@ import type {DriverSelectors} from '../types.js';
  */
 export const CHATGPT_SELECTORS: DriverSelectors = {
   // Root element containing the conversation
-  conversationRoot: [
-    'main',
-    '[role="main"]',
-  ],
+  conversationRoot: ['main', '[role="main"]'],
 
   // Input field for typing prompts
   promptInput: [
@@ -91,5 +93,8 @@ export const CHATGPT_EXTRA_SELECTORS = {
   thinkingTimeMarker: /思考時間[：:]\s*\d+s?|Thinking.*\d+s?/,
 
   // Skip thinking button
-  skipThinkingButton: ['button:contains("今すぐ回答")', 'button:contains("Skip thinking")'],
+  skipThinkingButton: [
+    'button:contains("今すぐ回答")',
+    'button:contains("Skip thinking")',
+  ],
 };

@@ -62,7 +62,9 @@ class ConnectUI {
 
       // Validate relay URL
       if (!this.relayUrl) {
-        this.showError('Missing relayUrl parameter. Make sure Chrome AI Bridge is running.');
+        this.showError(
+          'Missing relayUrl parameter. Make sure Chrome AI Bridge is running.',
+        );
         return;
       }
 
@@ -79,7 +81,6 @@ class ConnectUI {
 
       // Show tab selection UI
       await this.loadTabs();
-
     } catch (error) {
       this.showError(`Initialization failed: ${error.message}`);
     }
@@ -89,7 +90,9 @@ class ConnectUI {
     try {
       const url = new URL(this.relayUrl);
       if (!['127.0.0.1', 'localhost', '::1'].includes(url.hostname)) {
-        this.showError('Invalid relay URL: must be loopback address (127.0.0.1)');
+        this.showError(
+          'Invalid relay URL: must be loopback address (127.0.0.1)',
+        );
         return false;
       }
       return true;
@@ -169,7 +172,6 @@ class ConnectUI {
       this.renderTabs(filteredTabs);
       this.showStatus('Select a tab to connect', 'info', '📋');
       this.tabSelectionEl.classList.remove('hidden');
-
     } catch (error) {
       this.showError(`Failed to load tabs: ${error.message}`);
     }
@@ -197,7 +199,9 @@ class ConnectUI {
       if (tab.favIconUrl && !tab.favIconUrl.startsWith('chrome://')) {
         const img = document.createElement('img');
         img.src = tab.favIconUrl;
-        img.onerror = () => { faviconEl.textContent = '🌐'; };
+        img.onerror = () => {
+          faviconEl.textContent = '🌐';
+        };
         faviconEl.appendChild(img);
       } else {
         faviconEl.textContent = '🌐';
@@ -238,7 +242,7 @@ class ConnectUI {
       const connectBtn = document.createElement('button');
       connectBtn.className = 'tab-connect-btn';
       connectBtn.textContent = 'Connect';
-      connectBtn.addEventListener('click', (e) => {
+      connectBtn.addEventListener('click', e => {
         e.stopPropagation();
         this.connectToTab(tab);
       });
@@ -294,7 +298,6 @@ class ConnectUI {
 
       // Set up disconnect button
       this.disconnectBtnEl.onclick = () => this.disconnect(tab.id);
-
     } catch (error) {
       this.showError(`Connection failed: ${error.message}`);
     }
@@ -304,7 +307,7 @@ class ConnectUI {
     try {
       await chrome.runtime.sendMessage({
         type: 'disconnect',
-        tabId: tabId
+        tabId: tabId,
       });
     } catch {
       // Ignore disconnect errors
@@ -399,7 +402,7 @@ class ConnectUI {
       const response = await chrome.runtime.sendMessage({
         type: 'getDebugLogs',
         filter: filter,
-        limit: 100
+        limit: 100,
       });
 
       if (!response || !response.success) {
@@ -440,13 +443,18 @@ class ConnectUI {
         alarm=${discovery.lastKeepAliveAlarmAt || 'n/a'}
         <br>
         <strong>By Category:</strong>
-        ${Object.entries(stats.byCategory || {}).map(([cat, count]) => `${cat}: ${count}`).join(', ') || 'none'}
+        ${
+          Object.entries(stats.byCategory || {})
+            .map(([cat, count]) => `${cat}: ${count}`)
+            .join(', ') || 'none'
+        }
       `;
 
       // Render logs
       const logs = response.logs || [];
       if (logs.length === 0) {
-        this.logOutputEl.innerHTML = '<span style="color: #888;">No logs yet</span>';
+        this.logOutputEl.innerHTML =
+          '<span style="color: #888;">No logs yet</span>';
         return;
       }
 
@@ -467,17 +475,19 @@ class ConnectUI {
     const msg = this.escapeHtml(log.message || '');
     const data = log.data ? this.escapeHtml(JSON.stringify(log.data)) : '';
 
-    return `<div class="log-entry">` +
+    return (
+      `<div class="log-entry">` +
       `<span class="ts">${ts}</span> ` +
       `<span class="${catClass}">[${cat.toUpperCase()}]</span> ` +
       `<span class="msg">${msg}</span>` +
       (data ? `<span class="data">${data}</span>` : '') +
-      `</div>`;
+      `</div>`
+    );
   }
 
   async clearLogs() {
     try {
-      await chrome.runtime.sendMessage({ type: 'clearDebugLogs' });
+      await chrome.runtime.sendMessage({type: 'clearDebugLogs'});
       this.refreshLogs();
     } catch (error) {
       this.showError(`Failed to clear logs: ${error.message}`);
@@ -489,7 +499,7 @@ class ConnectUI {
       const response = await chrome.runtime.sendMessage({
         type: 'getDebugLogs',
         filter: null,
-        limit: 500
+        limit: 500,
       });
 
       if (!response || !response.success) {
@@ -501,10 +511,12 @@ class ConnectUI {
         timestamp: new Date().toISOString(),
         stats: response.stats,
         state: response.state,
-        logs: response.logs
+        logs: response.logs,
       };
 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: 'application/json',
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Debug Logger
  * Outputs logs to stderr and appends to .local/debug.log
  */
@@ -72,7 +77,8 @@ export function debugLog(
   const prefix = `[${timestamp}] [${levelName}] [${category}]`;
 
   // Format data for output
-  const dataStr = data && Object.keys(data).length > 0 ? ` ${JSON.stringify(data)}` : '';
+  const dataStr =
+    data && Object.keys(data).length > 0 ? ` ${JSON.stringify(data)}` : '';
 
   // Output to stderr
   console.error(`${prefix} ${message}${dataStr}`);
@@ -91,19 +97,35 @@ export function debugLog(
 }
 
 // Convenience methods
-export function logDebug(category: string, message: string, data?: Record<string, unknown>): void {
+export function logDebug(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
   debugLog(LogLevel.DEBUG, category, message, data);
 }
 
-export function logInfo(category: string, message: string, data?: Record<string, unknown>): void {
+export function logInfo(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
   debugLog(LogLevel.INFO, category, message, data);
 }
 
-export function logWarn(category: string, message: string, data?: Record<string, unknown>): void {
+export function logWarn(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
   debugLog(LogLevel.WARN, category, message, data);
 }
 
-export function logError(category: string, message: string, data?: Record<string, unknown>): void {
+export function logError(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
   debugLog(LogLevel.ERROR, category, message, data);
 }
 
@@ -112,10 +134,19 @@ export function logError(category: string, message: string, data?: Record<string
  */
 export function logConnectionState(
   kind: 'chatgpt' | 'gemini',
-  state: 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'healthy' | 'unhealthy',
+  state:
+    | 'connecting'
+    | 'connected'
+    | 'disconnected'
+    | 'reconnecting'
+    | 'healthy'
+    | 'unhealthy',
   details?: Record<string, unknown>,
 ): void {
-  const level = state === 'disconnected' || state === 'unhealthy' ? LogLevel.WARN : LogLevel.INFO;
+  const level =
+    state === 'disconnected' || state === 'unhealthy'
+      ? LogLevel.WARN
+      : LogLevel.INFO;
   debugLog(level, 'connection', `${kind} ${state}`, details);
 }
 
@@ -126,7 +157,8 @@ export function logRelay(
   event: 'starting' | 'started' | 'stopped' | 'timeout' | 'error',
   details?: Record<string, unknown>,
 ): void {
-  const level = event === 'error' || event === 'timeout' ? LogLevel.ERROR : LogLevel.INFO;
+  const level =
+    event === 'error' || event === 'timeout' ? LogLevel.ERROR : LogLevel.INFO;
   debugLog(level, 'relay', event, details);
 }
 

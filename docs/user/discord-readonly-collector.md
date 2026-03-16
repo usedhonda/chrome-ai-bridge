@@ -9,13 +9,16 @@ This collector fetches messages from specific Discord channels and stores them i
 ## 1) Discord permissions (no write access)
 
 ### OAuth2 scope
+
 - `bot`
 
 ### Required bot permissions
+
 - `View Channels`
 - `Read Message History`
 
 ### Do NOT grant
+
 - `Send Messages`
 - `Send Messages in Threads`
 - `Create Public Threads`
@@ -24,6 +27,7 @@ This collector fetches messages from specific Discord channels and stores them i
 - Any other write/manage permission
 
 ### Recommended hardening
+
 - In each target channel, explicitly deny `Send Messages` for the bot role.
 
 ## 2) Configure environment
@@ -56,6 +60,7 @@ npm run discord:preflight -- --channel-url "https://discord.com/channels/9689010
 ```
 
 This checks:
+
 - bot identity can be resolved
 - target channels are readable
 - message history endpoint is accessible
@@ -98,6 +103,7 @@ npm run discord:status -- --channel 123456789012345678 --tail 20
 ```
 
 Templates:
+
 - `docs/user/examples/discord-collector.cron.example`
 - `docs/user/examples/com.chrome-ai-bridge.discord-collector.plist` (launchd/macOS)
 

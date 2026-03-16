@@ -4,7 +4,7 @@
  * 停止ボタンが誤検出されている問題を調査
  */
 
-import { getClient } from '../build/src/fast-cdp/fast-chat.js';
+import {getClient} from '../build/src/fast-cdp/fast-chat.js';
 
 async function main() {
   console.log('\n=== Gemini Button State Debug ===\n');
@@ -170,7 +170,9 @@ async function main() {
     console.log(`Stop button detected: ${hasStopButton}`);
     console.log(`  - By aria-label: ${hasStopByLabel}`);
     console.log(`  - By mat-icon: ${hasStopByIcon}`);
-    console.log(`Send button: ${state.sendButton.found ? (state.sendButton.disabled ? 'disabled' : 'enabled') : 'not found'}`);
+    console.log(
+      `Send button: ${state.sendButton.found ? (state.sendButton.disabled ? 'disabled' : 'enabled') : 'not found'}`,
+    );
     console.log(`Mic buttons: ${state.micButtons.length}`);
     console.log(`Feedback buttons: ${state.feedbackImgs}`);
     console.log(`Responses: ${state.responseCount}`);
@@ -181,7 +183,6 @@ async function main() {
     }
 
     await client.close();
-
   } catch (error) {
     console.error('Error:', error.message);
     process.exit(1);

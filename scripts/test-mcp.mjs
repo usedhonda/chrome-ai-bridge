@@ -14,10 +14,10 @@
  *   npm run test:mcp -- --debug         # Show server stderr output
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';
+import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,7 +28,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 function extractKeywords(question) {
   const keywords = [];
-  const englishTerms = question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
+  const englishTerms =
+    question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
   for (const term of englishTerms) {
     if (term.length >= 2) keywords.push(term.toLowerCase());
   }
@@ -46,7 +47,7 @@ function calculateRelevance(question, answer) {
   const keywords = extractKeywords(question);
   if (keywords.length === 0) return 1;
   const answerLower = answer.toLowerCase();
-  const matched = keywords.filter((kw) => answerLower.includes(kw.toLowerCase()));
+  const matched = keywords.filter(kw => answerLower.includes(kw.toLowerCase()));
   return matched.length / keywords.length;
 }
 
@@ -75,9 +76,11 @@ const EXPECTED_TOOLS = [
 
 // Natural-sounding test questions (avoid BAN-triggering patterns)
 const TEST_QUESTIONS = {
-  chatgpt: 'How do I deep copy an object in JavaScript? Include a code example.',
+  chatgpt:
+    'How do I deep copy an object in JavaScript? Include a code example.',
   gemini: 'Explain the difference between concurrency and parallelism briefly.',
-  parallel: 'What are the main advantages of using TypeScript over plain JavaScript?',
+  parallel:
+    'What are the main advantages of using TypeScript over plain JavaScript?',
 };
 
 // --- Server stderr capture ---
@@ -85,12 +88,12 @@ const serverLogs = [];
 
 // --- Utilities ---
 function log(msg) {
-  const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const ts = new Date().toLocaleTimeString('en-US', {hour12: false});
   console.log(`[${ts}] ${msg}`);
 }
 
 function logError(msg) {
-  const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const ts = new Date().toLocaleTimeString('en-US', {hour12: false});
   console.error(`[${ts}] ${msg}`);
 }
 
@@ -108,7 +111,7 @@ async function startServer() {
   });
 
   // Capture stderr
-  transport.stderr?.on('data', (chunk) => {
+  transport.stderr?.on('data', chunk => {
     const line = chunk.toString().trim();
     if (line) {
       serverLogs.push(line);
@@ -126,21 +129,37 @@ async function startServer() {
   // Connect with timeout
   const connectPromise = client.connect(transport);
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Server startup timed out after ${SERVER_STARTUP_TIMEOUT_MS}ms`)), SERVER_STARTUP_TIMEOUT_MS)
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Server startup timed out after ${SERVER_STARTUP_TIMEOUT_MS}ms`,
+          ),
+        ),
+      SERVER_STARTUP_TIMEOUT_MS,
+    ),
   );
 
   await Promise.race([connectPromise, timeoutPromise]);
 
-  return { client, transport };
+  return {client, transport};
 }
 
 /**
  * Call a tool with timeout
  */
 async function callToolWithTimeout(client, toolName, toolArgs) {
-  const callPromise = client.callTool({ name: toolName, arguments: toolArgs });
+  const callPromise = client.callTool({name: toolName, arguments: toolArgs});
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Tool call '${toolName}' timed out after ${TOOL_CALL_TIMEOUT_MS}ms`)), TOOL_CALL_TIMEOUT_MS)
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Tool call '${toolName}' timed out after ${TOOL_CALL_TIMEOUT_MS}ms`,
+          ),
+        ),
+      TOOL_CALL_TIMEOUT_MS,
+    ),
   );
   return Promise.race([callPromise, timeoutPromise]);
 }
@@ -153,8 +172,8 @@ function extractText(result) {
     return '';
   }
   return result.content
-    .filter((c) => c.type === 'text')
-    .map((c) => c.text)
+    .filter(c => c.type === 'text')
+    .map(c => c.text)
     .join('\n');
 }
 
@@ -164,7 +183,7 @@ function extractText(result) {
  * The ask_chatgpt_gemini_web tool returns text with "ChatGPT:" and "Gemini:" labels.
  */
 function parseParallelResponse(text) {
-  const result = { chatgpt: '', gemini: '' };
+  const result = {chatgpt: '', gemini: ''};
 
   // Split by ChatGPT:/Gemini: labels
   const chatgptMatch = text.match(/ChatGPT:\s*([\s\S]*?)(?=\nGemini:|$)/i);
@@ -191,11 +210,11 @@ async function testToolListing(client) {
   const name = 'tools/list';
   log(`Test: ${name}`);
 
-  const { tools } = await client.listTools();
-  const toolNames = tools.map((t) => t.name);
+  const {tools} = await client.listTools();
+  const toolNames = tools.map(t => t.name);
 
-  const missing = EXPECTED_TOOLS.filter((t) => !toolNames.includes(t));
-  const extra = toolNames.filter((t) => !EXPECTED_TOOLS.includes(t));
+  const missing = EXPECTED_TOOLS.filter(t => !toolNames.includes(t));
+  const extra = toolNames.filter(t => !EXPECTED_TOOLS.includes(t));
 
   const passed = missing.length === 0;
 
@@ -220,7 +239,13 @@ async function testToolListing(client) {
     }
   }
 
-  return { name, passed: passed && schemaOk, missing, extra, toolCount: toolNames.length };
+  return {
+    name,
+    passed: passed && schemaOk,
+    missing,
+    extra,
+    toolCount: toolNames.length,
+  };
 }
 
 /**
@@ -233,7 +258,9 @@ async function testChatGPT(client) {
   log(`  Question: "${question}"`);
 
   const startMs = Date.now();
-  const result = await callToolWithTimeout(client, 'ask_chatgpt_web', { question });
+  const result = await callToolWithTimeout(client, 'ask_chatgpt_web', {
+    question,
+  });
   const elapsedMs = Date.now() - startMs;
 
   const text = extractText(result);
@@ -251,7 +278,14 @@ async function testChatGPT(client) {
   log(`  Preview: "${text.slice(0, 80)}..."`);
   if (isError) log(`  ERROR: Response marked as error`);
 
-  return { name, passed, elapsedMs, answerLength: text.length, relevance, isError };
+  return {
+    name,
+    passed,
+    elapsedMs,
+    answerLength: text.length,
+    relevance,
+    isError,
+  };
 }
 
 /**
@@ -264,7 +298,9 @@ async function testGemini(client) {
   log(`  Question: "${question}"`);
 
   const startMs = Date.now();
-  const result = await callToolWithTimeout(client, 'ask_gemini_web', { question });
+  const result = await callToolWithTimeout(client, 'ask_gemini_web', {
+    question,
+  });
   const elapsedMs = Date.now() - startMs;
 
   const text = extractText(result);
@@ -281,7 +317,14 @@ async function testGemini(client) {
   log(`  Preview: "${text.slice(0, 80)}..."`);
   if (isError) log(`  ERROR: Response marked as error`);
 
-  return { name, passed, elapsedMs, answerLength: text.length, relevance, isError };
+  return {
+    name,
+    passed,
+    elapsedMs,
+    answerLength: text.length,
+    relevance,
+    isError,
+  };
 }
 
 /**
@@ -294,7 +337,9 @@ async function testParallel(client) {
   log(`  Question: "${question}"`);
 
   const startMs = Date.now();
-  const result = await callToolWithTimeout(client, 'ask_chatgpt_gemini_web', { question });
+  const result = await callToolWithTimeout(client, 'ask_chatgpt_gemini_web', {
+    question,
+  });
   const elapsedMs = Date.now() - startMs;
 
   const text = extractText(result);
@@ -310,16 +355,23 @@ async function testParallel(client) {
   const passed = !isError && chatgptOk && geminiOk;
 
   log(`  Time: ${elapsedMs}ms`);
-  log(`  ChatGPT: ${parts.chatgpt.length} chars, relevance ${Math.round(chatgptRelevance * 100)}%`);
-  log(`  Gemini: ${parts.gemini.length} chars, relevance ${Math.round(geminiRelevance * 100)}%`);
+  log(
+    `  ChatGPT: ${parts.chatgpt.length} chars, relevance ${Math.round(chatgptRelevance * 100)}%`,
+  );
+  log(
+    `  Gemini: ${parts.gemini.length} chars, relevance ${Math.round(geminiRelevance * 100)}%`,
+  );
   if (!chatgptOk) log(`  WARNING: ChatGPT answer too short`);
   if (!geminiOk) log(`  WARNING: Gemini answer too short`);
   if (isError) log(`  ERROR: Response marked as error`);
 
   return {
-    name, passed, elapsedMs, isError,
-    chatgpt: { length: parts.chatgpt.length, relevance: chatgptRelevance },
-    gemini: { length: parts.gemini.length, relevance: geminiRelevance },
+    name,
+    passed,
+    elapsedMs,
+    isError,
+    chatgpt: {length: parts.chatgpt.length, relevance: chatgptRelevance},
+    gemini: {length: parts.gemini.length, relevance: geminiRelevance},
   };
 }
 
@@ -347,7 +399,7 @@ async function main() {
   let client;
   let transport;
   try {
-    ({ client, transport } = await startServer());
+    ({client, transport} = await startServer());
     log('MCP server connected');
   } catch (error) {
     logError(`Failed to start MCP server: ${error.message}`);
@@ -379,7 +431,11 @@ async function main() {
           console.log('');
         } catch (error) {
           log(`  ERROR: ${error.message}`);
-          results.push({ name: 'ask_chatgpt_web', passed: false, error: error.message });
+          results.push({
+            name: 'ask_chatgpt_web',
+            passed: false,
+            error: error.message,
+          });
           console.log('  -> FAIL');
           console.log('');
         }
@@ -394,7 +450,11 @@ async function main() {
           console.log('');
         } catch (error) {
           log(`  ERROR: ${error.message}`);
-          results.push({ name: 'ask_gemini_web', passed: false, error: error.message });
+          results.push({
+            name: 'ask_gemini_web',
+            passed: false,
+            error: error.message,
+          });
           console.log('  -> FAIL');
           console.log('');
         }
@@ -409,7 +469,11 @@ async function main() {
           console.log('');
         } catch (error) {
           log(`  ERROR: ${error.message}`);
-          results.push({ name: 'ask_chatgpt_gemini_web', passed: false, error: error.message });
+          results.push({
+            name: 'ask_chatgpt_gemini_web',
+            passed: false,
+            error: error.message,
+          });
           console.log('  -> FAIL');
           console.log('');
         }
@@ -427,8 +491,8 @@ async function main() {
   }
 
   // Summary
-  const passed = results.filter((r) => r.passed).length;
-  const failed = results.filter((r) => !r.passed).length;
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.filter(r => !r.passed).length;
   const total = results.length;
 
   console.log('');
@@ -459,7 +523,7 @@ async function main() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Fatal error:', err);
   process.exit(1);
 });

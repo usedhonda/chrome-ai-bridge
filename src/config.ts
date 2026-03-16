@@ -131,13 +131,14 @@ export function getIpcGuardConfig(): IpcGuardConfig {
     sessionIdleMs:
       raw.sessionIdleMs >= 0 ? Math.floor(raw.sessionIdleMs) : 1_800_000,
     startupDelayJitterMs:
-      raw.startupDelayJitterMs > 0 ? Math.floor(raw.startupDelayJitterMs) : 1_500,
+      raw.startupDelayJitterMs > 0
+        ? Math.floor(raw.startupDelayJitterMs)
+        : 1_500,
     startupProcessThreshold:
       raw.startupProcessThreshold > 0
         ? Math.floor(raw.startupProcessThreshold)
         : 8,
-    primaryIdleMs:
-      raw.primaryIdleMs >= 0 ? Math.floor(raw.primaryIdleMs) : 0,
+    primaryIdleMs: raw.primaryIdleMs >= 0 ? Math.floor(raw.primaryIdleMs) : 0,
     execMaxConcurrency:
       raw.execMaxConcurrency > 0 ? Math.floor(raw.execMaxConcurrency) : 3,
   };

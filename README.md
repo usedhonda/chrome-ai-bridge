@@ -43,13 +43,13 @@ v2.1 introduces a fundamentally new approach to response extraction. Instead of 
 
 ### Before vs After
 
-| | v2.0 (DOM extraction) | v2.1 (Network interception) |
-|---|---|---|
-| **How it works** | Read HTML elements via CSS selectors | Intercept API responses directly |
-| **When UI changes** | Breaks (selectors become invalid) | Unaffected |
-| **Output format** | Plain text only | Markdown, LaTeX, structured content |
-| **Thinking mode** | Complex filtering needed | Naturally separated by protocol |
-| **Reliability** | Depends on page rendering | Depends on API protocol (stable) |
+|                     | v2.0 (DOM extraction)                | v2.1 (Network interception)         |
+| ------------------- | ------------------------------------ | ----------------------------------- |
+| **How it works**    | Read HTML elements via CSS selectors | Intercept API responses directly    |
+| **When UI changes** | Breaks (selectors become invalid)    | Unaffected                          |
+| **Output format**   | Plain text only                      | Markdown, LaTeX, structured content |
+| **Thinking mode**   | Complex filtering needed             | Naturally separated by protocol     |
+| **Reliability**     | Depends on page rendering            | Depends on API protocol (stable)    |
 
 ### Architecture
 
@@ -127,20 +127,20 @@ Ask ChatGPT or Gemini questions directly from your AI assistant:
 "Ask both AIs for their opinions on this approach"
 ```
 
-| Feature | Description |
-|---------|-------------|
-| **Parallel queries** | Ask both AIs simultaneously with `ask_chatgpt_gemini_web` |
-| **Session persistence** | Conversations continue across tool calls |
-| **Auto-logging** | All Q&A saved to `.local/chrome-ai-bridge/history.jsonl` |
+| Feature                 | Description                                               |
+| ----------------------- | --------------------------------------------------------- |
+| **Parallel queries**    | Ask both AIs simultaneously with `ask_chatgpt_gemini_web` |
+| **Session persistence** | Conversations continue across tool calls                  |
+| **Auto-logging**        | All Q&A saved to `.local/chrome-ai-bridge/history.jsonl`  |
 
 ### Debugging Tools
 
 Inspect the connection state and page content:
 
-| Tool | Description |
-|------|-------------|
+| Tool                | Description                                      |
+| ------------------- | ------------------------------------------------ |
 | `take_cdp_snapshot` | Get page state (URL, title, input/button status) |
-| `get_page_dom` | Query DOM elements with CSS selectors |
+| `get_page_dom`      | Query DOM elements with CSS selectors            |
 
 ---
 
@@ -148,13 +148,13 @@ Inspect the connection state and page content:
 
 ### Available Tools (5)
 
-| Tool | Description |
-|------|-------------|
-| `ask_chatgpt_web` | Ask ChatGPT via browser |
-| `ask_gemini_web` | Ask Gemini via browser |
+| Tool                     | Description                            |
+| ------------------------ | -------------------------------------- |
+| `ask_chatgpt_web`        | Ask ChatGPT via browser                |
+| `ask_gemini_web`         | Ask Gemini via browser                 |
 | `ask_chatgpt_gemini_web` | Ask both AIs in parallel (recommended) |
-| `take_cdp_snapshot` | Debug: Get CDP page state |
-| `get_page_dom` | Debug: Query DOM elements |
+| `take_cdp_snapshot`      | Debug: Get CDP page state              |
+| `get_page_dom`           | Debug: Query DOM elements              |
 
 ### Recommended Usage
 
@@ -178,8 +178,8 @@ User: "Ask ChatGPT specifically about this"
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
+| Variable              | Description                                |
+| --------------------- | ------------------------------------------ |
 | `CAI_DISABLE_WEB_LLM` | Set `true` to disable ChatGPT/Gemini tools |
 
 ---
@@ -244,13 +244,13 @@ npm run cdp:gemini
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [Technical Spec](docs/SPEC.md) | Detailed architecture and implementation |
-| [Setup Guide](docs/user/setup.md) | Detailed setup and configuration |
-| [Troubleshooting](docs/user/troubleshooting.md) | Problem solving |
-| [CI Policy](docs/ci-policy.md) | Required checks and browser E2E lane policy |
-| [Technical Spec - Architecture](docs/SPEC.md#1-architecture-overview) | Extension architecture |
+| Guide                                                                 | Description                                 |
+| --------------------------------------------------------------------- | ------------------------------------------- |
+| [Technical Spec](docs/SPEC.md)                                        | Detailed architecture and implementation    |
+| [Setup Guide](docs/user/setup.md)                                     | Detailed setup and configuration            |
+| [Troubleshooting](docs/user/troubleshooting.md)                       | Problem solving                             |
+| [CI Policy](docs/ci-policy.md)                                        | Required checks and browser E2E lane policy |
+| [Technical Spec - Architecture](docs/SPEC.md#1-architecture-overview) | Extension architecture                      |
 
 ---
 

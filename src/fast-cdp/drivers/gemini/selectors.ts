@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Gemini Selectors
  *
  * Centralized selector definitions for Gemini UI elements.
@@ -15,10 +20,7 @@ import type {DriverSelectors} from '../types.js';
  */
 export const GEMINI_SELECTORS: DriverSelectors = {
   // Root element containing the conversation
-  conversationRoot: [
-    'main',
-    '[role="main"]',
-  ],
+  conversationRoot: ['main', '[role="main"]'],
 
   // Input field for typing prompts
   promptInput: [
@@ -75,10 +77,7 @@ export const GEMINI_SELECTORS: DriverSelectors = {
   ],
 
   // Error messages
-  errorBanner: [
-    '[role="alert"]',
-    '.error-message',
-  ],
+  errorBanner: ['[role="alert"]', '.error-message'],
 };
 
 /**

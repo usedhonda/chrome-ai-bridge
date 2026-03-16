@@ -23,9 +23,12 @@ import {
   askChatGPTFastWithTimings,
   askGeminiFastWithTimings,
   getClient,
-  getPageDom
+  getPageDom,
 } from '../build/src/fast-cdp/fast-chat.js';
-import {generateAgentId, setAgentId} from '../build/src/fast-cdp/agent-context.js';
+import {
+  generateAgentId,
+  setAgentId,
+} from '../build/src/fast-cdp/agent-context.js';
 
 // Initialize agent ID for Agent Teams support
 const agentId = generateAgentId('test-script');
@@ -47,7 +50,7 @@ function generateUniqueQuestion() {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   });
   const randomId = Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -81,7 +84,8 @@ function extractKeywords(question) {
   const keywords = [];
 
   // 1. 英語の技術用語を抽出（大文字小文字を保持）
-  const englishTerms = question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
+  const englishTerms =
+    question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
   for (const term of englishTerms) {
     if (term.length >= 2) {
       keywords.push(term.toLowerCase());
@@ -98,8 +102,10 @@ function extractKeywords(question) {
 
   // 3. 日本語の重要そうな単語（助詞で区切る）
   const japaneseWords = question
-    .replace(/[A-Za-z0-9ァ-ヶー]+/g, ' ')  // 英語・カタカナを除去
-    .split(/[はをのがにでとからまでよりへやかもなだですますしたするしてされるということようについてにおいてとしてというためのことものところときようためほうほか何どうどのこのそのあのどんな教えて説明簡潔詳しく具体的例方法1つ一つひとつ]+/)
+    .replace(/[A-Za-z0-9ァ-ヶー]+/g, ' ') // 英語・カタカナを除去
+    .split(
+      /[はをのがにでとからまでよりへやかもなだですますしたするしてされるということようについてにおいてとしてというためのことものところときようためほうほか何どうどのこのそのあのどんな教えて説明簡潔詳しく具体的例方法1つ一つひとつ]+/,
+    )
     .filter(w => w.length >= 2);
 
   for (const word of japaneseWords) {
@@ -123,10 +129,11 @@ function checkRelevance(question, answer) {
   const answerLower = answer.toLowerCase();
 
   const matchedKeywords = keywords.filter(kw =>
-    answerLower.includes(kw.toLowerCase())
+    answerLower.includes(kw.toLowerCase()),
   );
 
-  const matchRate = keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
+  const matchRate =
+    keywords.length > 0 ? matchedKeywords.length / keywords.length : 0;
 
   // 最低1つのキーワードがマッチするか、マッチ率が20%以上
   const relevant = matchedKeywords.length >= 1 || matchRate >= 0.2;
@@ -135,7 +142,7 @@ function checkRelevance(question, answer) {
     relevant,
     matchedKeywords,
     totalKeywords: keywords.length,
-    matchRate: Math.round(matchRate * 100)
+    matchRate: Math.round(matchRate * 100),
   };
 }
 
@@ -165,11 +172,36 @@ function createBar(percentage, width = 20) {
  */
 const THRESHOLDS = {
   connectMs: {expected: 2000, warning: 5000, improvable: true, label: '接続'},
-  waitInputMs: {expected: 1000, warning: 3000, improvable: true, label: '入力欄待機'},
-  inputMs: {expected: 500, warning: 2000, improvable: true, label: 'テキスト入力'},
-  sendMs: {expected: 2000, warning: 10000, improvable: true, label: '送信ボタン待機'},
-  waitResponseMs: {expected: -1, warning: -1, improvable: false, label: '回答待機'},
-  navigateMs: {expected: 1000, warning: 3000, improvable: true, label: 'ナビゲーション'},
+  waitInputMs: {
+    expected: 1000,
+    warning: 3000,
+    improvable: true,
+    label: '入力欄待機',
+  },
+  inputMs: {
+    expected: 500,
+    warning: 2000,
+    improvable: true,
+    label: 'テキスト入力',
+  },
+  sendMs: {
+    expected: 2000,
+    warning: 10000,
+    improvable: true,
+    label: '送信ボタン待機',
+  },
+  waitResponseMs: {
+    expected: -1,
+    warning: -1,
+    improvable: false,
+    label: '回答待機',
+  },
+  navigateMs: {
+    expected: 1000,
+    warning: 3000,
+    improvable: true,
+    label: 'ナビゲーション',
+  },
 };
 
 /**
@@ -207,7 +239,9 @@ function printTimingReport(provider, questionText, timings) {
   console.error('========================================');
   console.error(`=== ${provider} パフォーマンスレポート ===`);
   console.error('========================================');
-  console.error(`質問: "${questionText.slice(0, 60)}${questionText.length > 60 ? '...' : ''}"`);
+  console.error(
+    `質問: "${questionText.slice(0, 60)}${questionText.length > 60 ? '...' : ''}"`,
+  );
 
   // タイミング詳細
   console.error('');
@@ -216,12 +250,14 @@ function printTimingReport(provider, questionText, timings) {
 
   for (const phase of phases) {
     const ms = timings[phase.key] || 0;
-    const pct = total > 0 ? (ms / total * 100) : 0;
+    const pct = total > 0 ? (ms / total) * 100 : 0;
     const bar = createBar(pct);
     const marker = phase.key === maxPhase.key ? ' ← 最大' : '';
     const msStr = formatNumber(ms).padStart(6);
     const pctStr = pct.toFixed(1).padStart(5);
-    console.error(`  ${phase.name.padEnd(14)}: ${msStr} ms (${pctStr}%) ${bar}${marker}`);
+    console.error(
+      `  ${phase.name.padEnd(14)}: ${msStr} ms (${pctStr}%) ${bar}${marker}`,
+    );
   }
 
   console.error(`  ${'─'.repeat(37)}`);
@@ -236,7 +272,7 @@ function printTimingReport(provider, questionText, timings) {
   const bottlenecks = [];
   for (const phase of phases) {
     const ms = timings[phase.key] || 0;
-    const pct = total > 0 ? (ms / total * 100) : 0;
+    const pct = total > 0 ? (ms / total) * 100 : 0;
     const threshold = THRESHOLDS[phase.key];
     if (!threshold) continue;
 
@@ -271,7 +307,9 @@ function printTimingReport(provider, questionText, timings) {
   });
 
   for (const b of bottlenecks.slice(0, 4)) {
-    console.error(`  ${b.severity} ${b.name}: ${formatNumber(b.ms)}ms (${b.pct.toFixed(1)}%) - ${b.reason}`);
+    console.error(
+      `  ${b.severity} ${b.name}: ${formatNumber(b.ms)}ms (${b.pct.toFixed(1)}%) - ${b.reason}`,
+    );
   }
 
   // 改善提案
@@ -291,7 +329,9 @@ function printTimingReport(provider, questionText, timings) {
     suggestions.push('• 入力欄: ページの初期ロード完了を待つ');
   }
   if ((timings.navigateMs || 0) > 2000) {
-    suggestions.push('• ナビゲーション: 既存タブを再利用してナビゲーション回避');
+    suggestions.push(
+      '• ナビゲーション: 既存タブを再利用してナビゲーション回避',
+    );
   }
 
   if (suggestions.length === 0) {
@@ -310,8 +350,12 @@ function printTimingReport(provider, questionText, timings) {
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.error('');
   console.error('使い方:');
-  console.error('  npm run test:chatgpt              # ユニークな質問を自動生成');
-  console.error('  npm run test:gemini               # ユニークな質問を自動生成');
+  console.error(
+    '  npm run test:chatgpt              # ユニークな質問を自動生成',
+  );
+  console.error(
+    '  npm run test:gemini               # ユニークな質問を自動生成',
+  );
   console.error('  npm run test:both                 # 両方テスト');
   console.error('  npm run test:chatgpt -- "質問文"  # 指定した質問を使用');
   console.error('');
@@ -319,8 +363,12 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.error('  --dump-dom         DOMスナップショットを取得');
   console.error('  --skip-relevance   関連性チェックをスキップ');
   console.error('');
-  console.error('質問を省略すると、タイムスタンプと乱数を含むユニークな質問が自動生成されます。');
-  console.error('これにより、キャッシュされた回答ではなく新しい応答であることを確認できます。');
+  console.error(
+    '質問を省略すると、タイムスタンプと乱数を含むユニークな質問が自動生成されます。',
+  );
+  console.error(
+    'これにより、キャッシュされた回答ではなく新しい応答であることを確認できます。',
+  );
   console.error('');
   process.exit(0);
 }
@@ -357,9 +405,15 @@ async function testChatGPT(q) {
     console.error('');
     console.error('--- 関連性チェック ---');
     console.error(`キーワード: ${extractKeywords(q).join(', ')}`);
-    console.error(`マッチ: ${relevance.matchedKeywords.join(', ') || '(なし)'}`);
-    console.error(`マッチ率: ${relevance.matchRate}% (${relevance.matchedKeywords.length}/${relevance.totalKeywords})`);
-    console.error(`関連性: ${relevance.relevant ? '✅ あり' : '❌ なし（前の会話の可能性）'}`);
+    console.error(
+      `マッチ: ${relevance.matchedKeywords.join(', ') || '(なし)'}`,
+    );
+    console.error(
+      `マッチ率: ${relevance.matchRate}% (${relevance.matchedKeywords.length}/${relevance.totalKeywords})`,
+    );
+    console.error(
+      `関連性: ${relevance.relevant ? '✅ あり' : '❌ なし（前の会話の可能性）'}`,
+    );
     console.error('========================================');
 
     // パフォーマンスレポート出力
@@ -370,7 +424,14 @@ async function testChatGPT(q) {
       console.error('');
       console.error('⚠️  警告: 回答が質問と関連していない可能性があります');
       console.error('    前の会話の続きが返ってきた可能性があります');
-      return {success: false, answer, elapsed, timings, error: 'Response not relevant to question', relevance};
+      return {
+        success: false,
+        answer,
+        elapsed,
+        timings,
+        error: 'Response not relevant to question',
+        relevance,
+      };
     }
 
     return {success: true, answer, elapsed, timings, relevance};
@@ -421,9 +482,15 @@ async function testGemini(q) {
     console.error('');
     console.error('--- 関連性チェック ---');
     console.error(`キーワード: ${extractKeywords(q).join(', ')}`);
-    console.error(`マッチ: ${relevance.matchedKeywords.join(', ') || '(なし)'}`);
-    console.error(`マッチ率: ${relevance.matchRate}% (${relevance.matchedKeywords.length}/${relevance.totalKeywords})`);
-    console.error(`関連性: ${relevance.relevant ? '✅ あり' : '❌ なし（前の会話の可能性）'}`);
+    console.error(
+      `マッチ: ${relevance.matchedKeywords.join(', ') || '(なし)'}`,
+    );
+    console.error(
+      `マッチ率: ${relevance.matchRate}% (${relevance.matchedKeywords.length}/${relevance.totalKeywords})`,
+    );
+    console.error(
+      `関連性: ${relevance.relevant ? '✅ あり' : '❌ なし（前の会話の可能性）'}`,
+    );
     console.error('========================================');
 
     // パフォーマンスレポート出力
@@ -434,7 +501,14 @@ async function testGemini(q) {
       console.error('');
       console.error('⚠️  警告: 回答が質問と関連していない可能性があります');
       console.error('    前の会話の続きが返ってきた可能性があります');
-      return {success: false, answer, elapsed, timings, error: 'Response not relevant to question', relevance};
+      return {
+        success: false,
+        answer,
+        elapsed,
+        timings,
+        error: 'Response not relevant to question',
+        relevance,
+      };
     }
 
     return {success: true, answer, elapsed, timings, relevance};
@@ -488,10 +562,14 @@ async function dumpDomSnapshot(kind) {
         console.error(`  Element ${i + 1}: <${el.tagName}>`);
         const attrs = Object.entries(el.attributes).slice(0, 5);
         for (const [name, value] of attrs) {
-          console.error(`    ${name}="${value.slice(0, 50)}${value.length > 50 ? '...' : ''}"`);
+          console.error(
+            `    ${name}="${value.slice(0, 50)}${value.length > 50 ? '...' : ''}"`,
+          );
         }
         if (el.textContent) {
-          console.error(`    text: "${el.textContent.slice(0, 80)}${el.textContent.length > 80 ? '...' : ''}"`);
+          console.error(
+            `    text: "${el.textContent.slice(0, 80)}${el.textContent.length > 80 ? '...' : ''}"`,
+          );
         }
       }
     }
@@ -501,15 +579,21 @@ async function dumpDomSnapshot(kind) {
       console.error('\n## Messages');
       console.error(`  Total: ${snapshot.messages.length}`);
       const userMsgs = snapshot.messages.filter(m => m.role === 'user');
-      const assistantMsgs = snapshot.messages.filter(m => m.role === 'assistant');
-      console.error(`  User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`);
+      const assistantMsgs = snapshot.messages.filter(
+        m => m.role === 'assistant',
+      );
+      console.error(
+        `  User: ${userMsgs.length}, Assistant: ${assistantMsgs.length}`,
+      );
 
       // 最新4件を表示
       const recent = snapshot.messages.slice(-4);
       console.error('\n### Recent Messages');
       for (const msg of recent) {
         const role = msg.role === 'user' ? '👤' : '🤖';
-        console.error(`  ${role} ${msg.text.slice(0, 100)}${msg.text.length > 100 ? '...' : ''}`);
+        console.error(
+          `  ${role} ${msg.text.slice(0, 100)}${msg.text.length > 100 ? '...' : ''}`,
+        );
       }
     }
 
@@ -583,16 +667,24 @@ async function main() {
 
   if (results.chatgpt) {
     const r = results.chatgpt;
-    console.error(`ChatGPT: ${r.success ? '✅ 成功' : '❌ 失敗'} (${formatNumber(r.elapsed)}ms)`);
+    console.error(
+      `ChatGPT: ${r.success ? '✅ 成功' : '❌ 失敗'} (${formatNumber(r.elapsed)}ms)`,
+    );
     if (r.answer) {
-      console.error(`  回答: ${r.answer.slice(0, 80)}${r.answer.length > 80 ? '...' : ''}`);
+      console.error(
+        `  回答: ${r.answer.slice(0, 80)}${r.answer.length > 80 ? '...' : ''}`,
+      );
     }
     if (r.relevance) {
-      console.error(`  関連性: ${r.relevance.matchRate}% (${r.relevance.matchedKeywords.join(', ') || 'なし'})`);
+      console.error(
+        `  関連性: ${r.relevance.matchRate}% (${r.relevance.matchedKeywords.join(', ') || 'なし'})`,
+      );
     }
     if (r.timings) {
       const t = r.timings;
-      console.error(`  内訳: 接続=${formatNumber(t.connectMs)}ms, 入力=${formatNumber(t.waitInputMs + t.inputMs)}ms, 送信待機=${formatNumber(t.sendMs)}ms, 応答=${formatNumber(t.waitResponseMs)}ms`);
+      console.error(
+        `  内訳: 接続=${formatNumber(t.connectMs)}ms, 入力=${formatNumber(t.waitInputMs + t.inputMs)}ms, 送信待機=${formatNumber(t.sendMs)}ms, 応答=${formatNumber(t.waitResponseMs)}ms`,
+      );
     }
     if (!r.success && r.error) {
       console.error(`  エラー: ${r.error}`);
@@ -601,17 +693,27 @@ async function main() {
 
   if (results.gemini) {
     const r = results.gemini;
-    console.error(`Gemini:  ${r.success ? '✅ 成功' : '❌ 失敗'} (${formatNumber(r.elapsed)}ms)`);
+    console.error(
+      `Gemini:  ${r.success ? '✅ 成功' : '❌ 失敗'} (${formatNumber(r.elapsed)}ms)`,
+    );
     if (r.answer) {
-      console.error(`  回答: ${r.answer.slice(0, 80)}${r.answer.length > 80 ? '...' : ''}`);
+      console.error(
+        `  回答: ${r.answer.slice(0, 80)}${r.answer.length > 80 ? '...' : ''}`,
+      );
     }
     if (r.relevance) {
-      console.error(`  関連性: ${r.relevance.matchRate}% (${r.relevance.matchedKeywords.join(', ') || 'なし'})`);
+      console.error(
+        `  関連性: ${r.relevance.matchRate}% (${r.relevance.matchedKeywords.join(', ') || 'なし'})`,
+      );
     }
     if (r.timings) {
       const t = r.timings;
-      const navPart = t.navigateMs ? `, ナビ=${formatNumber(t.navigateMs)}ms` : '';
-      console.error(`  内訳: 接続=${formatNumber(t.connectMs)}ms${navPart}, 入力=${formatNumber(t.waitInputMs + t.inputMs)}ms, 送信待機=${formatNumber(t.sendMs)}ms, 応答=${formatNumber(t.waitResponseMs)}ms`);
+      const navPart = t.navigateMs
+        ? `, ナビ=${formatNumber(t.navigateMs)}ms`
+        : '';
+      console.error(
+        `  内訳: 接続=${formatNumber(t.connectMs)}ms${navPart}, 入力=${formatNumber(t.waitInputMs + t.inputMs)}ms, 送信待機=${formatNumber(t.sendMs)}ms, 応答=${formatNumber(t.waitResponseMs)}ms`,
+      );
     }
     if (!r.success && r.error) {
       console.error(`  エラー: ${r.error}`);

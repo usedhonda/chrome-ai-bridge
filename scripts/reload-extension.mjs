@@ -17,7 +17,9 @@
 import fs from 'node:fs';
 
 const RELAY_INFO_PATH = '/tmp/chrome-ai-bridge-relay.json';
-const DISCOVERY_PORTS = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
+const DISCOVERY_PORTS = [
+  38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775,
+];
 const TIMEOUT_MS = 3000;
 
 async function tryReload(port) {
@@ -56,7 +58,9 @@ async function main() {
         if (await tryReload(relayPort)) {
           return;
         }
-        console.log(`[reload-ext] Relay info port ${relayPort} failed, scanning all ports...`);
+        console.log(
+          `[reload-ext] Relay info port ${relayPort} failed, scanning all ports...`,
+        );
       } else {
         console.log('[reload-ext] Relay info is stale, scanning all ports...');
         fs.unlinkSync(RELAY_INFO_PATH);
@@ -74,7 +78,9 @@ async function main() {
     }
   }
 
-  console.log('[reload-ext] No active Chrome AI Bridge server found on any discovery port (skipping)');
+  console.log(
+    '[reload-ext] No active Chrome AI Bridge server found on any discovery port (skipping)',
+  );
 }
 
 main();

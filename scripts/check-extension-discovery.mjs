@@ -21,7 +21,12 @@ function parsePorts(spec) {
       const [rawStart, rawEnd] = part.split('-', 2).map(s => s.trim());
       const start = Number(rawStart);
       const end = Number(rawEnd);
-      if (!Number.isInteger(start) || !Number.isInteger(end) || start <= 0 || end <= 0) {
+      if (
+        !Number.isInteger(start) ||
+        !Number.isInteger(end) ||
+        start <= 0 ||
+        end <= 0
+      ) {
         throw new Error(`Invalid port range "${part}"`);
       }
       const lower = Math.min(start, end);
@@ -50,19 +55,29 @@ async function fetchRelayInfo(port, fetchTimeoutMs) {
       return {ok: false, reason: `http-${response.status}`};
     }
     const payload = await response.json().catch(() => null);
-    if (!payload || typeof payload.wsUrl !== 'string' || payload.wsUrl.length === 0) {
+    if (
+      !payload ||
+      typeof payload.wsUrl !== 'string' ||
+      payload.wsUrl.length === 0
+    ) {
       return {ok: false, reason: 'invalid-payload'};
     }
     return {ok: true, payload};
   } catch (error) {
-    if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      error.name === 'AbortError'
+    ) {
       return {ok: false, reason: 'timeout'};
     }
     return {
       ok: false,
-      reason: error && typeof error === 'object' && 'message' in error
-        ? String(error.message)
-        : String(error),
+      reason:
+        error && typeof error === 'object' && 'message' in error
+          ? String(error.message)
+          : String(error),
     };
   } finally {
     clearTimeout(timer);
@@ -113,7 +128,9 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
 
-  const details = ports.map(port => `${port}:${failures.get(port) || 0}`).join(', ');
+  const details = ports
+    .map(port => `${port}:${failures.get(port) || 0}`)
+    .join(', ');
   process.stderr.write(
     `No extension discovery endpoint responded within ${timeoutMs}ms. attempts={${details}}\n`,
   );

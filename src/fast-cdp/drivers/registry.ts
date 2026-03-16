@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Driver Registry
  *
  * Manages registration and lookup of site drivers.
@@ -19,9 +24,14 @@ const drivers = new Map<string, RegisteredDriver>();
  * @param meta - Driver metadata including URL patterns
  * @param factory - Factory function to create driver instances
  */
-export function registerDriver(meta: DriverMeta, factory: () => SiteDriver): void {
+export function registerDriver(
+  meta: DriverMeta,
+  factory: () => SiteDriver,
+): void {
   if (drivers.has(meta.name)) {
-    console.warn(`[registry] Driver ${meta.name} already registered, overwriting`);
+    console.warn(
+      `[registry] Driver ${meta.name} already registered, overwriting`,
+    );
   }
   drivers.set(meta.name, {meta, factory});
 }

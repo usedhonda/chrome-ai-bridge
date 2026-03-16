@@ -13,8 +13,9 @@
  * - TTL-based cleanup of stale sessions
  */
 
-import {CdpClient} from './cdp-client.js';
-import {RelayServer} from '../extension/relay-server.js';
+import type {RelayServer} from '../extension/relay-server.js';
+
+import type {CdpClient} from './cdp-client.js';
 
 /**
  * Connection state for a single agent
@@ -72,7 +73,9 @@ export function generateAgentId(clientName?: string): string {
  */
 export function setAgentId(id: string): void {
   if (currentAgentId !== null && currentAgentId !== id) {
-    console.error(`[agent-context] Warning: Agent ID changed from ${currentAgentId} to ${id}`);
+    console.error(
+      `[agent-context] Warning: Agent ID changed from ${currentAgentId} to ${id}`,
+    );
   }
   currentAgentId = id;
   console.error(`[agent-context] Agent ID set: ${id}`);
@@ -118,7 +121,9 @@ export function getAgentConnection(): AgentConnection {
       lastAccess: new Date(),
     };
     agentConnections.set(agentId, conn);
-    console.error(`[agent-context] Created new connection for agent: ${agentId}`);
+    console.error(
+      `[agent-context] Created new connection for agent: ${agentId}`,
+    );
   }
 
   // Update last access time

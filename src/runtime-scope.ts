@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Runtime scope utilities.
  *
  * By default, scope is derived from the current git root (or cwd fallback),
@@ -6,10 +11,10 @@
  * This isolates lock files between different projects using the same chrome-ai-bridge instance.
  */
 
+import {execFileSync} from 'node:child_process';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import process from 'node:process';
-import {execFileSync} from 'node:child_process';
 
 function detectScopePath(): string {
   const envScope = String(process.env.CAI_SCOPE_PATH || '').trim();
@@ -18,16 +23,12 @@ function detectScopePath(): string {
   }
 
   try {
-    const gitRoot = execFileSync(
-      'git',
-      ['rev-parse', '--show-toplevel'],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 1500,
-      },
-    ).trim();
+    const gitRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1500,
+    }).trim();
     if (gitRoot) {
       return path.resolve(gitRoot);
     }
@@ -61,4 +62,3 @@ export function getRuntimeNamespace(): string {
     .slice(0, 12);
   return `scope-${hash}`;
 }
-

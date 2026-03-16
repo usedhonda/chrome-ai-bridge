@@ -17,34 +17,36 @@ async function exploreDom() {
     console.error('接続成功\n');
 
     // デフォルトの探索セレクター
-    const defaultSelectors = target === 'chatgpt'
-      ? [
-          // メッセージ関連
-          '[data-message-author-role]',
-          '[data-message-id]',
-          'article',
-          '.agent-turn',
-          '.user-turn',
-          '.message',
-          // コンテナ
-          '[class*="conversation"]',
-          '[class*="thread"]',
-          'main',
-          // 入力関連
-          '.ProseMirror',
-          'textarea',
-          '[data-testid="send-button"]',
-          '[data-testid="stop-button"]',
-        ]
-      : [
-          // Gemini用
-          'model-response',
-          'user-query',
-          '[role="textbox"]',
-          'div[contenteditable="true"]',
-        ];
+    const defaultSelectors =
+      target === 'chatgpt'
+        ? [
+            // メッセージ関連
+            '[data-message-author-role]',
+            '[data-message-id]',
+            'article',
+            '.agent-turn',
+            '.user-turn',
+            '.message',
+            // コンテナ
+            '[class*="conversation"]',
+            '[class*="thread"]',
+            'main',
+            // 入力関連
+            '.ProseMirror',
+            'textarea',
+            '[data-testid="send-button"]',
+            '[data-testid="stop-button"]',
+          ]
+        : [
+            // Gemini用
+            'model-response',
+            'user-query',
+            '[role="textbox"]',
+            'div[contenteditable="true"]',
+          ];
 
-    const selectors = customSelectors.length > 0 ? customSelectors : defaultSelectors;
+    const selectors =
+      customSelectors.length > 0 ? customSelectors : defaultSelectors;
 
     console.error('調査するセレクター:', selectors.join(', '));
     console.error('');
@@ -75,7 +77,9 @@ async function exploreDom() {
       if (result.count > 0) {
         console.error(`✅ ${selector}: ${result.count}件`);
         for (const sample of result.samples) {
-          console.error(`   <${sample.tag}> ${sample.id ? '#' + sample.id : ''} .${sample.classes.join('.')}`);
+          console.error(
+            `   <${sample.tag}> ${sample.id ? '#' + sample.id : ''} .${sample.classes.join('.')}`,
+          );
           if (Object.keys(sample.attrs).length > 0) {
             console.error(`      attrs: ${JSON.stringify(sample.attrs)}`);
           }
@@ -114,12 +118,13 @@ async function exploreDom() {
     `);
 
     for (const el of structure) {
-      console.error(`  <${el.tag}> .${el.classes.join('.')} [${el.childCount} children]`);
+      console.error(
+        `  <${el.tag}> .${el.classes.join('.')} [${el.childCount} children]`,
+      );
       if (Object.keys(el.attrs).length > 0) {
         console.error(`    ${JSON.stringify(el.attrs)}`);
       }
     }
-
   } catch (err) {
     console.error('エラー:', err.message);
     process.exit(1);

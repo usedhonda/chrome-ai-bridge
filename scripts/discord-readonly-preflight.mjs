@@ -25,14 +25,25 @@ const PERM = {
 
 function parseChannelIds(argvChannels, argvChannelsCsv, envChannelsCsv) {
   const fromArgList = Array.isArray(argvChannels)
-    ? argvChannels.map(String).map(s => s.trim()).filter(Boolean)
+    ? argvChannels
+        .map(String)
+        .map(s => s.trim())
+        .filter(Boolean)
     : [];
-  const fromArgCsv = typeof argvChannelsCsv === 'string'
-    ? argvChannelsCsv.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
-  const fromEnvCsv = typeof envChannelsCsv === 'string'
-    ? envChannelsCsv.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const fromArgCsv =
+    typeof argvChannelsCsv === 'string'
+      ? argvChannelsCsv
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
+  const fromEnvCsv =
+    typeof envChannelsCsv === 'string'
+      ? envChannelsCsv
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
   return [...new Set([...fromArgList, ...fromArgCsv, ...fromEnvCsv])];
 }
 
@@ -135,7 +146,9 @@ async function main() {
     .help()
     .parseSync();
 
-  const token = String(argv.token || process.env.DISCORD_BOT_TOKEN || '').trim();
+  const token = String(
+    argv.token || process.env.DISCORD_BOT_TOKEN || '',
+  ).trim();
   if (!token) {
     throw new Error('Missing token. Provide --token or DISCORD_BOT_TOKEN.');
   }
@@ -145,16 +158,23 @@ async function main() {
     argv.channels,
     process.env.DISCORD_CHANNEL_IDS,
   );
-  const envChannelUrls = typeof process.env.DISCORD_CHANNEL_URLS === 'string'
-    ? process.env.DISCORD_CHANNEL_URLS.split(',').map(s => s.trim()).filter(Boolean)
-    : [];
+  const envChannelUrls =
+    typeof process.env.DISCORD_CHANNEL_URLS === 'string'
+      ? process.env.DISCORD_CHANNEL_URLS.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : [];
   const channelIdsFromUrls = parseChannelIdsFromUrls([
     ...(Array.isArray(argv['channel-url']) ? argv['channel-url'] : []),
     ...envChannelUrls,
   ]);
-  const dedupedChannelIds = [...new Set([...channelIds, ...channelIdsFromUrls])];
+  const dedupedChannelIds = [
+    ...new Set([...channelIds, ...channelIdsFromUrls]),
+  ];
   if (dedupedChannelIds.length === 0) {
-    throw new Error('No channel IDs provided. Use --channel or DISCORD_CHANNEL_IDS.');
+    throw new Error(
+      'No channel IDs provided. Use --channel or DISCORD_CHANNEL_IDS.',
+    );
   }
 
   const me = await discordGet(token, '/users/@me');
@@ -164,40 +184,57 @@ async function main() {
   for (const channelId of dedupedChannelIds) {
     try {
       const channel = await discordGet(token, `/channels/${channelId}`);
-      const permissions = channel.permissions ? String(channel.permissions) : '';
+      const permissions = channel.permissions
+        ? String(channel.permissions)
+        : '';
 
       const canView = hasPermission(permissions, PERM.VIEW_CHANNEL);
-      const canReadHistory = hasPermission(permissions, PERM.READ_MESSAGE_HISTORY);
+      const canReadHistory = hasPermission(
+        permissions,
+        PERM.READ_MESSAGE_HISTORY,
+      );
       const canSend = hasPermission(permissions, PERM.SEND_MESSAGES);
       const canSendThreads = hasPermission(
         permissions,
         PERM.SEND_MESSAGES_IN_THREADS,
       );
-      const canManageMessages = hasPermission(permissions, PERM.MANAGE_MESSAGES);
+      const canManageMessages = hasPermission(
+        permissions,
+        PERM.MANAGE_MESSAGES,
+      );
 
       // Ensure history endpoint is accessible.
       await discordGet(token, `/channels/${channelId}/messages`, {limit: 1});
 
       const checks = [];
       checks.push(`view=${canView === null ? 'unknown' : String(canView)}`);
-      checks.push(`read_history=${canReadHistory === null ? 'unknown' : String(canReadHistory)}`);
+      checks.push(
+        `read_history=${canReadHistory === null ? 'unknown' : String(canReadHistory)}`,
+      );
       checks.push(`send=${canSend === null ? 'unknown' : String(canSend)}`);
-      checks.push(`send_threads=${canSendThreads === null ? 'unknown' : String(canSendThreads)}`);
-      checks.push(`manage_messages=${canManageMessages === null ? 'unknown' : String(canManageMessages)}`);
+      checks.push(
+        `send_threads=${canSendThreads === null ? 'unknown' : String(canSendThreads)}`,
+      );
+      checks.push(
+        `manage_messages=${canManageMessages === null ? 'unknown' : String(canManageMessages)}`,
+      );
 
       console.log(
         `[preflight] PASS channel=${channelId} name=${channel.name || 'n/a'} ${checks.join(' ')}`,
       );
 
-      if (canSend === true || canSendThreads === true || canManageMessages === true) {
+      if (
+        canSend === true ||
+        canSendThreads === true ||
+        canManageMessages === true
+      ) {
         console.log(
           `[preflight] WARN channel=${channelId} write/manage permission appears enabled. For strict read-only, deny send/manage perms.`,
         );
       }
     } catch (error) {
       hadError = true;
-      const message =
-        error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
       console.error(`[preflight] FAIL channel=${channelId} error=${message}`);
     }
   }

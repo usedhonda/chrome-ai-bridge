@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Manifest Loader
  *
  * Loads and validates the driver manifest file.
@@ -6,8 +11,8 @@
  */
 
 import {readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,7 +58,10 @@ export function loadManifest(): Manifest {
     return {
       version: '1.0.0',
       drivers: [
-        {name: 'chatgpt', match: ['https://chatgpt.com/*', 'https://chat.openai.com/*']},
+        {
+          name: 'chatgpt',
+          match: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
+        },
         {name: 'gemini', match: ['https://gemini.google.com/*']},
       ],
     };

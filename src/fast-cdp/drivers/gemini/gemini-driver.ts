@@ -1,4 +1,9 @@
 /**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * Gemini Driver
  *
  * Handles Gemini-specific DOM interactions for sending prompts
@@ -12,6 +17,7 @@ import type {
   ExtractResult,
   DriverOptions,
 } from '../types.js';
+
 import {GEMINI_SELECTORS} from './selectors.js';
 
 /**
@@ -28,7 +34,10 @@ export class GeminiDriver extends BaseDriver {
     const sanitized = JSON.stringify(text);
 
     // Input the text using Shadow DOM traversal
-    const inputResult = await this.evaluateWithUtils<{ok: boolean; error?: string}>(`
+    const inputResult = await this.evaluateWithUtils<{
+      ok: boolean;
+      error?: string;
+    }>(`
       const text = ${sanitized};
       const textbox = __collectDeep(['[role="textbox"]', 'div[contenteditable="true"]', 'textarea']).nodes[0];
 
@@ -57,14 +66,20 @@ export class GeminiDriver extends BaseDriver {
     `);
 
     if (!inputResult.ok) {
-      return {success: false, error: inputResult.error || 'Failed to input text'};
+      return {
+        success: false,
+        error: inputResult.error || 'Failed to input text',
+      };
     }
 
     // Wait for input to be processed
     await this.sleep(200);
 
     // Find and click send button
-    const clickResult = await this.evaluateWithUtils<{clicked: boolean; error?: string}>(`
+    const clickResult = await this.evaluateWithUtils<{
+      clicked: boolean;
+      error?: string;
+    }>(`
       const buttons = __collectDeep(['button', '[role="button"]']).nodes
         .filter(__isVisible)
         .filter(el => !__isDisabled(el));
@@ -94,7 +109,10 @@ export class GeminiDriver extends BaseDriver {
     `);
 
     if (!clickResult.clicked) {
-      return {success: false, error: clickResult.error || 'Failed to click send button'};
+      return {
+        success: false,
+        error: clickResult.error || 'Failed to click send button',
+      };
     }
 
     this.log('Prompt sent');
@@ -201,7 +219,10 @@ export class GeminiDriver extends BaseDriver {
       }
 
       // Text stability check
-      if (state.lastResponseTextLength === lastTextLength && lastTextLength > 0) {
+      if (
+        state.lastResponseTextLength === lastTextLength &&
+        lastTextLength > 0
+      ) {
         textStableCount++;
         if (textStableCount >= 6 && !state.hasStopButton) {
           // Text stable for 3 seconds and no stop button
@@ -222,8 +243,11 @@ export class GeminiDriver extends BaseDriver {
   /**
    * Extract the latest response from Gemini
    */
-  async extractResponse(options?: DriverOptions): Promise<ExtractResult> {
-    const result = await this.evaluateWithUtils<{text: string; evidence: string}>(`
+  async extractResponse(_options?: DriverOptions): Promise<ExtractResult> {
+    const result = await this.evaluateWithUtils<{
+      text: string;
+      evidence: string;
+    }>(`
       // Method 1: Find response via feedback button location
       const feedbackImgs = __collectDeep(['img[alt="thumb_up"]', 'img[alt="thumb_down"]']).nodes;
       const thumbUpImg = feedbackImgs.find(img => img.alt === 'thumb_up') || feedbackImgs[0];
@@ -300,9 +324,7 @@ export class GeminiDriver extends BaseDriver {
  */
 export const GEMINI_DRIVER_META = {
   name: 'gemini',
-  urlPatterns: [
-    'https://gemini.google.com/*',
-  ],
+  urlPatterns: ['https://gemini.google.com/*'],
   description: 'Gemini by Google',
 };
 

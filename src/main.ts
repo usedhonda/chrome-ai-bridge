@@ -13,28 +13,20 @@
  */
 
 import assert from 'node:assert';
-import fs from 'node:fs';
-import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-
 import {randomUUID} from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
 
 import {parseArguments} from './cli.js';
+import {getIpcGuardConfig, getSessionConfig, IPC_CONFIG} from './config.js';
+import {generateAgentId, setAgentId} from './fast-cdp/agent-context.js';
+import {cleanupAllConnections} from './fast-cdp/fast-chat.js';
+import {cleanupStaleSessions} from './fast-cdp/session-manager.js';
 import {logger, saveLogsToFile} from './logger.js';
 import {Mutex} from './Mutex.js';
 import {ToolRegistry} from './plugin-api.js';
-import {
-  registerOptionalTools,
-  WEB_LLM_TOOLS_INFO,
-} from './tools/optional-tools.js';
-import {getFastContext} from './fast-cdp/fast-context.js';
-import {cleanupAllConnections} from './fast-cdp/fast-chat.js';
-import {askAI} from './tools/ai-helpers.js';
-import type {AIKind} from './tools/ai-helpers.js';
-import {generateAgentId, setAgentId} from './fast-cdp/agent-context.js';
-import {cleanupStaleSessions} from './fast-cdp/session-manager.js';
-import {getIpcGuardConfig, getSessionConfig, IPC_CONFIG} from './config.js';
 import {
   releaseLock,
   tryAcquireLockSafe,
@@ -42,6 +34,12 @@ import {
   getLockNamespace,
   cleanupOrphanBridgeProcesses,
 } from './process-lock.js';
+import {askAI} from './tools/ai-helpers.js';
+import type {AIKind} from './tools/ai-helpers.js';
+import {
+  registerOptionalTools,
+  WEB_LLM_TOOLS_INFO,
+} from './tools/optional-tools.js';
 
 function readPackageJson(): {version?: string} {
   const currentDir = import.meta.dirname;
@@ -91,7 +89,8 @@ function countLocalBridgeInstances(): number {
     return lines.filter(
       line =>
         line.includes('chrome-ai-bridge') &&
-        (line.includes('build/src/main.js') || line.includes('scripts/cli.mjs')),
+        (line.includes('build/src/main.js') ||
+          line.includes('scripts/cli.mjs')),
     ).length;
   } catch {
     return 0;
@@ -103,7 +102,9 @@ async function applyStartupJitterIfNeeded(): Promise<void> {
   if (instanceCount < ipcGuardConfig.startupProcessThreshold) {
     return;
   }
-  const delayMs = Math.floor(Math.random() * ipcGuardConfig.startupDelayJitterMs);
+  const delayMs = Math.floor(
+    Math.random() * ipcGuardConfig.startupDelayJitterMs,
+  );
   logger(
     `[main] High startup concurrency detected (${instanceCount} processes). Applying jitter=${delayMs}ms.`,
   );
@@ -124,13 +125,17 @@ for (let attempt = 0; attempt < MAX_STARTUP_ATTEMPTS; attempt++) {
     const backoff = BASE_DELAY_MS * Math.pow(2, attempt);
     const jitter = Math.random() * BASE_DELAY_MS;
     const delay = backoff + jitter;
-    logger(`[main] Startup attempt ${attempt + 1}/${MAX_STARTUP_ATTEMPTS} failed. Retrying in ${Math.round(delay)}ms...`);
+    logger(
+      `[main] Startup attempt ${attempt + 1}/${MAX_STARTUP_ATTEMPTS} failed. Retrying in ${Math.round(delay)}ms...`,
+    );
     await new Promise(r => setTimeout(r, delay));
   }
 }
 
 if (!becamePrimary) {
-  logger('[main] Failed to acquire primary lock after all retries. Another instance is running. Exiting.');
+  logger(
+    '[main] Failed to acquire primary lock after all retries. Another instance is running. Exiting.',
+  );
   process.exit(1);
 }
 
@@ -144,16 +149,21 @@ const touchPrimaryActivity = (): void => {
 
 // Start session cleanup timer
 const sessionConfig = getSessionConfig();
-const cleanupTimer = setInterval(async () => {
-  try {
-    const removed = await cleanupStaleSessions();
-    if (removed > 0) {
-      logger(`[session] Cleaned up ${removed} stale sessions`);
+const cleanupTimer = setInterval(
+  async () => {
+    try {
+      const removed = await cleanupStaleSessions();
+      if (removed > 0) {
+        logger(`[session] Cleaned up ${removed} stale sessions`);
+      }
+    } catch (error) {
+      logger(
+        `[session] Cleanup error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-  } catch (error) {
-    logger(`[session] Cleanup error: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}, sessionConfig.cleanupIntervalMinutes * 60 * 1000);
+  },
+  sessionConfig.cleanupIntervalMinutes * 60 * 1000,
+);
 cleanupTimer.unref();
 
 const logDisclaimers = () => {
@@ -193,7 +203,9 @@ async function maybeRunToolSelfCleanup(): Promise<void> {
   toolSelfCleanupInFlight = (async () => {
     const cleaned = await cleanupOrphanBridgeProcesses();
     if (cleaned > 0) {
-      logger(`[main] Tool-triggered orphan cleanup removed ${cleaned} process(es).`);
+      logger(
+        `[main] Tool-triggered orphan cleanup removed ${cleaned} process(es).`,
+      );
     }
   })()
     .catch(error => {
@@ -254,30 +266,50 @@ const httpServer = http.createServer(async (req, res) => {
     req.on('end', async () => {
       touchPrimaryActivity();
       await maybeRunToolSelfCleanup();
-      let parsed: {target?: string; question?: string; debug?: boolean; budgetMs?: number};
+      let parsed: {
+        target?: string;
+        question?: string;
+        debug?: boolean;
+        budgetMs?: number;
+      };
       try {
         parsed = body ? JSON.parse(body) : {};
       } catch {
-        res.writeHead(400, {'Content-Type': 'application/json'}).end(
-          JSON.stringify({success: false, error: 'Invalid JSON'}),
-        );
+        res
+          .writeHead(400, {'Content-Type': 'application/json'})
+          .end(JSON.stringify({success: false, error: 'Invalid JSON'}));
         return;
       }
 
-      const {target, question, debug: debugFlag, budgetMs: requestBudgetMs} = parsed;
+      const {
+        target,
+        question,
+        debug: debugFlag,
+        budgetMs: requestBudgetMs,
+      } = parsed;
       const effectiveBudgetMs = requestBudgetMs ?? 300000;
       if (!target || !question) {
-        res.writeHead(400, {'Content-Type': 'application/json'}).end(
-          JSON.stringify({success: false, error: 'Missing required fields: target, question'}),
-        );
+        res
+          .writeHead(400, {'Content-Type': 'application/json'})
+          .end(
+            JSON.stringify({
+              success: false,
+              error: 'Missing required fields: target, question',
+            }),
+          );
         return;
       }
 
       const validTargets = ['chatgpt', 'gemini', 'both'];
       if (!validTargets.includes(target)) {
-        res.writeHead(400, {'Content-Type': 'application/json'}).end(
-          JSON.stringify({success: false, error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`}),
-        );
+        res
+          .writeHead(400, {'Content-Type': 'application/json'})
+          .end(
+            JSON.stringify({
+              success: false,
+              error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`,
+            }),
+          );
         return;
       }
 
@@ -288,21 +320,32 @@ const httpServer = http.createServer(async (req, res) => {
             askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
             askAI('gemini', question, debugFlag, effectiveBudgetMs),
           ]);
-          res.writeHead(200, {'Content-Type': 'application/json'}).end(
-            JSON.stringify({success: true, results: [chatgptResult, geminiResult]}),
-          );
+          res
+            .writeHead(200, {'Content-Type': 'application/json'})
+            .end(
+              JSON.stringify({
+                success: true,
+                results: [chatgptResult, geminiResult],
+              }),
+            );
         } else {
-          const result = await askAI(target as AIKind, question, debugFlag, effectiveBudgetMs);
-          res.writeHead(200, {'Content-Type': 'application/json'}).end(
-            JSON.stringify({success: result.success, results: [result]}),
+          const result = await askAI(
+            target as AIKind,
+            question,
+            debugFlag,
+            effectiveBudgetMs,
           );
+          res
+            .writeHead(200, {'Content-Type': 'application/json'})
+            .end(JSON.stringify({success: result.success, results: [result]}));
         }
       } catch (error) {
-        const errorText = error instanceof Error ? error.message : String(error);
+        const errorText =
+          error instanceof Error ? error.message : String(error);
         if (!res.headersSent) {
-          res.writeHead(500, {'Content-Type': 'application/json'}).end(
-            JSON.stringify({success: false, error: errorText}),
-          );
+          res
+            .writeHead(500, {'Content-Type': 'application/json'})
+            .end(JSON.stringify({success: false, error: errorText}));
         }
       } finally {
         guard.dispose();
@@ -316,17 +359,24 @@ const httpServer = http.createServer(async (req, res) => {
 
 function onListening(): void {
   const addr = httpServer.address();
-  const actualPort = typeof addr === 'object' && addr ? addr.port : IPC_CONFIG.port;
+  const actualPort =
+    typeof addr === 'object' && addr ? addr.port : IPC_CONFIG.port;
   if (actualPort !== IPC_CONFIG.port) {
-    logger(`[http] Configured port ${IPC_CONFIG.port} was unavailable. Using dynamic port ${actualPort}.`);
+    logger(
+      `[http] Configured port ${IPC_CONFIG.port} was unavailable. Using dynamic port ${actualPort}.`,
+    );
     updateLockPort(actualPort);
   }
-  logger(`[http] HTTP listening on http://${IPC_CONFIG.host}:${actualPort} (health: ${IPC_CONFIG.healthPath}, api: /api/ask)`);
+  logger(
+    `[http] HTTP listening on http://${IPC_CONFIG.host}:${actualPort} (health: ${IPC_CONFIG.healthPath}, api: /api/ask)`,
+  );
 }
 
 httpServer.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
-    logger(`[http] Port ${IPC_CONFIG.port} in use. Retrying with dynamic port...`);
+    logger(
+      `[http] Port ${IPC_CONFIG.port} in use. Retrying with dynamic port...`,
+    );
     httpServer.listen(0, IPC_CONFIG.host, onListening);
   } else {
     logger(`[http] HTTP server error: ${err.message}`);
@@ -342,7 +392,7 @@ if (ipcGuardConfig.primaryIdleMs > 0) {
       logger(
         `[main] Primary idle for ${Math.round((Date.now() - primaryLastActivityAt) / 1000)}s. Auto-exiting.`,
       );
-      shutdown('idle timeout');
+      void shutdown('idle timeout');
     }
   }, 30_000);
   primaryIdleCheckTimer.unref();
@@ -354,15 +404,25 @@ if (ipcGuardConfig.primaryIdleMs > 0) {
 
 let isShuttingDown = false;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${label} timed out after ${ms}ms`));
     }, ms);
     timer.unref();
     promise.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (error) => { clearTimeout(timer); reject(error); }
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      },
     );
   });
 }
@@ -387,7 +447,9 @@ async function shutdown(reason: string): Promise<void> {
   try {
     await withTimeout(cleanupAllConnections(), 3000, 'cleanupAllConnections');
   } catch (error) {
-    logger(`Cleanup error: ${error instanceof Error ? error.message : String(error)}`);
+    logger(
+      `Cleanup error: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   // Close log file

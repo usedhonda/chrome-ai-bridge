@@ -25,8 +25,8 @@
 import type {ToolRegistry} from '../plugin-api.js';
 
 import * as cdpSnapshotTools from './cdp-snapshot.js';
-import * as chatgptWebTools from './chatgpt-web.js';
 import * as chatgptGeminiWebTools from './chatgpt-gemini-web.js';
+import * as chatgptWebTools from './chatgpt-web.js';
 import * as geminiWebTools from './gemini-web.js';
 
 /**
@@ -44,9 +44,12 @@ export const optionalTools = [
  * Returns false if CAI_DISABLE_WEB_LLM is set to 'true'.
  */
 export function shouldLoadWebLlmTools(): boolean {
-  const disable = process.env.CAI_DISABLE_WEB_LLM || process.env.MCP_DISABLE_WEB_LLM;
+  const disable =
+    process.env.CAI_DISABLE_WEB_LLM || process.env.MCP_DISABLE_WEB_LLM;
   if (process.env.MCP_DISABLE_WEB_LLM && !process.env.CAI_DISABLE_WEB_LLM) {
-    console.error('[deprecation] MCP_DISABLE_WEB_LLM is deprecated, use CAI_DISABLE_WEB_LLM instead');
+    console.error(
+      '[deprecation] MCP_DISABLE_WEB_LLM is deprecated, use CAI_DISABLE_WEB_LLM instead',
+    );
   }
   return disable !== 'true' && disable !== '1';
 }

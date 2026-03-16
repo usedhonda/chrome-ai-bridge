@@ -6,7 +6,8 @@
 
 import z from 'zod';
 
-import {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+import type {ChatDebugInfo} from '../fast-cdp/fast-chat.js';
+
 import {askAI} from './ai-helpers.js';
 import {ToolCategories} from './categories.js';
 import {defineTool} from './ToolDefinition.js';
@@ -25,22 +26,34 @@ function formatDebugInfo(debug: ChatDebugInfo): string {
   lines.push('');
   lines.push(`#### Markdowns (${debug.dom.markdowns.length})`);
   debug.dom.markdowns.forEach((md, i) => {
-    lines.push(`[${i}] class="${md.className}" thinking=${md.isResultThinking}`);
-    lines.push(`    innerText (${md.innerTextLength} chars): "${md.innerText.slice(0, 200)}${md.innerText.length > 200 ? '...' : ''}"`);
+    lines.push(
+      `[${i}] class="${md.className}" thinking=${md.isResultThinking}`,
+    );
+    lines.push(
+      `    innerText (${md.innerTextLength} chars): "${md.innerText.slice(0, 200)}${md.innerText.length > 200 ? '...' : ''}"`,
+    );
   });
   lines.push('');
   lines.push('#### Last Article');
   lines.push('innerHTML:');
-  lines.push(debug.dom.lastArticleHtml.slice(0, 2000) + (debug.dom.lastArticleHtml.length > 2000 ? '...' : ''));
+  lines.push(
+    debug.dom.lastArticleHtml.slice(0, 2000) +
+      (debug.dom.lastArticleHtml.length > 2000 ? '...' : ''),
+  );
   lines.push('');
   lines.push('innerText:');
-  lines.push(debug.dom.lastArticleInnerText.slice(0, 1000) + (debug.dom.lastArticleInnerText.length > 1000 ? '...' : ''));
+  lines.push(
+    debug.dom.lastArticleInnerText.slice(0, 1000) +
+      (debug.dom.lastArticleInnerText.length > 1000 ? '...' : ''),
+  );
   lines.push('');
   lines.push('### Extraction');
   lines.push('Selectors tried:');
   debug.extraction.selectorsTried.forEach(s => {
     const status = s.found ? '✓' : '✗';
-    lines.push(`  ${status} ${s.selector} → ${s.textLength} chars${s.found && debug.extraction.finalSelector === s.selector ? ' (used)' : ''}`);
+    lines.push(
+      `  ${status} ${s.selector} → ${s.textLength} chars${s.found && debug.extraction.finalSelector === s.selector ? ' (used)' : ''}`,
+    );
   });
   if (debug.extraction.fallbackUsed) {
     lines.push(`Fallback used: ${debug.extraction.fallbackUsed}`);
@@ -48,7 +61,9 @@ function formatDebugInfo(debug: ChatDebugInfo): string {
   lines.push('');
   lines.push('### Timings');
   const t = debug.timings;
-  lines.push(`connect: ${t.connectMs}ms | input: ${t.waitInputMs}ms | send: ${t.sendMs}ms | response: ${t.waitResponseMs}ms | total: ${t.totalMs}ms`);
+  lines.push(
+    `connect: ${t.connectMs}ms | input: ${t.waitInputMs}ms | send: ${t.sendMs}ms | response: ${t.waitResponseMs}ms | total: ${t.totalMs}ms`,
+  );
 
   return lines.join('\n');
 }
@@ -70,8 +85,13 @@ export const askChatGPTWeb = defineTool({
     debug: z
       .boolean()
       .optional()
-      .describe('Return detailed debug info (DOM structure, extraction attempts, timings)'),
-    projectName: z.string().optional().describe('Unused (kept for compatibility)'),
+      .describe(
+        'Return detailed debug info (DOM structure, extraction attempts, timings)',
+      ),
+    projectName: z
+      .string()
+      .optional()
+      .describe('Unused (kept for compatibility)'),
     createNewChat: z
       .boolean()
       .optional()

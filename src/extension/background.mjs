@@ -17,7 +17,8 @@ let currentLogLevel = LOG_LEVEL.DEBUG;
  */
 function log(level, category, message, data = {}) {
   const timestamp = new Date().toISOString();
-  const levelName = Object.keys(LOG_LEVEL).find(k => LOG_LEVEL[k] === level) || 'INFO';
+  const levelName =
+    Object.keys(LOG_LEVEL).find(k => LOG_LEVEL[k] === level) || 'INFO';
   const entry = {timestamp, level: levelName, category, message, data};
 
   // Console output
@@ -71,7 +72,9 @@ class RelayConnection {
     this._debuggee = {};
     this._ws = ws;
     this._closed = false;
-    this._tabPromise = new Promise(resolve => (this._tabPromiseResolve = resolve));
+    this._tabPromise = new Promise(
+      resolve => (this._tabPromiseResolve = resolve),
+    );
     this._eventListener = this._onDebuggerEvent.bind(this);
     this._detachListener = this._onDebuggerDetach.bind(this);
     this._ws.onmessage = this._onMessage.bind(this);
@@ -142,14 +145,17 @@ class RelayConnection {
       message = JSON.parse(event.data);
     } catch (error) {
       this._sendMessage({
-        error: {code: -32700, message: `Error parsing message: ${error.message}`},
+        error: {
+          code: -32700,
+          message: `Error parsing message: ${error.message}`,
+        },
       });
       return;
     }
 
     // Handle keep-alive ping from relay server
     if (message.type === 'ping') {
-      this._sendMessage({ type: 'pong' });
+      this._sendMessage({type: 'pong'});
       logDebug('keepalive', 'Received ping, sent pong');
       return;
     }
@@ -166,18 +172,18 @@ class RelayConnection {
   async _handleCommand(message) {
     if (message.method === 'getVersion') {
       const manifest = chrome.runtime.getManifest();
-      return { version: manifest.version, name: manifest.name };
+      return {version: manifest.version, name: manifest.name};
     }
     if (message.method === 'reloadExtension') {
       logInfo('reload', 'reloadExtension command received');
       // Set flag so the reloaded service worker skips cooldown
-      chrome.storage.local.set({ _reloadTriggered: Date.now() }).catch(() => {});
+      chrome.storage.local.set({_reloadTriggered: Date.now()}).catch(() => {});
       // Delay reload to allow response to be sent first
       setTimeout(() => {
         logInfo('reload', 'Calling chrome.runtime.reload()');
         chrome.runtime.reload();
       }, 100);
-      return { success: true, message: 'Extension reload initiated' };
+      return {success: true, message: 'Extension reload initiated'};
     }
     if (message.method === 'attachToTab') {
       await this._tabPromise;
@@ -202,7 +208,9 @@ class RelayConnection {
         this._debuggee,
         'Target.getTargetInfo',
       );
-      logInfo('attach', 'Target info after attach', {targetInfo: result?.targetInfo});
+      logInfo('attach', 'Target info after attach', {
+        targetInfo: result?.targetInfo,
+      });
       return {targetInfo: result?.targetInfo};
     }
     if (!this._debuggee.tabId) {
@@ -339,18 +347,27 @@ class TabShareExtension {
     const pendingKey = this._getPendingKey(selectorTabId, sessionId);
     const existingPending = this._pendingTabSelection.get(pendingKey);
     if (existingPending?.connection) {
-      logInfo('relay', 'Replacing stale pending connection', {pendingKey, sessionId, selectorTabId});
+      logInfo('relay', 'Replacing stale pending connection', {
+        pendingKey,
+        sessionId,
+        selectorTabId,
+      });
       existingPending.connection.close('Pending connection replaced');
       this._pendingTabSelection.delete(pendingKey);
       ensureKeepAliveAlarm('replace-stale-pending');
     }
-    logInfo('relay', 'Connecting to relay', {relayUrl, selectorTabId, sessionId, pendingKey});
+    logInfo('relay', 'Connecting to relay', {
+      relayUrl,
+      selectorTabId,
+      sessionId,
+      pendingKey,
+    });
 
     const openSocket = async attempt => {
       const socket = new WebSocket(relayUrl);
       await new Promise((resolve, reject) => {
         let settled = false;
-        const finish = (handler) => {
+        const finish = handler => {
           if (settled) {
             return;
           }
@@ -378,12 +395,20 @@ class TabShareExtension {
             } catch {
               // ignore
             }
-            reject(new Error(`WS_OPEN_ERROR: WebSocket error (attempt=${attempt + 1})`));
+            reject(
+              new Error(
+                `WS_OPEN_ERROR: WebSocket error (attempt=${attempt + 1})`,
+              ),
+            );
           });
         };
         socket.onclose = () => {
           finish(() => {
-            reject(new Error(`WS_OPEN_CLOSED: Socket closed before open (attempt=${attempt + 1})`));
+            reject(
+              new Error(
+                `WS_OPEN_CLOSED: Socket closed before open (attempt=${attempt + 1})`,
+              ),
+            );
           });
         };
       });
@@ -393,16 +418,20 @@ class TabShareExtension {
     let lastError;
     const maxAttempts = 5;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      logDebug('relay', `WebSocket attempt ${attempt + 1}/${maxAttempts}`, {relayUrl});
+      logDebug('relay', `WebSocket attempt ${attempt + 1}/${maxAttempts}`, {
+        relayUrl,
+      });
       try {
         socket = await openSocket(attempt);
         logInfo('relay', 'WebSocket connected', {attempt: attempt + 1});
         break;
       } catch (error) {
         lastError = error;
-        logWarn('relay', `WebSocket attempt ${attempt + 1} failed`, {error: error.message});
+        logWarn('relay', `WebSocket attempt ${attempt + 1} failed`, {
+          error: error.message,
+        });
         if (attempt < maxAttempts - 1) {
-          const baseDelay = Math.min(300 * (2 ** attempt), 3000);
+          const baseDelay = Math.min(300 * 2 ** attempt, 3000);
           const jitter = Math.floor(Math.random() * 200);
           const waitMs = baseDelay + jitter;
           await new Promise(resolve => setTimeout(resolve, waitMs));
@@ -410,17 +439,31 @@ class TabShareExtension {
       }
     }
     if (!socket) {
-      logError('relay', 'All WebSocket attempts failed', {lastError: lastError?.message});
+      logError('relay', 'All WebSocket attempts failed', {
+        lastError: lastError?.message,
+      });
       throw lastError || new Error('WebSocket error');
     }
     const connection = new RelayConnection(socket);
     connection.onclose = () => {
-      logInfo('relay', 'Connection closed', {selectorTabId, sessionId, pendingKey});
+      logInfo('relay', 'Connection closed', {
+        selectorTabId,
+        sessionId,
+        pendingKey,
+      });
       this._pendingTabSelection.delete(pendingKey);
       ensureKeepAliveAlarm('relay-connection-closed');
     };
-    this._pendingTabSelection.set(pendingKey, {connection, sessionId, selectorTabId});
-    logInfo('relay', 'Relay connection established', {selectorTabId, sessionId, pendingKey});
+    this._pendingTabSelection.set(pendingKey, {
+      connection,
+      sessionId,
+      selectorTabId,
+    });
+    logInfo('relay', 'Relay connection established', {
+      selectorTabId,
+      sessionId,
+      pendingKey,
+    });
     ensureKeepAliveAlarm('relay-connected');
   }
 
@@ -482,7 +525,11 @@ class TabShareExtension {
 
     const pending = this._pendingTabSelection.get(pendingKey);
     if (!pending) {
-      logDebug('connect', 'No pending connection, creating relay', {selectorTabId, sessionId, relayUrl});
+      logDebug('connect', 'No pending connection, creating relay', {
+        selectorTabId,
+        sessionId,
+        relayUrl,
+      });
       // If no pending connection, create one now.
       await this._connectToRelay(selectorTabId, relayUrl, sessionId);
     }
@@ -519,19 +566,35 @@ class TabShareExtension {
     };
     this._activeConnections.set(tabId, connection);
     this._tabSessionOwners.set(tabId, sessionId || `selector:${selectorTabId}`);
-    logInfo('connect', 'Tab connected successfully', {tabId, windowId, sessionId});
+    logInfo('connect', 'Tab connected successfully', {
+      tabId,
+      windowId,
+      sessionId,
+    });
     ensureKeepAliveAlarm('tab-connected');
     // バッジのみ設定（フォーカスはサーバー側が必要に応じて制御）
     await this._setConnectedTab(tabId, true);
   }
 
   async _resolveTabId(tabUrl, tabId, newTab, active = true) {
-    logDebug('resolve', '_resolveTabId called', {tabUrl, tabId, newTab, active});
+    logDebug('resolve', '_resolveTabId called', {
+      tabUrl,
+      tabId,
+      newTab,
+      active,
+    });
 
     // デバッグ: 全タブの一覧を取得
     const allTabs = await chrome.tabs.query({});
-    const tabSummary = allTabs.map(t => ({id: t.id, url: t.url?.slice(0, 60), active: t.active}));
-    logInfo('resolve', 'All tabs', {count: allTabs.length, tabs: tabSummary.slice(0, 10)});
+    const tabSummary = allTabs.map(t => ({
+      id: t.id,
+      url: t.url?.slice(0, 60),
+      active: t.active,
+    }));
+    logInfo('resolve', 'All tabs', {
+      count: allTabs.length,
+      tabs: tabSummary.slice(0, 10),
+    });
 
     // Priority 1: If tabId is provided, try to use it directly
     // Note: newTab flag is ignored - always prefer existing tabs to prevent tab spam
@@ -548,11 +611,14 @@ class TabShareExtension {
           logDebug('resolve', 'Tab URL mismatch, continuing search', {
             tabId,
             expectedHost: urlObj.hostname,
-            actualUrl: tab.url
+            actualUrl: tab.url,
           });
         }
       } catch (error) {
-        logDebug('resolve', 'Tab not found by tabId (may be closed)', {tabId, error: error.message});
+        logDebug('resolve', 'Tab not found by tabId (may be closed)', {
+          tabId,
+          error: error.message,
+        });
         // Tab may have been closed, continue with URL-based search
       }
     }
@@ -562,13 +628,19 @@ class TabShareExtension {
       const urlObj = new URL(tabUrl);
       const pattern = `*://${urlObj.hostname}${urlObj.pathname}*`;
       const tabs = await chrome.tabs.query({url: pattern});
-      logDebug('resolve', `Found ${tabs.length} matching tabs`, {pattern, tabCount: tabs.length});
+      logDebug('resolve', `Found ${tabs.length} matching tabs`, {
+        pattern,
+        tabCount: tabs.length,
+      });
       // Note: newTab flag is ignored - always prefer existing tabs to prevent tab spam
       if (tabs.length) {
         // Prefer active tab, then the most recently accessed
         const activeTab = tabs.find(tab => tab.active);
         const selectedTab = activeTab || tabs[0];
-        logInfo('resolve', 'Reusing existing tab by URL', {tabId: selectedTab.id, url: selectedTab.url});
+        logInfo('resolve', 'Reusing existing tab by URL', {
+          tabId: selectedTab.id,
+          url: selectedTab.url,
+        });
         return selectedTab.id;
       }
     } catch (error) {
@@ -601,9 +673,10 @@ class TabShareExtension {
   async _getDebugLogs(filter, limit) {
     const result = await chrome.storage.local.get('logs');
     const rawLogs = Array.isArray(result.logs) ? result.logs : [];
-    const toIso = value => (typeof value === 'number' && value > 0
-      ? new Date(value).toISOString()
-      : null);
+    const toIso = value =>
+      typeof value === 'number' && value > 0
+        ? new Date(value).toISOString()
+        : null;
     const normalized = rawLogs.map(logEntry => ({
       ts: logEntry.timestamp || logEntry.ts || new Date().toISOString(),
       category: logEntry.category || 'unknown',
@@ -723,7 +796,9 @@ class TabShareExtension {
           const existed = this._pendingTabSelection.delete(pendingKey);
           if (existed) {
             pending.connection.close('Tab inactive for 30 seconds');
-            chrome.tabs.sendMessage(pending.selectorTabId, {type: 'connectionTimeout'});
+            chrome.tabs.sendMessage(pending.selectorTabId, {
+              type: 'connectionTimeout',
+            });
           }
         }, 30000);
       }
@@ -742,7 +817,9 @@ const tabShareExtension = new TabShareExtension();
 const DISCOVERY_ALARM = 'cab-relay-discovery';
 const KEEPALIVE_ALARM = 'keepAlive';
 const KEEPALIVE_PERIOD_MINUTES = 0.5;
-const DISCOVERY_PORTS = [38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775];
+const DISCOVERY_PORTS = [
+  38765, 38766, 38767, 38768, 38769, 38770, 38771, 38772, 38773, 38774, 38775,
+];
 const DISCOVERY_MODE = {
   FAST: 'fast',
   NORMAL: 'normal',
@@ -785,17 +862,23 @@ const COOLDOWN_MS = 5000;
 let cooldownDisabled = false;
 
 // Check if this is a reload triggered by reloadExtension command
-chrome.storage.local.get('_reloadTriggered').then(result => {
-  if (result._reloadTriggered) {
-    const age = Date.now() - result._reloadTriggered;
-    if (age < 10000) {  // Within 10 seconds of reload trigger
-      cooldownDisabled = true;
-      logInfo('discovery', 'Cooldown disabled (reloadExtension triggered)', {age});
+chrome.storage.local
+  .get('_reloadTriggered')
+  .then(result => {
+    if (result._reloadTriggered) {
+      const age = Date.now() - result._reloadTriggered;
+      if (age < 10000) {
+        // Within 10 seconds of reload trigger
+        cooldownDisabled = true;
+        logInfo('discovery', 'Cooldown disabled (reloadExtension triggered)', {
+          age,
+        });
+      }
+      // Clear the flag
+      chrome.storage.local.remove('_reloadTriggered').catch(() => {});
     }
-    // Clear the flag
-    chrome.storage.local.remove('_reloadTriggered').catch(() => {});
-  }
-}).catch(() => {});
+  })
+  .catch(() => {});
 
 // ユーザー操作によるDiscoveryかどうかのフラグ
 // Chrome起動時やService Worker再起動時はfalse、アイコンクリック時のみtrue
@@ -838,20 +921,32 @@ function ensureKeepAliveAlarm(reason = 'state-change') {
   }
   const {activeCount, pendingCount} = getConnectionCounts();
   if (needed) {
-    chrome.alarms.create(KEEPALIVE_ALARM, {periodInMinutes: KEEPALIVE_PERIOD_MINUTES});
+    chrome.alarms.create(KEEPALIVE_ALARM, {
+      periodInMinutes: KEEPALIVE_PERIOD_MINUTES,
+    });
     keepAliveActive = true;
-    logInfo('keepalive', 'Enabled keepAlive alarm', {reason, activeCount, pendingCount});
+    logInfo('keepalive', 'Enabled keepAlive alarm', {
+      reason,
+      activeCount,
+      pendingCount,
+    });
     return;
   }
   chrome.alarms.clear(KEEPALIVE_ALARM).catch(() => {
     // Ignore errors - alarm may not exist.
   });
   keepAliveActive = false;
-  logInfo('keepalive', 'Disabled keepAlive alarm', {reason, activeCount, pendingCount});
+  logInfo('keepalive', 'Disabled keepAlive alarm', {
+    reason,
+    activeCount,
+    pendingCount,
+  });
 }
 
 function getDiscoveryIntervalMs(mode = discoveryMode) {
-  return DISCOVERY_INTERVAL_MS[mode] || DISCOVERY_INTERVAL_MS[DISCOVERY_MODE.FAST];
+  return (
+    DISCOVERY_INTERVAL_MS[mode] || DISCOVERY_INTERVAL_MS[DISCOVERY_MODE.FAST]
+  );
 }
 
 function setDiscoveryMode(nextMode, reason) {
@@ -877,7 +972,6 @@ function getDiscoveryPortsByPriority() {
     ...DISCOVERY_PORTS.filter(port => port !== lastSuccessfulPort),
   ];
 }
-
 
 function buildConnectUrl(
   wsUrl,
@@ -986,11 +1080,16 @@ async function fetchRelayInfo(port, timeoutMs = 800) {
 async function autoConnectRelay(best) {
   const tabUrl = best?.data?.tabUrl;
   const preferredTabId = best?.data?.tabId;
-  logDebug('auto-connect', 'autoConnectRelay called', {port: best?.port, tabUrl, tabId: preferredTabId, newTab: best?.data?.newTab});
+  logDebug('auto-connect', 'autoConnectRelay called', {
+    port: best?.port,
+    tabUrl,
+    tabId: preferredTabId,
+    newTab: best?.data?.newTab,
+  });
 
   if (!tabUrl) {
     logDebug('auto-connect', 'No tabUrl, skipping');
-    return false;  // tabUrl がなければ失敗
+    return false; // tabUrl がなければ失敗
   }
 
   if (best?.port) {
@@ -998,7 +1097,10 @@ async function autoConnectRelay(best) {
     if (refreshed?.wsUrl) {
       best.data = refreshed;
       lastSuccessfulPort = best.port;
-      logDebug('auto-connect', 'Refreshed relay info', {wsUrl: refreshed.wsUrl, tabId: refreshed.tabId});
+      logDebug('auto-connect', 'Refreshed relay info', {
+        wsUrl: refreshed.wsUrl,
+        tabId: refreshed.tabId,
+      });
     }
   }
 
@@ -1013,10 +1115,14 @@ async function autoConnectRelay(best) {
       tabUrl,
       preferredTabId,
       requestedNewTab,
-      false,  // active: false - 自動接続時はタブをフォーカスしない
+      false, // active: false - 自動接続時はタブをフォーカスしない
     );
   } catch (error) {
-    logError('auto-connect', 'Failed to resolve tab', {tabUrl, tabId: preferredTabId, error: error.message});
+    logError('auto-connect', 'Failed to resolve tab', {
+      tabUrl,
+      tabId: preferredTabId,
+      error: error.message,
+    });
     return false;
   }
   if (!targetTabId) {
@@ -1024,12 +1130,19 @@ async function autoConnectRelay(best) {
     return false;
   }
   if (tabShareExtension._activeConnections?.has(targetTabId)) {
-    const existingSessionId = tabShareExtension._tabSessionOwners?.get(targetTabId);
+    const existingSessionId =
+      tabShareExtension._tabSessionOwners?.get(targetTabId);
     const newSessionId = best?.data?.sessionId;
-    if (existingSessionId && newSessionId && existingSessionId !== newSessionId) {
+    if (
+      existingSessionId &&
+      newSessionId &&
+      existingSessionId !== newSessionId
+    ) {
       // Different session wants the same tab — replace the old connection
       logInfo('auto-connect', 'Replacing stale connection with newer session', {
-        targetTabId, oldSession: existingSessionId, newSession: newSessionId,
+        targetTabId,
+        oldSession: existingSessionId,
+        newSession: newSessionId,
       });
       const oldConn = tabShareExtension._activeConnections.get(targetTabId);
       if (oldConn) {
@@ -1056,7 +1169,11 @@ async function autoConnectRelay(best) {
   });
 
   try {
-    await tabShareExtension._connectToRelay(selectorId, best.data.wsUrl, sessionId);
+    await tabShareExtension._connectToRelay(
+      selectorId,
+      best.data.wsUrl,
+      sessionId,
+    );
     await tabShareExtension._connectTab(
       selectorId,
       targetTabId,
@@ -1072,7 +1189,10 @@ async function autoConnectRelay(best) {
       lastSuccessfulPort = best.port;
     }
   } catch (err) {
-    logError('auto-connect', 'autoConnectRelay failed', {error: err.message, tabUrl});
+    logError('auto-connect', 'autoConnectRelay failed', {
+      error: err.message,
+      tabUrl,
+    });
     debugLog('autoConnectRelay failed:', err);
     if (best?.port) {
       lastRelayByPort.delete(best.port);
@@ -1094,7 +1214,10 @@ async function autoOpenConnectUi() {
   // ただし reloadExtension コマンド経由の場合はスキップしない
   const elapsed = Date.now() - extensionStartTime;
   if (elapsed < COOLDOWN_MS && !cooldownDisabled) {
-    logDebug('discovery', `Cooldown active (${elapsed}ms < ${COOLDOWN_MS}ms), skipping`);
+    logDebug(
+      'discovery',
+      `Cooldown active (${elapsed}ms < ${COOLDOWN_MS}ms), skipping`,
+    );
     result.skippedCooldown = true;
     return result;
   }
@@ -1121,7 +1244,12 @@ async function autoOpenConnectUi() {
       continue;
     }
 
-    logInfo('discovery', 'New relay detected', {port, tabUrl: data.tabUrl, wsUrl: data.wsUrl, startedAt});
+    logInfo('discovery', 'New relay detected', {
+      port,
+      tabUrl: data.tabUrl,
+      wsUrl: data.wsUrl,
+      startedAt,
+    });
     lastRelayByPort.set(port, {
       wsUrl: data.wsUrl,
       startedAt,
@@ -1146,7 +1274,13 @@ async function autoOpenConnectUi() {
     logInfo('discovery', 'Deduped relays by tabUrl (preferring newest)', {
       before: newRelays.length,
       after: dedupedRelays.length,
-      dropped: newRelays.filter(r => !dedupedRelays.includes(r)).map(r => ({port: r.port, tabUrl: r.data?.tabUrl, startedAt: r.data?.startedAt})),
+      dropped: newRelays
+        .filter(r => !dedupedRelays.includes(r))
+        .map(r => ({
+          port: r.port,
+          tabUrl: r.data?.tabUrl,
+          startedAt: r.data?.startedAt,
+        })),
     });
   }
 
@@ -1158,13 +1292,19 @@ async function autoOpenConnectUi() {
 
   // 全ての新しい relay を処理（並列ではなく順次）
   for (const relay of dedupedRelays) {
-    logInfo('discovery', 'Processing relay', {port: relay.port, tabUrl: relay.data.tabUrl});
+    logInfo('discovery', 'Processing relay', {
+      port: relay.port,
+      tabUrl: relay.data.tabUrl,
+    });
     debugLog('Processing new relay:', relay.port, relay.data.tabUrl);
     let ok = false;
     try {
       ok = await autoConnectRelay(relay);
     } catch (err) {
-      logError('discovery', 'autoConnectRelay error', {error: err.message, port: relay.port});
+      logError('discovery', 'autoConnectRelay error', {
+        error: err.message,
+        port: relay.port,
+      });
       debugLog('autoConnectRelay error:', err);
       ok = false;
     }
@@ -1176,7 +1316,7 @@ async function autoOpenConnectUi() {
       if (userTriggered) {
         logInfo('discovery', 'Opening connect UI', {
           port: relay.port,
-          tabUrl: relay.data.tabUrl
+          tabUrl: relay.data.tabUrl,
         });
         await ensureConnectUiTab(
           relay.data.wsUrl,
@@ -1186,12 +1326,12 @@ async function autoOpenConnectUi() {
           relay.data.sessionId || undefined,
           Boolean(relay.data.allowTabTakeover),
         );
-        userTriggeredDiscovery = false;  // Reset after opening
+        userTriggeredDiscovery = false; // Reset after opening
         userTriggeredDiscoveryUntil = 0;
       } else {
         logDebug('discovery', 'Skipping connect UI (auto mode)', {
           port: relay.port,
-          tabUrl: relay.data.tabUrl
+          tabUrl: relay.data.tabUrl,
         });
       }
       continue;
@@ -1213,11 +1353,14 @@ async function autoOpenConnectUi() {
 
 // Clear any existing discovery alarms from previous sessions
 // This prevents leftover alarms from auto-opening tabs
-chrome.alarms.clear(DISCOVERY_ALARM).then(() => {
-  logInfo('background', 'Cleared existing discovery alarm (if any)');
-}).catch(() => {
-  // Ignore errors - alarm may not exist
-});
+chrome.alarms
+  .clear(DISCOVERY_ALARM)
+  .then(() => {
+    logInfo('background', 'Cleared existing discovery alarm (if any)');
+  })
+  .catch(() => {
+    // Ignore errors - alarm may not exist
+  });
 
 function updateDiscoveryMode(result) {
   const {activeCount, pendingCount} = getConnectionCounts();
@@ -1264,48 +1407,51 @@ function scheduleDiscoveryTick(delayMs) {
   if (discoveryIntervalId !== null) {
     return;
   }
-  discoveryIntervalId = setTimeout(async () => {
-    discoveryIntervalId = null;
+  discoveryIntervalId = setTimeout(
+    async () => {
+      discoveryIntervalId = null;
 
-    if (isDiscoveryRunning) {
+      if (isDiscoveryRunning) {
+        scheduleDiscoveryTick(getDiscoveryIntervalMs());
+        return;
+      }
+
+      isDiscoveryRunning = true;
+      lastDiscoveryTickStartedAt = Date.now();
+      lastDiscoveryError = null;
+      lastDiscoverySummary = null;
+      try {
+        const result = await autoOpenConnectUi();
+        lastDiscoverySummary = {
+          ...result,
+          mode: discoveryMode,
+          intervalMs: getDiscoveryIntervalMs(),
+        };
+        updateDiscoveryMode(result);
+      } catch (error) {
+        lastDiscoveryError =
+          error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : String(error);
+        logWarn('discovery', 'Discovery cycle failed', {
+          error: lastDiscoveryError,
+        });
+        emptyDiscoveryStreak = 0;
+        setDiscoveryMode(DISCOVERY_MODE.FAST, 'cycle-error');
+      } finally {
+        lastDiscoveryTickFinishedAt = Date.now();
+        lastDiscoveryTickDurationMs =
+          lastDiscoveryTickFinishedAt - lastDiscoveryTickStartedAt;
+        isDiscoveryRunning = false;
+      }
+
       scheduleDiscoveryTick(getDiscoveryIntervalMs());
-      return;
-    }
-
-    isDiscoveryRunning = true;
-    lastDiscoveryTickStartedAt = Date.now();
-    lastDiscoveryError = null;
-    lastDiscoverySummary = null;
-    try {
-      const result = await autoOpenConnectUi();
-      lastDiscoverySummary = {
-        ...result,
-        mode: discoveryMode,
-        intervalMs: getDiscoveryIntervalMs(),
-      };
-      updateDiscoveryMode(result);
-    } catch (error) {
-      lastDiscoveryError =
-        error && typeof error === 'object' && 'message' in error
-          ? String(error.message)
-          : String(error);
-      logWarn('discovery', 'Discovery cycle failed', {
-        error: lastDiscoveryError,
-      });
-      emptyDiscoveryStreak = 0;
-      setDiscoveryMode(DISCOVERY_MODE.FAST, 'cycle-error');
-    } finally {
-      lastDiscoveryTickFinishedAt = Date.now();
-      lastDiscoveryTickDurationMs =
-        lastDiscoveryTickFinishedAt - lastDiscoveryTickStartedAt;
-      isDiscoveryRunning = false;
-    }
-
-    scheduleDiscoveryTick(getDiscoveryIntervalMs());
-    // Must run AFTER scheduleDiscoveryTick so discoveryIntervalId is set,
-    // otherwise shouldKeepAlive() returns false and clears the alarm.
-    ensureKeepAliveAlarm('discovery-cycle');
-  }, Math.max(0, delayMs));
+      // Must run AFTER scheduleDiscoveryTick so discoveryIntervalId is set,
+      // otherwise shouldKeepAlive() returns false and clears the alarm.
+      ensureKeepAliveAlarm('discovery-cycle');
+    },
+    Math.max(0, delayMs),
+  );
 }
 
 function scheduleDiscovery() {
@@ -1335,7 +1481,7 @@ function kickDiscovery(reason) {
   scheduleDiscovery();
 }
 
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === KEEPALIVE_ALARM) {
     lastKeepAliveAlarmAt = Date.now();
     const {activeCount, pendingCount} = getConnectionCounts();
@@ -1365,7 +1511,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Start discovery when user clicks extension icon
 chrome.action.onClicked.addListener(() => {
   logInfo('action', 'Extension icon clicked - starting discovery');
-  userTriggeredDiscovery = true;  // ユーザーが明示的にトリガー
+  userTriggeredDiscovery = true; // ユーザーが明示的にトリガー
   userTriggeredDiscoveryUntil = Date.now() + 15000;
   kickDiscovery('user-click');
 });
@@ -1379,7 +1525,7 @@ chrome.runtime.onStartup.addListener(() => {
   logInfo('background', 'Chrome started - starting discovery');
   scheduleDiscovery();
 });
-scheduleDiscovery();  // Start immediately
+scheduleDiscovery(); // Start immediately
 // Ensure keepAlive is active from the start to prevent SW termination during discovery
 ensureKeepAliveAlarm('startup');
 

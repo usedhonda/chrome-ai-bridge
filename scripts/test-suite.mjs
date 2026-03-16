@@ -16,7 +16,7 @@ import {
 } from '../build/src/fast-cdp/fast-chat.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import {fileURLToPath} from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,7 +35,9 @@ async function askGeminiWithRetry(question, debug) {
 
       // GEMINI_STUCK_* エラーの場合はリトライ
       if (error.message?.includes('GEMINI_STUCK_') && attempt < maxRetries) {
-        console.error(`[test-suite] Gemini stuck error on attempt ${attempt}, retrying...`);
+        console.error(
+          `[test-suite] Gemini stuck error on attempt ${attempt}, retrying...`,
+        );
         continue;
       }
 
@@ -100,7 +102,12 @@ const debug = args.includes('--debug');
 // タグフィルター（--smoke, --regression など）
 const reservedFlags = ['debug', 'help', 'list', 'h'];
 const tagFilters = args
-  .filter(a => a.startsWith('--') && !a.includes('=') && !reservedFlags.includes(a.slice(2)))
+  .filter(
+    a =>
+      a.startsWith('--') &&
+      !a.includes('=') &&
+      !reservedFlags.includes(a.slice(2)),
+  )
   .map(a => a.slice(2));
 
 /**
@@ -112,7 +119,8 @@ export function extractKeywords(question) {
   const keywords = [];
 
   // 英語の技術用語を抽出
-  const englishTerms = question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
+  const englishTerms =
+    question.match(/[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)*/g) || [];
   for (const term of englishTerms) {
     if (term.length >= 2) {
       keywords.push(term.toLowerCase());
@@ -142,7 +150,7 @@ export function calculateRelevance(question, answer) {
 
   const answerLower = answer.toLowerCase();
   const matchedKeywords = keywords.filter(kw =>
-    answerLower.includes(kw.toLowerCase())
+    answerLower.includes(kw.toLowerCase()),
   );
 
   return matchedKeywords.length / keywords.length;
@@ -156,19 +164,21 @@ export function calculateRelevance(question, answer) {
  * @returns {object} - 検証結果
  */
 export async function validateAssertions(assertions, response, question) {
-  const results = { allPassed: true, checks: [] };
+  const results = {allPassed: true, checks: []};
 
   // 並列クエリの場合
   if (response.chatgpt && response.gemini) {
     // bothMustSucceed チェック
     if (assertions.bothMustSucceed) {
-      const chatgptOk = response.chatgpt.answer && response.chatgpt.answer.length > 0;
-      const geminiOk = response.gemini.answer && response.gemini.answer.length > 0;
+      const chatgptOk =
+        response.chatgpt.answer && response.chatgpt.answer.length > 0;
+      const geminiOk =
+        response.gemini.answer && response.gemini.answer.length > 0;
       const passed = chatgptOk && geminiOk;
       results.checks.push({
         name: 'bothMustSucceed',
         passed,
-        actual: { chatgpt: chatgptOk, gemini: geminiOk },
+        actual: {chatgpt: chatgptOk, gemini: geminiOk},
       });
       if (!passed) results.allPassed = false;
     }
@@ -177,11 +187,13 @@ export async function validateAssertions(assertions, response, question) {
     if (assertions.minAnswerLength) {
       const chatgptLen = response.chatgpt.answer?.length || 0;
       const geminiLen = response.gemini.answer?.length || 0;
-      const passed = chatgptLen >= assertions.minAnswerLength && geminiLen >= assertions.minAnswerLength;
+      const passed =
+        chatgptLen >= assertions.minAnswerLength &&
+        geminiLen >= assertions.minAnswerLength;
       results.checks.push({
         name: 'minAnswerLength',
         passed,
-        actual: { chatgpt: chatgptLen, gemini: geminiLen },
+        actual: {chatgpt: chatgptLen, gemini: geminiLen},
         expected: assertions.minAnswerLength,
       });
       if (!passed) results.allPassed = false;
@@ -267,8 +279,10 @@ export async function validateAssertions(assertions, response, question) {
  * @returns {object} - 実行結果
  */
 async function runScenario(scenario) {
-  const question = scenario.question.template
-    .replace('{{timestamp}}', Date.now().toString(36));
+  const question = scenario.question.template.replace(
+    '{{timestamp}}',
+    Date.now().toString(36),
+  );
 
   const provider = scenario.provider;
   const result = {
@@ -291,11 +305,15 @@ async function runScenario(scenario) {
         askChatGPTFastWithTimings(question, debug),
         askGeminiWithRetry(question, debug),
       ]);
-      response = { chatgpt, gemini };
+      response = {chatgpt, gemini};
     }
 
     // アサーション検証
-    result.details = await validateAssertions(scenario.assertions, response, question);
+    result.details = await validateAssertions(
+      scenario.assertions,
+      response,
+      question,
+    );
     result.passed = result.details.allPassed;
     result.response = response;
     result.endTime = new Date().toISOString();
@@ -323,13 +341,22 @@ function formatNumber(num) {
  */
 async function main() {
   // テスト開始前にGeminiセッションをクリア（前回のテストの残りを防ぐ）
-  const sessionsPath = path.join(process.cwd(), '.local', 'chrome-ai-bridge', 'sessions.json');
+  const sessionsPath = path.join(
+    process.cwd(),
+    '.local',
+    'chrome-ai-bridge',
+    'sessions.json',
+  );
   try {
     const sessionsData = JSON.parse(await fs.readFile(sessionsPath, 'utf-8'));
     const project = path.basename(process.cwd());
     if (sessionsData.projects?.[project]?.gemini) {
       delete sessionsData.projects[project].gemini;
-      await fs.writeFile(sessionsPath, JSON.stringify(sessionsData, null, 2), 'utf-8');
+      await fs.writeFile(
+        sessionsPath,
+        JSON.stringify(sessionsData, null, 2),
+        'utf-8',
+      );
       console.log('[Test Suite] Cleared Gemini session from previous test run');
     }
   } catch {
@@ -381,11 +408,15 @@ async function main() {
 
     // 失敗したチェックを表示
     if (!result.passed && result.details?.checks) {
-      result.details.checks.filter(c => !c.passed).forEach(c => {
-        const actual = typeof c.actual === 'object' ? JSON.stringify(c.actual) : c.actual;
-        const expected = c.expected !== undefined ? `, expected ${c.expected}` : '';
-        console.log(`     - ${c.name}: got ${actual}${expected}`);
-      });
+      result.details.checks
+        .filter(c => !c.passed)
+        .forEach(c => {
+          const actual =
+            typeof c.actual === 'object' ? JSON.stringify(c.actual) : c.actual;
+          const expected =
+            c.expected !== undefined ? `, expected ${c.expected}` : '';
+          console.log(`     - ${c.name}: got ${actual}${expected}`);
+        });
     }
 
     // エラー表示
@@ -396,11 +427,17 @@ async function main() {
     // Geminiシナリオ後はセッションをクリア（次のテストへの影響を防ぐ）
     if (scenario.provider === 'gemini' || scenario.provider === 'both') {
       try {
-        const sessionsData = JSON.parse(await fs.readFile(sessionsPath, 'utf-8'));
+        const sessionsData = JSON.parse(
+          await fs.readFile(sessionsPath, 'utf-8'),
+        );
         const project = path.basename(process.cwd());
         if (sessionsData.projects?.[project]?.gemini) {
           delete sessionsData.projects[project].gemini;
-          await fs.writeFile(sessionsPath, JSON.stringify(sessionsData, null, 2), 'utf-8');
+          await fs.writeFile(
+            sessionsPath,
+            JSON.stringify(sessionsData, null, 2),
+            'utf-8',
+          );
         }
       } catch {
         // セッションファイルがない場合は無視
@@ -420,16 +457,25 @@ async function main() {
   }
 
   // レポート保存
-  const reportDir = path.join(process.cwd(), '.local', 'chrome-ai-bridge', 'test-reports');
-  await fs.mkdir(reportDir, { recursive: true });
+  const reportDir = path.join(
+    process.cwd(),
+    '.local',
+    'chrome-ai-bridge',
+    'test-reports',
+  );
+  await fs.mkdir(reportDir, {recursive: true});
 
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+  const timestamp = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[:-]/g, '')
+    .replace('T', '_');
   const reportPath = path.join(reportDir, `${timestamp}.json`);
 
   const report = {
     version: scenariosData.version,
     timestamp: new Date().toISOString(),
-    filters: { id: filterId, tags: tagFilters },
+    filters: {id: filterId, tags: tagFilters},
     debug,
     results,
     summary: {
@@ -466,17 +512,21 @@ async function main() {
     console.log('─'.repeat(60));
     console.log('');
     console.log('失敗したシナリオ:');
-    results.filter(r => !r.passed).forEach(r => {
-      console.log(`  - ${r.name} [${r.scenario}]`);
-      if (r.error) {
-        console.log(`    Error: ${r.error}`);
-      }
-      if (r.details?.checks) {
-        r.details.checks.filter(c => !c.passed).forEach(c => {
-          console.log(`    ${c.name}: ${JSON.stringify(c.actual)}`);
-        });
-      }
-    });
+    results
+      .filter(r => !r.passed)
+      .forEach(r => {
+        console.log(`  - ${r.name} [${r.scenario}]`);
+        if (r.error) {
+          console.log(`    Error: ${r.error}`);
+        }
+        if (r.details?.checks) {
+          r.details.checks
+            .filter(c => !c.passed)
+            .forEach(c => {
+              console.log(`    ${c.name}: ${JSON.stringify(c.actual)}`);
+            });
+        }
+      });
     console.log('');
   }
 
@@ -491,8 +541,10 @@ async function main() {
 }
 
 // Only run main() when executed directly (not when imported as a module)
-const isDirectRun = process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+const isDirectRun =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) ===
+    path.resolve(fileURLToPath(import.meta.url));
 
 if (isDirectRun) {
   main().catch(err => {

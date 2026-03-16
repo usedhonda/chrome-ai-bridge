@@ -47,37 +47,48 @@ async function testCdpDom() {
     await client.send('DOM.enable');
 
     // ドキュメントルートを取得
-    const docResult = await client.send('DOM.getDocument', { depth: -1, pierce: true });
+    const docResult = await client.send('DOM.getDocument', {
+      depth: -1,
+      pierce: true,
+    });
     console.log('[3] DOM.getDocument nodeId:', docResult?.root?.nodeId);
 
     // querySelectorで.markdownを探す
     const queryResult = await client.send('DOM.querySelectorAll', {
       nodeId: docResult?.root?.nodeId,
-      selector: '.markdown'
+      selector: '.markdown',
     });
     console.log('[3] .markdown nodes:', queryResult?.nodeIds?.length);
 
     // 各.markdownのouterHTMLを取得
     if (queryResult?.nodeIds?.length > 0) {
       for (const nodeId of queryResult.nodeIds) {
-        const htmlResult = await client.send('DOM.getOuterHTML', { nodeId });
-        console.log(`[3] nodeId ${nodeId} outerHTML:`, (htmlResult?.outerHTML || '').slice(0, 200));
+        const htmlResult = await client.send('DOM.getOuterHTML', {nodeId});
+        console.log(
+          `[3] nodeId ${nodeId} outerHTML:`,
+          (htmlResult?.outerHTML || '').slice(0, 200),
+        );
       }
     }
 
     // articleも試す
     const articleResult = await client.send('DOM.querySelectorAll', {
       nodeId: docResult?.root?.nodeId,
-      selector: 'article'
+      selector: 'article',
     });
     console.log('[3] article nodes:', articleResult?.nodeIds?.length);
 
     if (articleResult?.nodeIds?.length > 0) {
-      const lastArticleId = articleResult.nodeIds[articleResult.nodeIds.length - 1];
-      const htmlResult = await client.send('DOM.getOuterHTML', { nodeId: lastArticleId });
-      console.log(`[3] last article outerHTML (first 500 chars):`, (htmlResult?.outerHTML || '').slice(0, 500));
+      const lastArticleId =
+        articleResult.nodeIds[articleResult.nodeIds.length - 1];
+      const htmlResult = await client.send('DOM.getOuterHTML', {
+        nodeId: lastArticleId,
+      });
+      console.log(
+        `[3] last article outerHTML (first 500 chars):`,
+        (htmlResult?.outerHTML || '').slice(0, 500),
+      );
     }
-
   } catch (err) {
     console.error('[3] DOM API エラー:', err.message);
   }
@@ -148,7 +159,10 @@ async function testCdpDom() {
         };
       })()
     `);
-    console.log('[6] scrollIntoView後の結果:', JSON.stringify(result4, null, 2));
+    console.log(
+      '[6] scrollIntoView後の結果:',
+      JSON.stringify(result4, null, 2),
+    );
   } catch (err) {
     console.error('[6] scrollIntoView エラー:', err.message);
   }

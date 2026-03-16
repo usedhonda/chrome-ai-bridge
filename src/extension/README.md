@@ -50,17 +50,11 @@ npm run build
   "mcpServers": {
     "chrome-ai-bridge-chatgpt": {
       "command": "node",
-      "args": [
-        "/path/to/chrome-ai-bridge/scripts/cli.mjs",
-        "--attachTab=101"
-      ]
+      "args": ["/path/to/chrome-ai-bridge/scripts/cli.mjs", "--attachTab=101"]
     },
     "chrome-ai-bridge-gemini": {
       "command": "node",
-      "args": [
-        "/path/to/chrome-ai-bridge/scripts/cli.mjs",
-        "--attachTab=102"
-      ]
+      "args": ["/path/to/chrome-ai-bridge/scripts/cli.mjs", "--attachTab=102"]
     }
   }
 }
@@ -139,6 +133,7 @@ src/extension/
 **原因**: 拡張機能がインストールされていないか、UIが開かれていない
 
 **解決策**:
+
 1. 拡張機能が正しくインストールされているか確認
 2. connect.htmlを開いてタブを選択
 
@@ -147,6 +142,7 @@ src/extension/
 **原因**: サーバーのトークンが一致しない
 
 **解決策**:
+
 1. サーバーのログからトークンを確認
 2. URLパラメータに正しいトークンを含める
 
@@ -155,6 +151,7 @@ src/extension/
 **原因**: 指定したタブIDが存在しない
 
 **解決策**:
+
 1. `chrome://inspect/#pages` でタブIDを確認
 2. 正しいタブIDを指定
 

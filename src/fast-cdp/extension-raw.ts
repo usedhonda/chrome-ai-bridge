@@ -1,10 +1,17 @@
+/**
+ * @license
+ * Copyright 2026 Google LLC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import {spawn} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+
 import {RelayServer} from '../extension/relay-server.js';
+
 import {logRelay, logExtension, logInfo, logError} from './debug-logger.js';
 
 // Wake connect page disabled by default — it opens a chrome-extension:// URL
@@ -14,13 +21,18 @@ const ENABLE_WAKE_CONNECT_PAGE =
   process.env.CAI_ENABLE_WAKE_CONNECT_PAGE === '1';
 const EXTENSION_ID_ALPHABET = 'abcdefghijklmnop';
 const EXTENSION_ID_PATTERN = /^[a-p]{32}$/;
-const MANIFEST_FILE_URL = new URL('../../extension/manifest.json', import.meta.url);
+const MANIFEST_FILE_URL = new URL(
+  '../../extension/manifest.json',
+  import.meta.url,
+);
 let cachedExtensionId: string | null = null;
 
 function deriveExtensionIdFromManifestKey(manifestKey: string): string {
   const derKey = Buffer.from(manifestKey, 'base64');
   if (derKey.length === 0) {
-    throw new Error('EXT_CONFIG_ERROR: manifest key is empty or invalid base64');
+    throw new Error(
+      'EXT_CONFIG_ERROR: manifest key is empty or invalid base64',
+    );
   }
   const hash = crypto.createHash('sha256').update(derKey).digest();
   let extensionId = '';
@@ -96,7 +108,8 @@ function getChromeExecutable(): string {
   } else if (platform === 'win32') {
     // Windows
     const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
-    const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+    const programFilesX86 =
+      process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
     const paths = [
       `${programFiles}\\Google\\Chrome\\Application\\chrome.exe`,
       `${programFilesX86}\\Google\\Chrome\\Application\\chrome.exe`,
@@ -154,7 +167,9 @@ function spawnChromeWithConnectUrl(connectUrl: string): boolean {
     }
     return true;
   } catch (error) {
-    console.error(`[fast-cdp] Failed to spawn Chrome: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[fast-cdp] Failed to spawn Chrome: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return false;
   }
 }
@@ -173,7 +188,8 @@ function buildConnectUrl(options: {
   params.set('relayUrl', options.wsUrl);
   params.set('sessionId', options.sessionId);
   if (options.tabUrl) params.set('tabUrl', options.tabUrl);
-  if (typeof options.tabId === 'number') params.set('tabId', String(options.tabId));
+  if (typeof options.tabId === 'number')
+    params.set('tabId', String(options.tabId));
   if (options.newTab) params.set('newTab', 'true');
   if (options.allowTabTakeover) params.set('allowTabTakeover', 'true');
   if (options.auto) params.set('auto', 'true');
@@ -227,7 +243,11 @@ export async function connectViaExtensionRaw(options: {
 
   // Start discovery server - extension will detect this and open connect.html
   // Note: Chrome spawn doesn't work for chrome-extension:// URLs, so we rely on discovery polling
-  logInfo('extension-raw', 'Starting discovery server', {tabUrl: options.tabUrl, tabId: options.tabId, newTab: options.newTab});
+  logInfo('extension-raw', 'Starting discovery server', {
+    tabUrl: options.tabUrl,
+    tabId: options.tabId,
+    newTab: options.newTab,
+  });
   const discoveryPort = await relay.startDiscoveryServer({
     tabUrl: options.tabUrl,
     tabId: options.tabId,
@@ -238,17 +258,25 @@ export async function connectViaExtensionRaw(options: {
   if (discoveryPort) {
     logInfo('extension-raw', 'Discovery server started', {discoveryPort});
     console.error(`[fast-cdp] Discovery server on port ${discoveryPort}`);
-    console.error(`[fast-cdp] Extension will auto-detect and open connect.html`);
+    console.error(
+      `[fast-cdp] Extension will auto-detect and open connect.html`,
+    );
 
     // Save relay info for reload-extension.mjs
     try {
       fs.writeFileSync(
         relayInfoPath,
-        JSON.stringify({ discoveryPort, sessionId, timestamp: Date.now() }),
+        JSON.stringify({discoveryPort, sessionId, timestamp: Date.now()}),
       );
-      logInfo('extension-raw', 'Saved relay info', { path: relayInfoPath, discoveryPort, sessionId });
+      logInfo('extension-raw', 'Saved relay info', {
+        path: relayInfoPath,
+        discoveryPort,
+        sessionId,
+      });
     } catch (err) {
-      logError('extension-raw', 'Failed to save relay info', { error: err instanceof Error ? err.message : String(err) });
+      logError('extension-raw', 'Failed to save relay info', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   } else {
     // Fallback: show manual URL
@@ -282,7 +310,9 @@ export async function connectViaExtensionRaw(options: {
             spawned,
           });
           if (spawned) {
-            console.error('[fast-cdp] Wake attempt: opened connect page in Chrome');
+            console.error(
+              '[fast-cdp] Wake attempt: opened connect page in Chrome',
+            );
           }
         }
       }, softTimeout);
@@ -291,7 +321,11 @@ export async function connectViaExtensionRaw(options: {
       const timeout = setTimeout(() => {
         clearTimeout(softTimer);
         logExtension('timeout', {elapsed: actualTimeout});
-        reject(new Error(`EXT_READY_TIMEOUT: timeoutMs=${actualTimeout} waitedMs=${actualTimeout}`));
+        reject(
+          new Error(
+            `EXT_READY_TIMEOUT: timeoutMs=${actualTimeout} waitedMs=${actualTimeout}`,
+          ),
+        );
       }, actualTimeout);
       timeout.unref();
 
@@ -307,7 +341,11 @@ export async function connectViaExtensionRaw(options: {
         clearTimeout(softTimer);
         clearTimeout(timeout);
         logExtension('disconnected', {reason: 'disconnected before ready'});
-        reject(new Error('EXT_DISCONNECTED_BEFORE_READY: Extension disconnected before ready'));
+        reject(
+          new Error(
+            'EXT_DISCONNECTED_BEFORE_READY: Extension disconnected before ready',
+          ),
+        );
       });
     });
   } catch (error) {
@@ -319,7 +357,9 @@ export async function connectViaExtensionRaw(options: {
     });
     console.error('[fast-cdp] Connection failed, cleaning up relay server');
     logRelay('stopped', {reason: 'connection failed'});
-    await relay.stop().catch(() => {});
+    await relay.stop().catch(() => {
+      /* no-op */
+    });
     throw error;
   }
 
@@ -328,7 +368,8 @@ export async function connectViaExtensionRaw(options: {
     logInfo('extension-raw', 'Attaching to tab');
     const attachResult = await relay.sendRequest('attachToTab');
     if (attachResult?.targetInfo) {
-      targetInfo = attachResult.targetInfo;
+      targetInfo =
+        attachResult.targetInfo as RawExtensionConnection['targetInfo'];
       logInfo('extension-raw', 'Tab attached successfully', {
         targetId: targetInfo?.targetId,
         type: targetInfo?.type,
@@ -338,7 +379,10 @@ export async function connectViaExtensionRaw(options: {
   } catch (attachError) {
     // best-effort; targetInfo is optional
     logError('extension-raw', 'Failed to attach to tab (non-fatal)', {
-      error: attachError instanceof Error ? attachError.message : String(attachError),
+      error:
+        attachError instanceof Error
+          ? attachError.message
+          : String(attachError),
     });
   }
 
@@ -346,8 +390,12 @@ export async function connectViaExtensionRaw(options: {
   try {
     const versionResult = await relay.sendRequest('getVersion');
     if (versionResult?.version) {
-      logInfo('extension-raw', 'Extension version', {version: versionResult.version});
-      console.error(`[fast-cdp] Extension version: ${versionResult.version}`);
+      logInfo('extension-raw', 'Extension version', {
+        version: versionResult.version as string,
+      });
+      console.error(
+        `[fast-cdp] Extension version: ${versionResult.version as string}`,
+      );
     }
   } catch {
     // best-effort; version info is optional
