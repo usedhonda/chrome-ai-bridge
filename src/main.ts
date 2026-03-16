@@ -289,27 +289,23 @@ const httpServer = http.createServer(async (req, res) => {
       } = parsed;
       const effectiveBudgetMs = requestBudgetMs ?? 300000;
       if (!target || !question) {
-        res
-          .writeHead(400, {'Content-Type': 'application/json'})
-          .end(
-            JSON.stringify({
-              success: false,
-              error: 'Missing required fields: target, question',
-            }),
-          );
+        res.writeHead(400, {'Content-Type': 'application/json'}).end(
+          JSON.stringify({
+            success: false,
+            error: 'Missing required fields: target, question',
+          }),
+        );
         return;
       }
 
       const validTargets = ['chatgpt', 'gemini', 'both'];
       if (!validTargets.includes(target)) {
-        res
-          .writeHead(400, {'Content-Type': 'application/json'})
-          .end(
-            JSON.stringify({
-              success: false,
-              error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`,
-            }),
-          );
+        res.writeHead(400, {'Content-Type': 'application/json'}).end(
+          JSON.stringify({
+            success: false,
+            error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`,
+          }),
+        );
         return;
       }
 
@@ -320,14 +316,12 @@ const httpServer = http.createServer(async (req, res) => {
             askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
             askAI('gemini', question, debugFlag, effectiveBudgetMs),
           ]);
-          res
-            .writeHead(200, {'Content-Type': 'application/json'})
-            .end(
-              JSON.stringify({
-                success: true,
-                results: [chatgptResult, geminiResult],
-              }),
-            );
+          res.writeHead(200, {'Content-Type': 'application/json'}).end(
+            JSON.stringify({
+              success: true,
+              results: [chatgptResult, geminiResult],
+            }),
+          );
         } else {
           const result = await askAI(
             target as AIKind,
