@@ -17,7 +17,7 @@ ask-ai CLI を使った AI 質問・議論スキル。chrome-ai-bridge リポジ
 ## 運用
 
 - `~/.claude/skills/ask-ai/` はこのディレクトリへのシンボリックリンク
-- cab は同リポジトリ内の `scripts/cab` を参照（相対パス）
+- cab は symlink 経由で絶対パス解決される
 
 ## ask-ai CLI 使い方（CC / Cdx 共通）
 

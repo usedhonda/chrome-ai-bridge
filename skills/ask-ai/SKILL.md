@@ -24,10 +24,10 @@ CLI 経由で実行。CC も Cdx も同じコマンド体系を使う。
 ### CLI パス
 
 ```
-skills/ask-ai/scripts/ask-ai
+~/.claude/skills/ask-ai/scripts/ask-ai
 ```
 
-（プロジェクトルートからの相対パス。シンボリックリンク経由の場合は実体パスを使用）
+（シンボリックリンク経由。全プロジェクトから到達可能）
 
 ---
 
