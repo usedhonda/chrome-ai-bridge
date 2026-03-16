@@ -1238,7 +1238,7 @@ async function askChatGPTFastInternal(question: string, debug?: boolean, budgetM
       budgetMs,
     );
     const pollIntervalMs = 1000;
-    const IDLE_TIMEOUT_MS = 30000;  // ストップボタン消失後、30秒間無活動でタイムアウト
+    const IDLE_TIMEOUT_MS = 60000;  // ストップボタン消失後、60秒間無活動でタイムアウト
     const startWait = Date.now();
     let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
     let lastLoggedState = '';
@@ -3159,7 +3159,7 @@ async function askGeminiFastInternal(question: string, debug?: boolean, budgetMs
     budgetMs,
   );
   const pollIntervalMs = 1000;
-  const IDLE_TIMEOUT_MS = 30000;  // ストップボタン消失後、30秒間無活動でタイムアウト
+  const IDLE_TIMEOUT_MS = 60000;  // ストップボタン消失後、60秒間無活動でタイムアウト
   const startWait = Date.now();
   let lastActivityAt = Date.now();  // 最後にストップボタンorテキスト成長を検出した時刻
   let lastLoggedState = '';
