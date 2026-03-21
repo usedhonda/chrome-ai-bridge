@@ -103,18 +103,18 @@ CLI 経由で実行。CC も Cdx も同じコマンド体系を使う。
 ### プロトコル
 
 ```
-Round 1: 問題提起
+Round 1: 問題提起（Gemini先行 — 高速）
 ├── Claude: 質問を設計
-├── ChatGPT: 初期回答（ask-ai chatgpt "..."）
+├── Gemini: 初期回答（ask-ai gemini "..."）
 └── Claude: 回答を評価、論点を抽出
 
-Round 2: クロス検証
-├── Claude: ChatGPTの回答をGeminiに提示
-├── Gemini: 同意/反論/補足（ask-ai gemini "..."）
+Round 2: クロス検証（ChatGPT — 深掘り）
+├── Claude: Geminiの回答を踏まえた質問を設計
+├── ChatGPT: 同意/反論/補足（ask-ai chatgpt "..."）
 └── Claude: 矛盾点・新しい視点を整理
 
 Round N: 深掘り（必要に応じて）
-├── 矛盾点を再質問
+├── 矛盾点を再質問（速度重視ならGemini、深さ重視ならChatGPT）
 └── 収束判定を行う
 
 Final: 統合判断
