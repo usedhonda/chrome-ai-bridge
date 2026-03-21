@@ -102,24 +102,37 @@ CLI 経由で実行。CC も Cdx も同じコマンド体系を使う。
 
 ### プロトコル
 
+Gemini は高速、ChatGPT は深いが遅い。この特性を活かし、**待ち時間を作業に変える**。
+
 ```
-Round 1: 問題提起（Gemini先行 — 高速）
+Round 1: Gemini で素早く方向性を掴む
 ├── Claude: 質問を設計
 ├── Gemini: 初期回答（ask-ai gemini "..."）
-└── Claude: 回答を評価、論点を抽出
+└── Claude: 回答を評価、暫定方針を立てる
 
-Round 2: クロス検証（ChatGPT — 深掘り）
-├── Claude: Geminiの回答を踏まえた質問を設計
-├── ChatGPT: 同意/反論/補足（ask-ai chatgpt "..."）
-└── Claude: 矛盾点・新しい視点を整理
+Round 2: 暫定方針で動きつつ ChatGPT を待つ
+├── Claude: Geminiの回答を踏まえた質問を ChatGPT に投げる
+│          （ask-ai chatgpt "..." — バックグラウンド実行可）
+├── 【待機中】Geminiの暫定方針をベースに作業を進める
+│   ├── コード修正、設計検討、ドキュメント作成など
+│   └── 「Gemini案で仮実装」して後から軌道修正する前提でOK
+├── ChatGPT: 回答到着
+└── Claude: ChatGPTの意見で暫定方針を検証・修正
 
 Round N: 深掘り（必要に応じて）
-├── 矛盾点を再質問（速度重視ならGemini、深さ重視ならChatGPT）
+├── 矛盾点を再質問（速度重視→Gemini、深さ重視→ChatGPT）
 └── 収束判定を行う
 
 Final: 統合判断
 └── Claude: 両者の意見を統合し、最終決定
 ```
+
+**ポイント:**
+
+- ChatGPT の応答待ち（数分〜10分超）を空白時間にしない
+- Gemini 案は「暫定」と割り切る。ChatGPT が矛盾を指摘したら軌道修正
+- バックグラウンド実行: `ask-ai chatgpt "..."` を Bash の `run_in_background` で投げ、
+  到着通知が来たら統合フェーズに入る
 
 ### クロス検証テンプレート
 
