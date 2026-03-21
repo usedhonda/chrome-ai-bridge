@@ -111,10 +111,10 @@ const CONNECT_NEWTAB_TIMEOUT_MS = Number(
   ),
 );
 const TOOL_BUDGET_MS = Number(
-  envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '300000'),
+  envWithFallback('CAI_TOOL_BUDGET_MS', 'CAI_MCP_TOOL_BUDGET_MS', '900000'),
 );
 const RESPONSE_WAIT_MAX_MS = Number(
-  process.env.CAI_RESPONSE_WAIT_MAX_MS || '300000',
+  process.env.CAI_RESPONSE_WAIT_MAX_MS || '900000',
 );
 const BUDGET_RESERVE_MS = Number(
   envWithFallback('CAI_BUDGET_RESERVE_MS', 'CAI_MCP_BUDGET_RESERVE_MS', '3000'),

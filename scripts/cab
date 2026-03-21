@@ -100,7 +100,7 @@ ask_ai() {
   response=$(curl -sf -X POST "${CAB_BASE}/api/ask" \
     -H 'Content-Type: application/json' \
     -d "$payload" \
-    --max-time 300) || {
+    --max-time 900) || {
     echo "Error: failed to connect to daemon at ${CAB_BASE}" >&2
     exit 1
   }
