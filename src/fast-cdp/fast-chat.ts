@@ -789,14 +789,15 @@ async function navigate(client: CdpClient, url: string) {
 }
 
 /** Strip conversation-specific paths (/c/<id>, /app/<id>) to prevent chat pollution on reuse */
-function getBaseUrl(kind: 'chatgpt' | 'gemini', url: string): string {
-  if (kind === 'chatgpt') {
-    return url.replace(/\/c\/[a-zA-Z0-9_-]+.*$/, '/');
+function getBaseUrl(_kind: 'chatgpt' | 'gemini', url: string): string {
+  // 会話URLをそのまま保存（/c/xxx, /app/xxx を維持）
+  // 同一エージェントセッション内で同じチャットに連続投稿できるようにする
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname; // query/hash を除去、パスは保持
+  } catch {
+    return url;
   }
-  if (kind === 'gemini') {
-    return url.replace(/\/app\/[a-zA-Z0-9_-]+.*$/, '/');
-  }
-  return url;
 }
 
 async function askChatGPTFastInternal(
@@ -1435,6 +1436,7 @@ async function askChatGPTFastInternal(
       isStillGenerating: boolean;
       hasResponseText: boolean;
       hasSkipThinkingButton: boolean;
+      hasStreamingIndicator: boolean;
       // デバッグ情報
       debug_assistantMsgsCount: number;
       debug_chatgptArticlesCount: number;
@@ -1587,6 +1589,14 @@ async function askChatGPTFastInternal(
             }
           }
 
+          // 最後のアシスタントメッセージ内のみでストリーミング指標を検出
+          // ページ全体検索は前の回答の残留クラスで偽陽性を起こすため使わない
+          const hasStreamingIndicator = Boolean(
+            lastAssistant?.querySelector('.result-streaming') ||
+            lastAssistant?.querySelector('.streaming-animation') ||
+            lastAssistant?.querySelector('.markdown.streaming-animation')
+          );
+
           // assistantMsgCount: 旧UIセレクター + 新UI(article)の両方をカウント
           const assistantCount = Math.max(assistantMsgs.length, chatgptArticles.length);
 
@@ -1694,6 +1704,7 @@ async function askChatGPTFastInternal(
             isStillGenerating,
             hasResponseText,
             hasSkipThinkingButton,
+            hasStreamingIndicator,
             // デバッグ情報
             debug_assistantMsgsCount: assistantMsgs.length,
             debug_chatgptArticlesCount: chatgptArticles.length,
@@ -1722,13 +1733,18 @@ async function askChatGPTFastInternal(
       sawStopButton = true;
       lastActivityAt = Date.now();
     }
+    // ストップボタンが見えなくても、最後の回答要素内にストリーミング指標があればアクティブ
+    // （ストップボタンの一瞬消失やThinkingフェーズ切替時のカバー）
+    if (state.hasStreamingIndicator) {
+      lastActivityAt = Date.now();
+    }
 
     // 状態が変化した場合のみログ出力
     const currentState = JSON.stringify(state);
     if (currentState !== lastLoggedState) {
       const elapsed = Math.round((Date.now() - startWait) / 1000);
       console.error(
-        `[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}, textGrow=${textGrowingCount}`,
+        `[ChatGPT] State @${elapsed}s: stop=${state.hasStopButton}, send=${state.sendButtonFound}(disabled=${state.sendButtonDisabled}), assistant=${state.assistantMsgCount}, inputHasText=${state.inputBoxHasText}, sawStop=${sawStopButton}, generating=${state.isStillGenerating}, streaming=${state.hasStreamingIndicator}, skipThink=${state.hasSkipThinkingButton}, hasText=${state.hasResponseText}, textGrow=${textGrowingCount}`,
       );
       lastLoggedState = currentState;
     }
@@ -1891,7 +1907,7 @@ async function askChatGPTFastInternal(
     );
     await resetConnection('chatgpt');
     throw new Error(
-      `Timed out waiting for ChatGPT response (${Math.round(elapsedMs / 1000)}s, ${reason}). Final state: ${JSON.stringify(finalState)}`,
+      `Timed out waiting for ChatGPT response (${Math.round(elapsedMs / 1000)}s, ${reason}). DO NOT RESEND: the question was already submitted to ChatGPT. Check the browser tab for the response. Final state: ${JSON.stringify(finalState)}`,
     );
   }
 
@@ -3824,7 +3840,7 @@ async function askGeminiFastInternal(
     );
     await resetConnection('gemini');
     throw new Error(
-      `Timed out waiting for Gemini response (${Math.round(geminiLoopElapsed / 1000)}s, ${reason}). sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`,
+      `Timed out waiting for Gemini response (${Math.round(geminiLoopElapsed / 1000)}s, ${reason}). DO NOT RESEND: the question was already submitted to Gemini. Check the browser tab for the response. sawStopButton=${sawStopButton}, textStableCount=${textStableCount}. Final state: ${JSON.stringify(finalState)}`,
     );
   }
 
