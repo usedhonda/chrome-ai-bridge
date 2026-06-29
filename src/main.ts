@@ -57,6 +57,17 @@ function readPackageJson(): {version?: string} {
 }
 
 const version = readPackageJson().version ?? 'unknown';
+const DEFAULT_TOOL_BUDGET_MS = Number(
+  process.env.CAI_TOOL_BUDGET_MS ||
+    process.env.CAI_MCP_TOOL_BUDGET_MS ||
+    '900000',
+);
+const DEFAULT_CHATGPT_PRO_TOOL_BUDGET_MS = Number(
+  process.env.CAI_CHATGPT_PRO_TOOL_BUDGET_MS ||
+    process.env.CAI_TOOL_BUDGET_MS ||
+    process.env.CAI_MCP_TOOL_BUDGET_MS ||
+    '1800000',
+);
 
 export const args = parseArguments(version);
 
@@ -287,7 +298,11 @@ const httpServer = http.createServer(async (req, res) => {
         debug: debugFlag,
         budgetMs: requestBudgetMs,
       } = parsed;
-      const effectiveBudgetMs = requestBudgetMs ?? 900000;
+      const effectiveBudgetMs =
+        requestBudgetMs ??
+        (target === 'chatgpt' || target === 'both'
+          ? DEFAULT_CHATGPT_PRO_TOOL_BUDGET_MS
+          : DEFAULT_TOOL_BUDGET_MS);
       if (!target || !question) {
         res.writeHead(400, {'Content-Type': 'application/json'}).end(
           JSON.stringify({

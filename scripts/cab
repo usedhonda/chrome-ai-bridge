@@ -17,6 +17,7 @@ CAB_DIR="$(cd "$(dirname "$_CAB_SELF")" && pwd)"
 CAB_LOG_DIR="${HOME}/.cache/chrome-ai-bridge"
 CAB_LOG="${CAB_LOG_DIR}/cab-daemon.log"
 CAB_STARTUP_TIMEOUT=30
+CAB_REQUEST_TIMEOUT_SEC="${CAI_CAB_REQUEST_TIMEOUT_SEC:-1800}"
 
 usage() {
   cat <<'HELP'
@@ -34,6 +35,8 @@ Usage:
 
 Environment:
   CAI_IPC_PORT             Daemon port (default: 9321)
+  CAI_CAB_REQUEST_TIMEOUT_SEC
+                           HTTP request timeout in seconds (default: 1800)
 
 Examples:
   cab chatgpt "How to deep copy in JS?"
@@ -100,7 +103,7 @@ ask_ai() {
   response=$(curl -sf -X POST "${CAB_BASE}/api/ask" \
     -H 'Content-Type: application/json' \
     -d "$payload" \
-    --max-time 900) || {
+    --max-time "${CAB_REQUEST_TIMEOUT_SEC}") || {
     echo "Error: failed to connect to daemon at ${CAB_BASE}" >&2
     exit 1
   }

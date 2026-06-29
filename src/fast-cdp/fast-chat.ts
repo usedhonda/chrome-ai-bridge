@@ -6,9 +6,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import {CHATGPT_CONFIG, GEMINI_CONFIG} from '../config.js';
 import type {RelayServer} from '../extension/relay-server.js';
 
-import {CHATGPT_CONFIG, GEMINI_CONFIG} from '../config.js';
 import {
   getAgentConnection,
   getAllAgentConnections,
@@ -116,6 +116,23 @@ const TOOL_BUDGET_MS = Number(
 );
 const RESPONSE_WAIT_MAX_MS = Number(
   process.env.CAI_RESPONSE_WAIT_MAX_MS || '900000',
+);
+const CHATGPT_PRO_TOOL_BUDGET_MS = Number(
+  process.env.CAI_CHATGPT_PRO_TOOL_BUDGET_MS ||
+    process.env.CAI_TOOL_BUDGET_MS ||
+    process.env.CAI_MCP_TOOL_BUDGET_MS ||
+    '1800000',
+);
+const CHATGPT_PRO_RESPONSE_WAIT_MAX_MS = Number(
+  process.env.CAI_RESPONSE_WAIT_MAX_MS ||
+    process.env.CAI_CHATGPT_PRO_RESPONSE_WAIT_MAX_MS ||
+    '1800000',
+);
+const CHATGPT_PRO_IDLE_TIMEOUT_MS = Number(
+  process.env.CAI_CHATGPT_PRO_IDLE_TIMEOUT_MS || '180000',
+);
+const CHATGPT_PRO_FINALIZE_WAIT_MS = Number(
+  process.env.CAI_CHATGPT_PRO_FINALIZE_WAIT_MS || '120000',
 );
 const BUDGET_RESERVE_MS = Number(
   envWithFallback('CAI_BUDGET_RESERVE_MS', 'CAI_MCP_BUDGET_RESERVE_MS', '3000'),
@@ -578,7 +595,158 @@ function isChatGPTConfiguredModelUrl(url: string): boolean {
   }
 }
 
-async function ensureChatGPTConfiguredModel(client: CdpClient): Promise<void> {
+interface ChatGPTModelSelection {
+  prefersPro: boolean;
+  selectedPro: boolean;
+  selectedModelLabel?: string;
+  selectionSource: 'url' | 'picker' | 'slug' | 'fallback';
+  fallbackReason?: string;
+}
+
+interface ChatGPTModelState {
+  url: string;
+  urlModel: string | null;
+  selectedLabel: string;
+  modelSlugs: string[];
+  proVisible: boolean;
+  proUnavailable: boolean;
+  warningText: string;
+}
+
+function isChatGPTProText(text: string | null | undefined): boolean {
+  return /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(text || '');
+}
+
+function getChatGPTProStateSource(
+  state: ChatGPTModelState,
+): 'url' | 'picker' | 'slug' | null {
+  if (isChatGPTProText(state.urlModel)) return 'url';
+  if (isChatGPTProText(state.selectedLabel)) return 'picker';
+  if (state.modelSlugs.some(slug => isChatGPTProText(slug))) return 'slug';
+  return null;
+}
+
+async function getChatGPTModelState(
+  client: CdpClient,
+): Promise<ChatGPTModelState> {
+  return await client.evaluate<ChatGPTModelState>(`
+    (() => {
+      const isVisible = (el) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect?.();
+        if (!rect || rect.width === 0 || rect.height === 0) return false;
+        const style = window.getComputedStyle(el);
+        return style.visibility !== 'hidden' && style.display !== 'none';
+      };
+      const labelOf = (el) => [
+        el.getAttribute?.('aria-label') || '',
+        el.getAttribute?.('data-testid') || '',
+        el.innerText || el.textContent || '',
+      ].join(' ').replace(/\\s+/g, ' ').trim();
+      const buttonLabels = Array.from(document.querySelectorAll('button, [role="button"]'))
+        .filter(isVisible)
+        .map(labelOf)
+        .filter(Boolean);
+      const selectedLabel =
+        buttonLabels.find(label => /gpt|chatgpt|model|モデル|pro/i.test(label)) || '';
+      const allText = document.body?.innerText || '';
+      const proVisible = /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(allText);
+      const proUnavailable =
+        /unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(allText) &&
+        /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(allText);
+      const modelSlugs = Array.from(document.querySelectorAll('[data-message-model-slug]'))
+        .map(el => el.getAttribute('data-message-model-slug') || '')
+        .filter(Boolean)
+        .slice(-5);
+      const url = location.href;
+      let urlModel = null;
+      try {
+        urlModel = new URL(url).searchParams.get('model');
+      } catch {}
+      return {
+        url,
+        urlModel,
+        selectedLabel,
+        modelSlugs,
+        proVisible,
+        proUnavailable,
+        warningText: allText
+          .split('\\n')
+          .filter(line => /unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(line))
+          .slice(0, 3)
+          .join(' | '),
+      };
+    })()
+  `);
+}
+
+async function trySelectChatGPTProFromPicker(client: CdpClient): Promise<{
+  attempted: boolean;
+  clicked: boolean;
+  label?: string;
+  reason?: string;
+}> {
+  return await client.evaluate<{
+    attempted: boolean;
+    clicked: boolean;
+    label?: string;
+    reason?: string;
+  }>(`
+    (async () => {
+      const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+      const isVisible = (el) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect?.();
+        if (!rect || rect.width === 0 || rect.height === 0) return false;
+        const style = window.getComputedStyle(el);
+        return style.visibility !== 'hidden' && style.display !== 'none';
+      };
+      const labelOf = (el) => [
+        el.getAttribute?.('aria-label') || '',
+        el.getAttribute?.('data-testid') || '',
+        el.innerText || el.textContent || '',
+      ].join(' ').replace(/\\s+/g, ' ').trim();
+      const isDisabled = (el) =>
+        el.disabled ||
+        el.getAttribute?.('aria-disabled') === 'true' ||
+        el.getAttribute?.('disabled') === 'true';
+      const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
+        .filter(isVisible);
+      const picker = buttons.find(btn => {
+        const label = labelOf(btn);
+        return /gpt|chatgpt|model|モデル/i.test(label) &&
+          !/send|stop|送信|停止/i.test(label);
+      });
+      if (!picker) return {attempted: false, clicked: false, reason: 'model picker not found'};
+
+      picker.click();
+      await sleep(600);
+
+      const candidates = Array.from(document.querySelectorAll(
+        'button, [role="button"], [role="menuitem"], [role="option"]'
+      ))
+        .filter(isVisible)
+        .map(el => ({el, label: labelOf(el)}))
+        .filter(item => /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(item.label))
+        .filter(item => !/unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(item.label))
+        .filter(item => !isDisabled(item.el));
+
+      if (candidates.length === 0) {
+        document.body.click();
+        return {attempted: true, clicked: false, reason: 'available Pro option not found'};
+      }
+
+      const preferred = candidates.find(item => /gpt|chatgpt|5/i.test(item.label)) || candidates[0];
+      preferred.el.click();
+      await sleep(1000);
+      return {attempted: true, clicked: true, label: preferred.label};
+    })()
+  `);
+}
+
+async function ensureChatGPTPreferredModel(
+  client: CdpClient,
+): Promise<ChatGPTModelSelection> {
   const currentUrl = await client.evaluate<string>('location.href');
   if (
     isChatGPTConversationUrl(currentUrl) ||
@@ -591,6 +759,59 @@ async function ensureChatGPTConfiguredModel(client: CdpClient): Promise<void> {
     await new Promise(r => setTimeout(r, 500));
     console.error('[ChatGPT] Configured model page loaded');
   }
+
+  let state = await getChatGPTModelState(client);
+  let source = getChatGPTProStateSource(state);
+  if (!source && !state.proUnavailable) {
+    const pickerResult = await trySelectChatGPTProFromPicker(client);
+    if (pickerResult.clicked) {
+      console.error(
+        `[ChatGPT] Selected Pro model from picker: ${pickerResult.label || 'unknown'}`,
+      );
+      await new Promise(r => setTimeout(r, 700));
+      state = await getChatGPTModelState(client);
+      source = getChatGPTProStateSource(state) || 'picker';
+    } else {
+      console.error(
+        `[ChatGPT] Pro picker selection skipped: ${pickerResult.reason || 'unknown reason'}`,
+      );
+    }
+  }
+
+  if (source) {
+    const selectedModelLabel =
+      state.selectedLabel || state.urlModel || state.modelSlugs.at(-1) || 'Pro';
+    console.error(
+      `[ChatGPT] Pro model active (${source}): ${selectedModelLabel}`,
+    );
+    return {
+      prefersPro: true,
+      selectedPro: true,
+      selectedModelLabel,
+      selectionSource: source,
+    };
+  }
+
+  const fallbackReason =
+    state.proUnavailable && state.warningText
+      ? state.warningText
+      : state.proVisible
+        ? 'Pro option visible but not selectable'
+        : 'Pro option not detected';
+  console.error(
+    `[ChatGPT] Pro unavailable; falling back to default model: ${fallbackReason}`,
+  );
+  if (!isChatGPTConversationUrl(state.url)) {
+    await navigate(client, CHATGPT_CONFIG.BASE_URL);
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return {
+    prefersPro: true,
+    selectedPro: false,
+    selectedModelLabel: state.selectedLabel || state.urlModel || undefined,
+    selectionSource: 'fallback',
+    fallbackReason,
+  };
 }
 
 /**
@@ -872,7 +1093,7 @@ async function askChatGPTFastInternal(
 
   // 送信前に必ず設定済みモデルの新規チャットへ寄せる。
   // 既存会話やモデル指定なしページに投入すると、前回コンテキストや別モデルが混ざる。
-  await ensureChatGPTConfiguredModel(client);
+  const modelSelection = await ensureChatGPTPreferredModel(client);
 
   // 入力欄が表示されるまで待機してから取得
   const tWaitInput = nowMs();
@@ -1436,12 +1657,17 @@ async function askChatGPTFastInternal(
   // 60秒 caller deadline を超えないよう、残り予算内で待機する。
   const maxWaitMs = getResponseWaitBudgetMs(
     t0,
-    RESPONSE_WAIT_MAX_MS,
+    modelSelection.selectedPro
+      ? CHATGPT_PRO_RESPONSE_WAIT_MAX_MS
+      : RESPONSE_WAIT_MAX_MS,
     'chatgpt-response',
-    budgetMs,
+    budgetMs ??
+      (modelSelection.selectedPro ? CHATGPT_PRO_TOOL_BUDGET_MS : undefined),
   );
   const pollIntervalMs = 1000;
-  const IDLE_TIMEOUT_MS = 60000; // ストップボタン消失後、60秒間無活動でタイムアウト
+  const IDLE_TIMEOUT_MS = modelSelection.selectedPro
+    ? CHATGPT_PRO_IDLE_TIMEOUT_MS
+    : 60000; // ストップボタン消失後、無活動でタイムアウト
   const startWait = Date.now();
   let lastActivityAt = Date.now(); // 最後にストップボタンorテキスト成長を検出した時刻
   let lastLoggedState = '';
@@ -1982,9 +2208,10 @@ async function askChatGPTFastInternal(
   // 回答テキストが存在するまでポーリングで待機
   const maxWaitForText = getResponseWaitBudgetMs(
     t0,
-    15000,
+    modelSelection.selectedPro ? CHATGPT_PRO_FINALIZE_WAIT_MS : 15000,
     'chatgpt-finalize',
-    budgetMs,
+    budgetMs ??
+      (modelSelection.selectedPro ? CHATGPT_PRO_TOOL_BUDGET_MS : undefined),
   );
   const pollInterval = 200;
   const waitStart = Date.now();
@@ -2795,7 +3022,7 @@ async function askChatGPTViaDriver(
   });
 
   await client.waitForFunction(`document.readyState === 'complete'`, 30000);
-  await ensureChatGPTConfiguredModel(client);
+  const modelSelection = await ensureChatGPTPreferredModel(client);
 
   // Driver取得・設定
   const driver = getDriver('chatgpt');
@@ -2828,9 +3055,12 @@ async function askChatGPTViaDriver(
   const tWaitResp = nowMs();
   const driverWaitBudgetMs = getResponseWaitBudgetMs(
     t0,
-    RESPONSE_WAIT_MAX_MS,
+    modelSelection.selectedPro
+      ? CHATGPT_PRO_RESPONSE_WAIT_MAX_MS
+      : RESPONSE_WAIT_MAX_MS,
     'chatgpt-driver-response',
-    budgetMs,
+    budgetMs ??
+      (modelSelection.selectedPro ? CHATGPT_PRO_TOOL_BUDGET_MS : undefined),
   );
   await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
   timings.waitResponseMs = nowMs() - tWaitResp;
