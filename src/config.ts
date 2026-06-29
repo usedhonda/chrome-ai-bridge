@@ -11,11 +11,14 @@
 /**
  * ChatGPT configuration
  */
+const DEFAULT_CHATGPT_MODEL =
+  process.env.CAI_CHATGPT_MODEL?.trim() || 'gpt-5-pro';
+
 export const CHATGPT_CONFIG = {
   /**
-   * Default ChatGPT URL with gpt-5-thinking model
+   * Default ChatGPT URL with the Pro model selected.
    */
-  DEFAULT_URL: 'https://chatgpt.com/?model=gpt-5-thinking',
+  DEFAULT_URL: `https://chatgpt.com/?model=${encodeURIComponent(DEFAULT_CHATGPT_MODEL)}`,
 
   /**
    * Base URL for ChatGPT (without query params)
@@ -25,7 +28,7 @@ export const CHATGPT_CONFIG = {
   /**
    * Default model parameter
    */
-  DEFAULT_MODEL: 'gpt-5-thinking',
+  DEFAULT_MODEL: DEFAULT_CHATGPT_MODEL,
 } as const;
 
 /**

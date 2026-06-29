@@ -8,6 +8,7 @@ import path from 'node:path';
 
 import type {RelayServer} from '../extension/relay-server.js';
 
+import {CHATGPT_CONFIG, GEMINI_CONFIG} from '../config.js';
 import {
   getAgentConnection,
   getAllAgentConnections,
@@ -553,6 +554,45 @@ function normalizeGeminiResponse(text: string, question?: string): string {
 
 // isSuspiciousAnswer 関数は削除済み（2回送信バグの原因）
 
+function isChatGPTConversationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.endsWith('chatgpt.com') &&
+      parsed.pathname.startsWith('/c/')
+    );
+  } catch {
+    return url.includes('chatgpt.com/c/');
+  }
+}
+
+function isChatGPTConfiguredModelUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname.endsWith('chatgpt.com') &&
+      parsed.searchParams.get('model') === CHATGPT_CONFIG.DEFAULT_MODEL
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function ensureChatGPTConfiguredModel(client: CdpClient): Promise<void> {
+  const currentUrl = await client.evaluate<string>('location.href');
+  if (
+    isChatGPTConversationUrl(currentUrl) ||
+    !isChatGPTConfiguredModelUrl(currentUrl)
+  ) {
+    console.error(
+      `[ChatGPT] Selecting configured model ${CHATGPT_CONFIG.DEFAULT_MODEL} before query...`,
+    );
+    await navigate(client, CHATGPT_CONFIG.DEFAULT_URL);
+    await new Promise(r => setTimeout(r, 500));
+    console.error('[ChatGPT] Configured model page loaded');
+  }
+}
+
 /**
  * 新しい接続を作成する（リトライ機構付き）
  * 戦略:
@@ -569,7 +609,7 @@ async function createConnection(
   const preferred = preferredSession.url;
   const preferredTabId = preferredSession.tabId;
   const defaultUrl =
-    kind === 'chatgpt' ? 'https://chatgpt.com/' : 'https://gemini.google.com/';
+    kind === 'chatgpt' ? CHATGPT_CONFIG.DEFAULT_URL : GEMINI_CONFIG.DEFAULT_URL;
 
   logInfo('fast-chat', `createConnection: ${kind}`, {
     preferred,
@@ -830,17 +870,9 @@ async function askChatGPTFastInternal(
   await new Promise(r => setTimeout(r, 500));
   console.error('[ChatGPT] Waited 500ms for SPA rendering');
 
-  // 既存チャット（/c/を含むURL）の場合、新規チャットへ遷移
-  // 同じ会話に質問を投入すると前回のコンテキストが応答に影響するため
-  const currentUrl = await client.evaluate<string>('location.href');
-  if (currentUrl.includes('/c/')) {
-    console.error(
-      '[ChatGPT] Existing conversation detected, navigating to new chat...',
-    );
-    await navigate(client, 'https://chatgpt.com/');
-    await new Promise(r => setTimeout(r, 500));
-    console.error('[ChatGPT] New chat page loaded');
-  }
+  // 送信前に必ず設定済みモデルの新規チャットへ寄せる。
+  // 既存会話やモデル指定なしページに投入すると、前回コンテキストや別モデルが混ざる。
+  await ensureChatGPTConfiguredModel(client);
 
   // 入力欄が表示されるまで待機してから取得
   const tWaitInput = nowMs();
@@ -2761,6 +2793,9 @@ async function askChatGPTViaDriver(
   logInfo('chatgpt', '[Driver] getClient completed', {
     connectMs: timings.connectMs,
   });
+
+  await client.waitForFunction(`document.readyState === 'complete'`, 30000);
+  await ensureChatGPTConfiguredModel(client);
 
   // Driver取得・設定
   const driver = getDriver('chatgpt');
