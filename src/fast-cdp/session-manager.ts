@@ -247,6 +247,25 @@ export async function clearAgentSession(
   }
 }
 
+/**
+ * Drop a stale chat URL when the provider confirms that conversation is gone.
+ */
+export async function dropAgentSessionUrl(
+  kind: 'chatgpt' | 'gemini',
+): Promise<void> {
+  const agentId = hasAgentId() ? getAgentId() : 'default';
+  const sessions = await loadSessions();
+
+  if (sessions.agents[agentId]?.[kind]) {
+    sessions.agents[agentId][kind] = null;
+    sessions.agents[agentId].lastAccess = new Date().toISOString();
+    await saveRawSessions(sessions);
+    console.error(
+      `[session-manager] Dropped stale ${kind} URL for agent: ${agentId}`,
+    );
+  }
+}
+
 function hasStoredUrl(session: AgentSession): boolean {
   return Boolean(session.chatgpt?.url || session.gemini?.url);
 }

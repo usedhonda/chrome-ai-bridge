@@ -29,6 +29,7 @@ import {
   saveAgentSession,
   getPreferredSessionV2,
   clearAgentSession,
+  dropAgentSessionUrl,
 } from './session-manager.js';
 import {DOM_UTILS_CODE} from './utils/index.js';
 
@@ -902,12 +903,23 @@ async function createConnection(
         );
       }
 
-      // クライアントとRelay参照を保存
-      setClientForAgent(kind, client, relayResult.relay);
-      const elapsed = Date.now() - startTime;
-      logConnectionState(kind, 'connected', {elapsed, reused: true});
-      console.error(`[fast-cdp] ${kind} reused existing tab successfully`);
-      return client;
+      const pageStatus = await getPageLoadStatus(client);
+      if (isDeletedChatSignal(kind, preferred, pageStatus)) {
+        console.error(
+          `[fast-cdp] ${kind} saved chat URL is gone (status=${pageStatus.status ?? 'unknown'}, finalUrl=${pageStatus.url}); opening a new chat`,
+        );
+        await dropAgentSessionUrl(kind);
+        await relayResult.relay.stop().catch(() => {
+          // ignore cleanup errors before new-tab fallback
+        });
+      } else {
+        // クライアントとRelay参照を保存
+        setClientForAgent(kind, client, relayResult.relay);
+        const elapsed = Date.now() - startTime;
+        logConnectionState(kind, 'connected', {elapsed, reused: true});
+        console.error(`[fast-cdp] ${kind} reused existing tab successfully`);
+        return client;
+      }
     } catch (error) {
       logWarn('fast-chat', `${kind} existing tab not found`, {
         error: error instanceof Error ? error.message : String(error),
@@ -1047,6 +1059,18 @@ export async function getClient(
 async function navigate(client: CdpClient, url: string) {
   await client.send('Page.navigate', {url});
   await client.waitForFunction(`document.readyState === 'complete'`, 30000);
+}
+
+async function getPageLoadStatus(client: CdpClient): Promise<PageLoadStatus> {
+  return await client.evaluate<PageLoadStatus>(`
+    (() => {
+      const nav = performance.getEntriesByType('navigation').at(-1);
+      const status = typeof nav?.responseStatus === 'number'
+        ? nav.responseStatus
+        : undefined;
+      return {url: location.href, status};
+    })()
+  `);
 }
 
 /** Strip conversation-specific paths (/c/<id>, /app/<id>) to prevent chat pollution on reuse */
@@ -3200,6 +3224,58 @@ async function askGeminiViaDriver(
 
 // Driver統合モードの判定
 const USE_DRIVERS = process.env.CAI_USE_DRIVERS === '1';
+
+interface PageLoadStatus {
+  url: string;
+  status?: number;
+}
+
+function isConversationUrl(kind: 'chatgpt' | 'gemini', url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return kind === 'chatgpt'
+      ? parsed.hostname.includes('chatgpt.com') &&
+          /^\/c\/[^/]+/.test(parsed.pathname)
+      : parsed.hostname.includes('gemini.google.com') &&
+          /^\/app\/[^/]+/.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function sameConversationUrl(a: string, b: string): boolean {
+  try {
+    const left = new URL(a);
+    const right = new URL(b);
+    return left.origin === right.origin && left.pathname === right.pathname;
+  } catch {
+    return false;
+  }
+}
+
+function isDeletedChatSignal(
+  kind: 'chatgpt' | 'gemini',
+  requestedUrl: string,
+  page: PageLoadStatus,
+): boolean {
+  if (!isConversationUrl(kind, requestedUrl)) {
+    return false;
+  }
+  if (page.status === 404 || page.status === 410) {
+    return true;
+  }
+  if (!page.url || sameConversationUrl(page.url, requestedUrl)) {
+    return false;
+  }
+  try {
+    const finalUrl = new URL(page.url);
+    const requested = new URL(requestedUrl);
+    const finalIsProvider = finalUrl.origin === requested.origin;
+    return finalIsProvider && !isConversationUrl(kind, page.url);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * ChatGPTに質問して回答を取得（後方互換用）
