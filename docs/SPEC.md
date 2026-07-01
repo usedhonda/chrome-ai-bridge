@@ -654,6 +654,8 @@ data: [DONE]
 
 **Hybrid selection**: After capture, the system compares network-extracted text with DOM-extracted text and selects the longer/more complete result. Network text is preferred when available.
 
+**Driver parity**: When `CAI_USE_DRIVERS=1`, `askChatGPTViaDriver()` uses the same `NetworkInterceptor` capture and hybrid network-vs-DOM answer selection around driver send/wait/extract. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
+
 ### 3.6 ChatGPT DOM-based Extraction (Fallback)
 
 > ⚠️ **DO NOT DELETE**: The logic described in this section is essential for ChatGPT Thinking mode support. Deleting it will cause response extraction to fail.
@@ -944,6 +946,8 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 - `normalizeGeminiResponse()` is applied to the final text for consistency with DOM-extracted text
 
 **Hybrid selection**: After capture, the system compares network-extracted text with DOM-extracted text and selects the longer/more complete result. Network text is preferred when available.
+
+**Driver parity**: When `CAI_USE_DRIVERS=1`, `askGeminiViaDriver()` uses the same `NetworkInterceptor` capture and applies the same Gemini normalization before hybrid network-vs-DOM answer selection. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
 
 ### 4.5 Gemini DOM-based Text Extraction (Fallback)
 

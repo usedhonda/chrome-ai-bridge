@@ -3154,38 +3154,71 @@ async function askChatGPTViaDriver(
   );
   timings.waitInputMs = nowMs() - tWaitInput;
 
-  // 送信
-  const tInput = nowMs();
-  const sendResult = await driver.sendPrompt(question);
-  if (!sendResult.success) {
-    throw new Error(`Failed to send prompt: ${sendResult.error}`);
+  const interceptor = new NetworkInterceptor(client);
+  interceptor.startCapture();
+
+  let answer: string;
+  try {
+    // 送信
+    const tInput = nowMs();
+    const sendResult = await driver.sendPrompt(question);
+    if (!sendResult.success) {
+      throw new Error(`Failed to send prompt: ${sendResult.error}`);
+    }
+    timings.inputMs = nowMs() - tInput;
+
+    const tSend = nowMs();
+    timings.sendMs = nowMs() - tSend;
+
+    // 応答待機
+    const tWaitResp = nowMs();
+    const driverWaitBudgetMs = getResponseWaitBudgetMs(
+      t0,
+      modelSelection.selectedPro
+        ? CHATGPT_PRO_RESPONSE_WAIT_MAX_MS
+        : RESPONSE_WAIT_MAX_MS,
+      'chatgpt-driver-response',
+      budgetMs ??
+        (modelSelection.selectedPro ? CHATGPT_PRO_TOOL_BUDGET_MS : undefined),
+    );
+    await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
+    timings.waitResponseMs = nowMs() - tWaitResp;
+
+    // 応答抽出
+    const extractResult = await driver.extractResponse({debug});
+    answer = extractResult.text;
+    logInfo('chatgpt', '[Driver] Response extracted', {
+      length: answer.length,
+      evidence: extractResult.evidence,
+      confidence: extractResult.confidence,
+    });
+  } catch (error) {
+    await interceptor.stopCaptureAndWait().catch(() => undefined);
+    throw error;
   }
-  timings.inputMs = nowMs() - tInput;
 
-  const tSend = nowMs();
-  timings.sendMs = nowMs() - tSend;
+  await interceptor.stopCaptureAndWait();
+  const networkResult = interceptor.getResult();
+  logInfo('chatgpt', '[Driver] Network capture result', {
+    frames: networkResult.frames.length,
+    textLength: networkResult.text.length,
+    rawDataSize: networkResult.rawDataSize,
+    captureTimeMs: networkResult.captureTimeMs,
+    summary: interceptor.getSummary(),
+  });
 
-  // 応答待機
-  const tWaitResp = nowMs();
-  const driverWaitBudgetMs = getResponseWaitBudgetMs(
-    t0,
-    modelSelection.selectedPro
-      ? CHATGPT_PRO_RESPONSE_WAIT_MAX_MS
-      : RESPONSE_WAIT_MAX_MS,
-    'chatgpt-driver-response',
-    budgetMs ??
-      (modelSelection.selectedPro ? CHATGPT_PRO_TOOL_BUDGET_MS : undefined),
-  );
-  await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
-  timings.waitResponseMs = nowMs() - tWaitResp;
-
-  // 応答抽出
-  const extractResult = await driver.extractResponse({debug});
-  const answer = extractResult.text;
-  logInfo('chatgpt', '[Driver] Response extracted', {
-    length: answer.length,
-    evidence: extractResult.evidence,
-    confidence: extractResult.confidence,
+  let hybridAnswer = answer;
+  let answerSource = 'dom';
+  const netLen = networkResult.text.length;
+  const domLen = answer.length;
+  if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
+    hybridAnswer = networkResult.text;
+    answerSource = 'network';
+  }
+  logInfo('chatgpt', '[Driver] Answer source selected', {
+    source: answerSource,
+    networkLen: netLen,
+    domLen,
   });
 
   // セッション保存
@@ -3205,7 +3238,7 @@ async function askChatGPTViaDriver(
   await appendHistory({
     provider: 'chatgpt',
     question,
-    answer,
+    answer: hybridAnswer,
     url: finalUrl,
     timings,
   });
@@ -3219,7 +3252,7 @@ async function askChatGPTViaDriver(
     totalMs: timings.totalMs ?? 0,
   };
 
-  return {answer, timings: fullTimings};
+  return {answer: hybridAnswer, timings: fullTimings};
 }
 
 /**
@@ -3257,35 +3290,72 @@ async function askGeminiViaDriver(
   );
   timings.waitInputMs = nowMs() - tWaitInput;
 
-  // 送信
-  const tInput = nowMs();
-  const sendResult = await driver.sendPrompt(question);
-  if (!sendResult.success) {
-    throw new Error(`Failed to send prompt: ${sendResult.error}`);
+  const interceptor = new NetworkInterceptor(client);
+  interceptor.startCapture();
+
+  let answer: string;
+  try {
+    // 送信
+    const tInput = nowMs();
+    const sendResult = await driver.sendPrompt(question);
+    if (!sendResult.success) {
+      throw new Error(`Failed to send prompt: ${sendResult.error}`);
+    }
+    timings.inputMs = nowMs() - tInput;
+
+    const tSend = nowMs();
+    timings.sendMs = nowMs() - tSend;
+
+    // 応答待機
+    const tWaitResp = nowMs();
+    const driverWaitBudgetMs = getResponseWaitBudgetMs(
+      t0,
+      RESPONSE_WAIT_MAX_MS,
+      'gemini-driver-response',
+      budgetMs,
+    );
+    await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
+    timings.waitResponseMs = nowMs() - tWaitResp;
+
+    // 応答抽出
+    const extractResult = await driver.extractResponse({debug});
+    answer = normalizeGeminiResponse(extractResult.text, question);
+    logInfo('gemini', '[Driver] Response extracted', {
+      length: answer.length,
+      evidence: extractResult.evidence,
+      confidence: extractResult.confidence,
+    });
+  } catch (error) {
+    await interceptor.stopCaptureAndWait().catch(() => undefined);
+    throw error;
   }
-  timings.inputMs = nowMs() - tInput;
 
-  const tSend = nowMs();
-  timings.sendMs = nowMs() - tSend;
+  await interceptor.stopCaptureAndWait();
+  const networkResult = interceptor.getResult();
+  logInfo('gemini', '[Driver] Network capture result', {
+    frames: networkResult.frames.length,
+    textLength: networkResult.text.length,
+    rawDataSize: networkResult.rawDataSize,
+    captureTimeMs: networkResult.captureTimeMs,
+    summary: interceptor.getSummary(),
+  });
 
-  // 応答待機
-  const tWaitResp = nowMs();
-  const driverWaitBudgetMs = getResponseWaitBudgetMs(
-    t0,
-    RESPONSE_WAIT_MAX_MS,
-    'gemini-driver-response',
-    budgetMs,
+  const networkNormalized = normalizeGeminiResponse(
+    networkResult.text,
+    question,
   );
-  await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
-  timings.waitResponseMs = nowMs() - tWaitResp;
-
-  // 応答抽出
-  const extractResult = await driver.extractResponse({debug});
-  const answer = normalizeGeminiResponse(extractResult.text, question);
-  logInfo('gemini', '[Driver] Response extracted', {
-    length: answer.length,
-    evidence: extractResult.evidence,
-    confidence: extractResult.confidence,
+  let hybridAnswer = answer;
+  let answerSource = 'dom';
+  const netLen = networkNormalized.length;
+  const domLen = answer.length;
+  if (netLen > 0 && (domLen === 0 || netLen >= domLen * 0.5)) {
+    hybridAnswer = networkNormalized;
+    answerSource = 'network';
+  }
+  logInfo('gemini', '[Driver] Answer source selected', {
+    source: answerSource,
+    networkLen: netLen,
+    domLen,
   });
 
   // セッション保存
@@ -3300,7 +3370,7 @@ async function askGeminiViaDriver(
   await appendHistory({
     provider: 'gemini',
     question,
-    answer,
+    answer: hybridAnswer,
     url: finalUrl,
     timings,
   });
@@ -3314,7 +3384,7 @@ async function askGeminiViaDriver(
     totalMs: timings.totalMs ?? 0,
   };
 
-  return {answer, timings: fullTimings};
+  return {answer: hybridAnswer, timings: fullTimings};
 }
 
 // Driver統合モードの判定
