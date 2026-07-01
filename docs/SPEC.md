@@ -567,6 +567,7 @@ Even with focus emulation enabled, `Page.bringToFront` is called before DOM-base
 17. Stop network capture: interceptor.stopCaptureAndWait()
 18. Hybrid text selection: network text (primary) vs DOM text (fallback)
 19. Save session and record history
+   - Only ChatGPT conversation URLs (`/c/<id>`) are persisted as reusable session URLs
    - If the reused `/c/<id>` stayed the same, save the same URL again
    - If ChatGPT forks to a different `/c/<id>`, log the fork before saving the new URL
 ```

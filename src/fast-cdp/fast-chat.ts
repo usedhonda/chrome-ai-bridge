@@ -2954,7 +2954,7 @@ async function askChatGPTFastInternal(
   );
 
   const finalUrl = await client.evaluate<string>('location.href');
-  if (finalUrl && finalUrl.includes('chatgpt.com')) {
+  if (finalUrl && isChatGPTConversationUrl(finalUrl)) {
     logChatGPTForkIfNeeded(
       reuseContext.preserveConversation,
       reuseContext.preferredUrl,
@@ -3190,7 +3190,7 @@ async function askChatGPTViaDriver(
 
   // セッション保存
   const finalUrl = await driver.getCurrentUrl();
-  if (finalUrl.includes('chatgpt.com')) {
+  if (isChatGPTConversationUrl(finalUrl)) {
     logChatGPTForkIfNeeded(
       reuseContext.preserveConversation,
       reuseContext.preferredUrl,
