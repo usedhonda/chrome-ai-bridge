@@ -21,7 +21,11 @@ import path from 'node:path';
 
 import {parseArguments} from './cli.js';
 import {getIpcGuardConfig, getSessionConfig, IPC_CONFIG} from './config.js';
-import {generateAgentId, setAgentId} from './fast-cdp/agent-context.js';
+import {
+  generateAgentId,
+  runWithAgentId,
+  setAgentId,
+} from './fast-cdp/agent-context.js';
 import {cleanupAllConnections} from './fast-cdp/fast-chat.js';
 import {cleanupStaleSessions} from './fast-cdp/session-manager.js';
 import {logger, saveLogsToFile} from './logger.js';
@@ -195,6 +199,12 @@ const TOOL_SELF_CLEANUP_INTERVAL_MS = Math.max(
 let lastToolSelfCleanupAt = 0;
 let toolSelfCleanupInFlight: Promise<void> | null = null;
 
+function resolveRequestAgentId(header: string | string[] | undefined): string {
+  const raw = Array.isArray(header) ? header[0] : header;
+  const trimmed = raw?.trim();
+  return trimmed || 'default';
+}
+
 async function maybeRunToolSelfCleanup(): Promise<void> {
   if (!TOOL_SELF_CLEANUP_ENABLED) {
     return;
@@ -275,90 +285,97 @@ const httpServer = http.createServer(async (req, res) => {
       body += chunk;
     });
     req.on('end', async () => {
-      touchPrimaryActivity();
-      await maybeRunToolSelfCleanup();
-      let parsed: {
-        target?: string;
-        question?: string;
-        debug?: boolean;
-        budgetMs?: number;
-      };
-      try {
-        parsed = body ? JSON.parse(body) : {};
-      } catch {
-        res
-          .writeHead(400, {'Content-Type': 'application/json'})
-          .end(JSON.stringify({success: false, error: 'Invalid JSON'}));
-        return;
-      }
+      const requestAgentId = resolveRequestAgentId(
+        req.headers['x-cab-session'],
+      );
+      await runWithAgentId(requestAgentId, async () => {
+        touchPrimaryActivity();
+        await maybeRunToolSelfCleanup();
+        let parsed: {
+          target?: string;
+          question?: string;
+          debug?: boolean;
+          budgetMs?: number;
+        };
+        try {
+          parsed = body ? JSON.parse(body) : {};
+        } catch {
+          res
+            .writeHead(400, {'Content-Type': 'application/json'})
+            .end(JSON.stringify({success: false, error: 'Invalid JSON'}));
+          return;
+        }
 
-      const {
-        target,
-        question,
-        debug: debugFlag,
-        budgetMs: requestBudgetMs,
-      } = parsed;
-      const effectiveBudgetMs =
-        requestBudgetMs ??
-        (target === 'chatgpt' || target === 'both'
-          ? DEFAULT_CHATGPT_PRO_TOOL_BUDGET_MS
-          : DEFAULT_TOOL_BUDGET_MS);
-      if (!target || !question) {
-        res.writeHead(400, {'Content-Type': 'application/json'}).end(
-          JSON.stringify({
-            success: false,
-            error: 'Missing required fields: target, question',
-          }),
-        );
-        return;
-      }
-
-      const validTargets = ['chatgpt', 'gemini', 'both'];
-      if (!validTargets.includes(target)) {
-        res.writeHead(400, {'Content-Type': 'application/json'}).end(
-          JSON.stringify({
-            success: false,
-            error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`,
-          }),
-        );
-        return;
-      }
-
-      const guard = await toolMutex.acquire();
-      try {
-        if (target === 'both') {
-          const [chatgptResult, geminiResult] = await Promise.all([
-            askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
-            askAI('gemini', question, debugFlag, effectiveBudgetMs),
-          ]);
-          res.writeHead(200, {'Content-Type': 'application/json'}).end(
+        const {
+          target,
+          question,
+          debug: debugFlag,
+          budgetMs: requestBudgetMs,
+        } = parsed;
+        const effectiveBudgetMs =
+          requestBudgetMs ??
+          (target === 'chatgpt' || target === 'both'
+            ? DEFAULT_CHATGPT_PRO_TOOL_BUDGET_MS
+            : DEFAULT_TOOL_BUDGET_MS);
+        if (!target || !question) {
+          res.writeHead(400, {'Content-Type': 'application/json'}).end(
             JSON.stringify({
-              success: true,
-              results: [chatgptResult, geminiResult],
+              success: false,
+              error: 'Missing required fields: target, question',
             }),
           );
-        } else {
-          const result = await askAI(
-            target as AIKind,
-            question,
-            debugFlag,
-            effectiveBudgetMs,
+          return;
+        }
+
+        const validTargets = ['chatgpt', 'gemini', 'both'];
+        if (!validTargets.includes(target)) {
+          res.writeHead(400, {'Content-Type': 'application/json'}).end(
+            JSON.stringify({
+              success: false,
+              error: `Invalid target: ${target}. Must be one of: ${validTargets.join(', ')}`,
+            }),
           );
-          res
-            .writeHead(200, {'Content-Type': 'application/json'})
-            .end(JSON.stringify({success: result.success, results: [result]}));
+          return;
         }
-      } catch (error) {
-        const errorText =
-          error instanceof Error ? error.message : String(error);
-        if (!res.headersSent) {
-          res
-            .writeHead(500, {'Content-Type': 'application/json'})
-            .end(JSON.stringify({success: false, error: errorText}));
+
+        const guard = await toolMutex.acquire();
+        try {
+          if (target === 'both') {
+            const [chatgptResult, geminiResult] = await Promise.all([
+              askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
+              askAI('gemini', question, debugFlag, effectiveBudgetMs),
+            ]);
+            res.writeHead(200, {'Content-Type': 'application/json'}).end(
+              JSON.stringify({
+                success: true,
+                results: [chatgptResult, geminiResult],
+              }),
+            );
+          } else {
+            const result = await askAI(
+              target as AIKind,
+              question,
+              debugFlag,
+              effectiveBudgetMs,
+            );
+            res
+              .writeHead(200, {'Content-Type': 'application/json'})
+              .end(
+                JSON.stringify({success: result.success, results: [result]}),
+              );
+          }
+        } catch (error) {
+          const errorText =
+            error instanceof Error ? error.message : String(error);
+          if (!res.headersSent) {
+            res
+              .writeHead(500, {'Content-Type': 'application/json'})
+              .end(JSON.stringify({success: false, error: errorText}));
+          }
+        } finally {
+          guard.dispose();
         }
-      } finally {
-        guard.dispose();
-      }
+      });
     });
     return;
   }

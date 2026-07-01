@@ -13,6 +13,8 @@
  * - TTL-based cleanup of stale sessions
  */
 
+import {AsyncLocalStorage} from 'node:async_hooks';
+
 import type {RelayServer} from '../extension/relay-server.js';
 
 import type {CdpClient} from './cdp-client.js';
@@ -34,16 +36,23 @@ export interface AgentConnection {
 const agentConnections = new Map<string, AgentConnection>();
 
 /**
- * Current agent ID for this process
+ * Request-scoped agent ID. The daemon handles multiple callers in one process,
+ * so per-request context must not be stored in a mutable global.
  */
-let currentAgentId: string | null = null;
+const agentIdStorage = new AsyncLocalStorage<string>();
+
+/**
+ * Fallback agent ID for process-level scripts and legacy callers.
+ */
+let defaultAgentId: string | null = null;
 
 /**
  * Generate a unique agent ID.
  *
- * Strategy (hybrid):
- * 1. If CAI_AGENT_ID environment variable is set, use it + PID
- * 2. Otherwise, generate from PID + timestamp
+ * Strategy:
+ * 1. If CAI_AGENT_ID environment variable is set, use it as-is
+ * 2. Otherwise, use the caller-provided client name
+ * 3. Fall back to "default"
  *
  * @param clientName Optional client name (e.g., "claude-code")
  * @returns Unique agent ID
@@ -52,17 +61,14 @@ export function generateAgentId(clientName?: string): string {
   const envAgentId = process.env.CAI_AGENT_ID;
 
   if (envAgentId) {
-    // Environment variable takes precedence (allows explicit control)
-    return `${envAgentId}-${process.pid}`;
+    return envAgentId;
   }
 
   if (clientName) {
-    // Use client name if available
-    return `${clientName}-${process.pid}`;
+    return clientName;
   }
 
-  // Fallback: generate from PID + timestamp
-  return `agent-${process.pid}-${Date.now()}`;
+  return 'default';
 }
 
 /**
@@ -72,13 +78,20 @@ export function generateAgentId(clientName?: string): string {
  * @param id Agent ID to set
  */
 export function setAgentId(id: string): void {
-  if (currentAgentId !== null && currentAgentId !== id) {
+  if (defaultAgentId !== null && defaultAgentId !== id) {
     console.error(
-      `[agent-context] Warning: Agent ID changed from ${currentAgentId} to ${id}`,
+      `[agent-context] Warning: default agent ID changed from ${defaultAgentId} to ${id}`,
     );
   }
-  currentAgentId = id;
-  console.error(`[agent-context] Agent ID set: ${id}`);
+  defaultAgentId = id;
+  console.error(`[agent-context] Default agent ID set: ${id}`);
+}
+
+/**
+ * Run a callback with a request-scoped agent ID.
+ */
+export function runWithAgentId<T>(id: string, callback: () => T): T {
+  return agentIdStorage.run(id, callback);
 }
 
 /**
@@ -88,10 +101,21 @@ export function setAgentId(id: string): void {
  * @throws Error if agent ID is not set
  */
 export function getAgentId(): string {
-  if (!currentAgentId) {
+  const scopedAgentId = agentIdStorage.getStore();
+  if (scopedAgentId) {
+    return scopedAgentId;
+  }
+  if (!defaultAgentId) {
     throw new Error('Agent ID not set. Call setAgentId() first.');
   }
-  return currentAgentId;
+  return defaultAgentId;
+}
+
+/**
+ * Get the current agent ID, if one is available.
+ */
+export function getCurrentAgentId(): string | null {
+  return agentIdStorage.getStore() ?? defaultAgentId;
 }
 
 /**
@@ -100,7 +124,7 @@ export function getAgentId(): string {
  * @returns true if agent ID is set
  */
 export function hasAgentId(): boolean {
-  return currentAgentId !== null;
+  return getCurrentAgentId() !== null;
 }
 
 /**
