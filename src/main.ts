@@ -190,6 +190,7 @@ Available tools: ask_chatgpt_web, ask_gemini_web, ask_chatgpt_gemini_web, take_c
 };
 
 const toolMutex = new Mutex(ipcGuardConfig.execMaxConcurrency);
+const laneMutexes = new Map<string, Mutex>();
 const TOOL_SELF_CLEANUP_ENABLED =
   process.env.CAI_TOOL_SELF_CLEANUP_ENABLED !== '0';
 const TOOL_SELF_CLEANUP_INTERVAL_MS = Math.max(
@@ -203,6 +204,36 @@ function resolveRequestAgentId(header: string | string[] | undefined): string {
   const raw = Array.isArray(header) ? header[0] : header;
   const trimmed = raw?.trim();
   return trimmed || 'default';
+}
+
+function getLaneMutex(agentId: string, provider: AIKind): Mutex {
+  const key = `${agentId}:${provider}`;
+  let mutex = laneMutexes.get(key);
+  if (!mutex) {
+    mutex = new Mutex(1);
+    laneMutexes.set(key, mutex);
+  }
+  return mutex;
+}
+
+async function runProviderWithConcurrencyGuards<T>(
+  agentId: string,
+  provider: AIKind,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const laneGuard = await getLaneMutex(agentId, provider).acquire();
+  let globalGuard: InstanceType<typeof Mutex.Guard> | undefined;
+  try {
+    // Acquire lane before global: waiters for the same lane/provider do not
+    // occupy global slots, so other lanes/providers can continue and avoid
+    // deadlock. A target=both request intentionally consumes one global slot
+    // per provider while still running ChatGPT and Gemini in parallel.
+    globalGuard = await toolMutex.acquire();
+    return await fn();
+  } finally {
+    globalGuard?.dispose();
+    laneGuard.dispose();
+  }
 }
 
 async function maybeRunToolSelfCleanup(): Promise<void> {
@@ -338,12 +369,15 @@ const httpServer = http.createServer(async (req, res) => {
           return;
         }
 
-        const guard = await toolMutex.acquire();
         try {
           if (target === 'both') {
             const [chatgptResult, geminiResult] = await Promise.all([
-              askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
-              askAI('gemini', question, debugFlag, effectiveBudgetMs),
+              runProviderWithConcurrencyGuards(requestAgentId, 'chatgpt', () =>
+                askAI('chatgpt', question, debugFlag, effectiveBudgetMs),
+              ),
+              runProviderWithConcurrencyGuards(requestAgentId, 'gemini', () =>
+                askAI('gemini', question, debugFlag, effectiveBudgetMs),
+              ),
             ]);
             res.writeHead(200, {'Content-Type': 'application/json'}).end(
               JSON.stringify({
@@ -352,11 +386,11 @@ const httpServer = http.createServer(async (req, res) => {
               }),
             );
           } else {
-            const result = await askAI(
-              target as AIKind,
-              question,
-              debugFlag,
-              effectiveBudgetMs,
+            const provider = target as AIKind;
+            const result = await runProviderWithConcurrencyGuards(
+              requestAgentId,
+              provider,
+              () => askAI(provider, question, debugFlag, effectiveBudgetMs),
             );
             res
               .writeHead(200, {'Content-Type': 'application/json'})
@@ -372,8 +406,6 @@ const httpServer = http.createServer(async (req, res) => {
               .writeHead(500, {'Content-Type': 'application/json'})
               .end(JSON.stringify({success: false, error: errorText}));
           }
-        } finally {
-          guard.dispose();
         }
       });
     });

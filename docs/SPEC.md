@@ -327,6 +327,8 @@ chrome-ai-bridge is a CLI tool / daemon that automates ChatGPT / Gemini Web UI f
 
 **Implementation**: `RelayServer.stopDiscoveryServer()` is called automatically after the `ready` event fires. If reconnection is needed, `restartDiscoveryServer()` re-acquires a port.
 
+**Tool execution concurrency**: `/api/ask` serializes requests per `(agentId, provider)` lane before acquiring the global `CAI_EXEC_MAX_CONCURRENCY` semaphore. This prevents two simultaneous ChatGPT sends in the same lane from sharing one tab, while preserving parallelism for different lanes and for different providers. `target=both` intentionally runs ChatGPT and Gemini as independent provider branches, so it can consume one global slot per provider while keeping the two providers parallel.
+
 **Port lifecycle**:
 
 ```
