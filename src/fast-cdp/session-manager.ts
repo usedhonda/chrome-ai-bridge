@@ -241,16 +241,33 @@ export async function clearAgentSession(
   }
 }
 
+function hasStoredUrl(session: AgentSession): boolean {
+  return Boolean(session.chatgpt?.url || session.gemini?.url);
+}
+
+function clearStoredTabIds(session: AgentSession): boolean {
+  let changed = false;
+  for (const kind of ['chatgpt', 'gemini'] as const) {
+    const entry = session[kind];
+    if (entry?.tabId !== undefined) {
+      delete entry.tabId;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 /**
- * Remove stale sessions that exceed TTL.
+ * Remove stale session metadata that exceeds TTL without deleting chat URLs.
  *
- * @returns Number of agents removed
+ * @returns Number of agents cleaned up
  */
 export async function cleanupStaleSessions(): Promise<number> {
   const config = getSessionConfig();
   const sessions = await loadSessions();
 
   const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const ttlMs = config.sessionTtlMinutes * 60 * 1000;
   let removedCount = 0;
 
@@ -259,11 +276,19 @@ export async function cleanupStaleSessions(): Promise<number> {
     const age = now - lastAccess;
 
     if (age > ttlMs) {
-      delete sessions.agents[agentId];
       removedCount++;
-      console.error(
-        `[session-manager] Removed stale agent: ${agentId} (${Math.round(age / 60000)}min old)`,
-      );
+      if (hasStoredUrl(session)) {
+        clearStoredTabIds(session);
+        session.lastAccess = nowIso;
+        console.error(
+          `[session-manager] Preserved stale agent URLs: ${agentId} (${Math.round(age / 60000)}min old)`,
+        );
+      } else {
+        delete sessions.agents[agentId];
+        console.error(
+          `[session-manager] Removed stale empty agent: ${agentId} (${Math.round(age / 60000)}min old)`,
+        );
+      }
     }
   }
 
@@ -280,9 +305,19 @@ export async function cleanupStaleSessions(): Promise<number> {
     // Remove oldest until under limit
     const toRemove = sorted.slice(0, agentIds.length - config.maxAgents);
     for (const agentId of toRemove) {
-      delete sessions.agents[agentId];
       removedCount++;
-      console.error(`[session-manager] Removed agent (over limit): ${agentId}`);
+      if (hasStoredUrl(sessions.agents[agentId])) {
+        clearStoredTabIds(sessions.agents[agentId]);
+        sessions.agents[agentId].lastAccess = nowIso;
+        console.error(
+          `[session-manager] Preserved agent URLs over limit: ${agentId}`,
+        );
+      } else {
+        delete sessions.agents[agentId];
+        console.error(
+          `[session-manager] Removed empty agent (over limit): ${agentId}`,
+        );
+      }
     }
   }
 
