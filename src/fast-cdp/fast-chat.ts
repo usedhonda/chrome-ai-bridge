@@ -3253,6 +3253,29 @@ function sameConversationUrl(a: string, b: string): boolean {
   }
 }
 
+function isAuthOrOnboardingUrl(
+  kind: 'chatgpt' | 'gemini',
+  url: string,
+): boolean {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    if (kind === 'chatgpt' && parsed.hostname.includes('chatgpt.com')) {
+      return /^\/(auth|login|log-in|signin|sign-in|signup|sign-up|onboarding|account|accounts)(\/|$)/.test(
+        path,
+      );
+    }
+    if (kind === 'gemini' && parsed.hostname.includes('gemini.google.com')) {
+      return /^\/(auth|login|signin|sign-in|onboarding|account|accounts)(\/|$)/.test(
+        path,
+      );
+    }
+    return parsed.hostname.includes('accounts.google.com');
+  } catch {
+    return false;
+  }
+}
+
 function isDeletedChatSignal(
   kind: 'chatgpt' | 'gemini',
   requestedUrl: string,
@@ -3270,6 +3293,9 @@ function isDeletedChatSignal(
   try {
     const finalUrl = new URL(page.url);
     const requested = new URL(requestedUrl);
+    if (isAuthOrOnboardingUrl(kind, page.url)) {
+      return false;
+    }
     const finalIsProvider = finalUrl.origin === requested.origin;
     return finalIsProvider && !isConversationUrl(kind, page.url);
   } catch {
