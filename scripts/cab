@@ -37,6 +37,7 @@ Environment:
   CAI_IPC_PORT             Daemon port (default: 9321)
   CAI_CAB_REQUEST_TIMEOUT_SEC
                            HTTP request timeout in seconds (default: 1800)
+  CAB_SESSION_ID           Session lane sent to daemon (default: default)
 
 Examples:
   cab chatgpt "How to deep copy in JS?"
@@ -90,6 +91,7 @@ ask_ai() {
   local target="$1"
   local question="$2"
   local debug="${3:-false}"
+  local session_id="${CAB_SESSION_ID:-default}"
 
   ensure_daemon || exit 1
 
@@ -102,6 +104,7 @@ ask_ai() {
   local response
   response=$(curl -sf -X POST "${CAB_BASE}/api/ask" \
     -H 'Content-Type: application/json' \
+    -H "x-cab-session: ${session_id}" \
     -d "$payload" \
     --max-time "${CAB_REQUEST_TIMEOUT_SEC}") || {
     echo "Error: failed to connect to daemon at ${CAB_BASE}" >&2
