@@ -14,6 +14,19 @@ if [ ! -x "$CAB" ]; then
   exit 1
 fi
 
+if [ -z "${CAB_SESSION_ID:-}" ]; then
+  if [ -n "${TMUX:-}" ]; then
+    _TMUX_SOCKET="${TMUX%%,*}"
+    CAB_SESSION_ID="$(basename "$_TMUX_SOCKET")"
+    if [ -z "$CAB_SESSION_ID" ] || [ "$CAB_SESSION_ID" = "." ]; then
+      CAB_SESSION_ID="default"
+    fi
+  else
+    CAB_SESSION_ID="default"
+  fi
+fi
+export CAB_SESSION_ID
+
 case "${1:-}" in
   health|--health) exec "$CAB" health ;;
   --help|-h|"")    exec "$CAB" --help ;;
