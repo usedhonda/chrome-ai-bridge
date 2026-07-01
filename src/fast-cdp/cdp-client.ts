@@ -21,7 +21,6 @@ const RETRYABLE_RELAY_TIMEOUT_METHODS = new Set([
   'Page.enable',
   'Page.navigate',
   'Runtime.enable',
-  'Runtime.evaluate',
 ]);
 
 function isRelayRequestTimeout(error: unknown): boolean {
