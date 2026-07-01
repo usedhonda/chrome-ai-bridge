@@ -263,8 +263,15 @@ function clearStoredTabIds(session: AgentSession): boolean {
   return changed;
 }
 
+function getSessionAgeMs(session: AgentSession, now: number): number {
+  const lastAccess = new Date(session.lastAccess).getTime();
+  return Number.isFinite(lastAccess)
+    ? now - lastAccess
+    : Number.POSITIVE_INFINITY;
+}
+
 /**
- * Remove stale session metadata that exceeds TTL without deleting chat URLs.
+ * Remove stale session metadata without breaking recent chat URL persistence.
  *
  * @returns Number of agents cleaned up
  */
@@ -273,23 +280,22 @@ export async function cleanupStaleSessions(): Promise<number> {
   const sessions = await loadSessions();
 
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
   const ttlMs = config.sessionTtlMinutes * 60 * 1000;
   let removedCount = 0;
 
   for (const [agentId, session] of Object.entries(sessions.agents)) {
-    const lastAccess = new Date(session.lastAccess).getTime();
-    const age = now - lastAccess;
+    const age = getSessionAgeMs(session, now);
 
     if (age > ttlMs) {
-      removedCount++;
       if (hasStoredUrl(session)) {
-        clearStoredTabIds(session);
-        session.lastAccess = nowIso;
-        console.error(
-          `[session-manager] Preserved stale agent URLs: ${agentId} (${Math.round(age / 60000)}min old)`,
-        );
+        if (clearStoredTabIds(session)) {
+          removedCount++;
+          console.error(
+            `[session-manager] Preserved stale agent URLs and cleared tab IDs: ${agentId} (${Math.round(age / 60000)}min old)`,
+          );
+        }
       } else {
+        removedCount++;
         delete sessions.agents[agentId];
         console.error(
           `[session-manager] Removed stale empty agent: ${agentId} (${Math.round(age / 60000)}min old)`,
@@ -301,29 +307,25 @@ export async function cleanupStaleSessions(): Promise<number> {
   // Enforce maxAgents limit
   const agentIds = Object.keys(sessions.agents);
   if (agentIds.length > config.maxAgents) {
-    // Sort by lastAccess (oldest first)
-    const sorted = agentIds.sort((a, b) => {
-      const aTime = new Date(sessions.agents[a].lastAccess).getTime();
-      const bTime = new Date(sessions.agents[b].lastAccess).getTime();
-      return aTime - bTime;
-    });
+    const inactiveSorted = agentIds
+      .filter(agentId => getSessionAgeMs(sessions.agents[agentId], now) > ttlMs)
+      .sort(
+        (a, b) =>
+          getSessionAgeMs(sessions.agents[b], now) -
+          getSessionAgeMs(sessions.agents[a], now),
+      );
 
-    // Remove oldest until under limit
-    const toRemove = sorted.slice(0, agentIds.length - config.maxAgents);
+    // Evict only inactive LRU entries. Recent lanes keep URLs even over limit.
+    const toRemove = inactiveSorted.slice(
+      0,
+      agentIds.length - config.maxAgents,
+    );
     for (const agentId of toRemove) {
       removedCount++;
-      if (hasStoredUrl(sessions.agents[agentId])) {
-        clearStoredTabIds(sessions.agents[agentId]);
-        sessions.agents[agentId].lastAccess = nowIso;
-        console.error(
-          `[session-manager] Preserved agent URLs over limit: ${agentId}`,
-        );
-      } else {
-        delete sessions.agents[agentId];
-        console.error(
-          `[session-manager] Removed empty agent (over limit): ${agentId}`,
-        );
-      }
+      delete sessions.agents[agentId];
+      console.error(
+        `[session-manager] Removed inactive LRU agent over limit: ${agentId}`,
+      );
     }
   }
 
