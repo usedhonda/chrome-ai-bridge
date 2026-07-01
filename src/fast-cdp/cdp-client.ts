@@ -11,6 +11,29 @@ export interface CdpEvent {
   sessionId?: string;
 }
 
+const RETRYABLE_RELAY_TIMEOUT_METHODS = new Set([
+  'DOM.enable',
+  'Emulation.setFocusEmulationEnabled',
+  'Network.enable',
+  'Network.getResponseBody',
+  'Page.bringToFront',
+  'Page.captureScreenshot',
+  'Page.enable',
+  'Page.navigate',
+  'Runtime.enable',
+  'Runtime.evaluate',
+]);
+
+function isRelayRequestTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error && error.message.includes('RELAY_REQUEST_TIMEOUT')
+  );
+}
+
+function relayRetryDelayMs(attempt: number): number {
+  return 250 * Math.pow(2, attempt);
+}
+
 export class CdpClient {
   private relay: RelayServer;
   private sessionId?: string;
@@ -24,12 +47,30 @@ export class CdpClient {
     this.sessionId = sessionId;
   }
 
-  async send(method: string, params?: Record<string, unknown>) {
-    return this.relay.sendRequest('forwardCDPCommand', {
-      sessionId: this.sessionId,
-      method,
-      params: params ?? {},
-    });
+  async send(
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const maxAttempts = RETRYABLE_RELAY_TIMEOUT_METHODS.has(method) ? 3 : 1;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.relay.sendRequest('forwardCDPCommand', {
+          sessionId: this.sessionId,
+          method,
+          params: params ?? {},
+        });
+      } catch (error) {
+        if (!isRelayRequestTimeout(error) || attempt >= maxAttempts - 1) {
+          throw error;
+        }
+        const waitMs = relayRetryDelayMs(attempt);
+        console.error(
+          `[CDP] ${method} hit RELAY_REQUEST_TIMEOUT; retry ${attempt + 2}/${maxAttempts} after ${waitMs}ms`,
+        );
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+    }
+    throw new Error(`CDP_RETRY_EXHAUSTED: method=${method}`);
   }
 
   /**
