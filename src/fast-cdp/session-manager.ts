@@ -224,7 +224,7 @@ export async function saveAgentSession(
 }
 
 /**
- * Clear session for the current agent.
+ * Clear volatile tab metadata for the current agent without dropping chat URL.
  */
 export async function clearAgentSession(
   kind: 'chatgpt' | 'gemini',
@@ -233,10 +233,16 @@ export async function clearAgentSession(
   const sessions = await loadSessions();
 
   if (sessions.agents[agentId]) {
-    sessions.agents[agentId][kind] = null;
+    const entry = sessions.agents[agentId][kind];
+    if (entry?.url) {
+      delete entry.tabId;
+      sessions.agents[agentId].lastAccess = new Date().toISOString();
+    } else {
+      sessions.agents[agentId][kind] = null;
+    }
     await saveRawSessions(sessions);
     console.error(
-      `[session-manager] Cleared ${kind} session for agent: ${agentId}`,
+      `[session-manager] Cleared ${kind} tab metadata for agent: ${agentId}, preserved URL if present`,
     );
   }
 }
