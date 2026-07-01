@@ -654,7 +654,7 @@ data: [DONE]
 
 **Hybrid selection**: After capture, the system compares network-extracted text with DOM-extracted text and selects the longer/more complete result. Network text is preferred when available.
 
-**Driver parity**: When `CAI_USE_DRIVERS=1`, `askChatGPTViaDriver()` uses the same `NetworkInterceptor` capture and hybrid network-vs-DOM answer selection around driver send/wait/extract. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
+**Driver parity**: When `CAI_USE_DRIVERS=1`, `askChatGPTViaDriver()` uses the same `NetworkInterceptor` capture and hybrid network-vs-DOM answer selection around driver send/wait/extract. `ChatGPTDriver` also mirrors the monolith wait/extract depth: stop-button gone debounce, Thinking fallback, collapsed thinking expansion, final text wait, streaming-text priority, and multi-stage DOM/main/body extraction. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
 
 ### 3.6 ChatGPT DOM-based Extraction (Fallback)
 
