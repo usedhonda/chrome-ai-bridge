@@ -20,6 +20,17 @@ import {getSessionConfig} from '../config.js';
 
 import {getAgentId, hasAgentId} from './agent-context.js';
 
+let sessionMutationQueue: Promise<void> = Promise.resolve();
+
+async function withSessionMutationLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = sessionMutationQueue.then(fn, fn);
+  sessionMutationQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 /**
  * Session entry for a single AI provider
  */
@@ -101,8 +112,15 @@ async function loadRawSessions(): Promise<SessionStoreV1 | SessionStoreV2> {
  */
 async function saveRawSessions(sessions: SessionStoreV2): Promise<void> {
   const targetPath = getSessionPath();
+  const tempPath = `${targetPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
   await fs.mkdir(path.dirname(targetPath), {recursive: true});
-  await fs.writeFile(targetPath, JSON.stringify(sessions, null, 2), 'utf-8');
+  try {
+    await fs.writeFile(tempPath, JSON.stringify(sessions, null, 2), 'utf-8');
+    await fs.rename(tempPath, targetPath);
+  } catch (err) {
+    await fs.unlink(tempPath).catch(() => undefined);
+    throw err;
+  }
 }
 
 /**
@@ -151,7 +169,7 @@ async function migrateToV2(v1: SessionStoreV1): Promise<SessionStoreV2> {
 /**
  * Load sessions, auto-migrating if needed.
  */
-export async function loadSessions(): Promise<SessionStoreV2> {
+async function loadSessionsUnlocked(): Promise<SessionStoreV2> {
   const raw = await loadRawSessions();
 
   if (isV2Format(raw)) {
@@ -165,32 +183,36 @@ export async function loadSessions(): Promise<SessionStoreV2> {
 }
 
 /**
+ * Load sessions, auto-migrating if needed.
+ */
+export async function loadSessions(): Promise<SessionStoreV2> {
+  return await withSessionMutationLock(loadSessionsUnlocked);
+}
+
+/**
  * Get or create session for the current agent.
  * Always updates lastAccess to keep session alive for TTL.
  */
 export async function getAgentSession(): Promise<AgentSession> {
-  const agentId = hasAgentId() ? getAgentId() : 'default';
-  const sessions = await loadSessions();
-  let needsSave = false;
+  return await withSessionMutationLock(async () => {
+    const agentId = hasAgentId() ? getAgentId() : 'default';
+    const sessions = await loadSessionsUnlocked();
 
-  if (!sessions.agents[agentId]) {
-    sessions.agents[agentId] = {
-      lastAccess: new Date().toISOString(),
-      chatgpt: null,
-      gemini: null,
-    };
-    needsSave = true;
-  } else {
-    // Update lastAccess for existing sessions (keeps TTL alive)
-    sessions.agents[agentId].lastAccess = new Date().toISOString();
-    needsSave = true;
-  }
+    if (!sessions.agents[agentId]) {
+      sessions.agents[agentId] = {
+        lastAccess: new Date().toISOString(),
+        chatgpt: null,
+        gemini: null,
+      };
+    } else {
+      // Update lastAccess for existing sessions (keeps TTL alive)
+      sessions.agents[agentId].lastAccess = new Date().toISOString();
+    }
 
-  if (needsSave) {
     await saveRawSessions(sessions);
-  }
 
-  return sessions.agents[agentId];
+    return sessions.agents[agentId];
+  });
 }
 
 /**
@@ -201,26 +223,28 @@ export async function saveAgentSession(
   url: string,
   tabId?: number,
 ): Promise<void> {
-  const agentId = hasAgentId() ? getAgentId() : 'default';
-  const sessions = await loadSessions();
+  await withSessionMutationLock(async () => {
+    const agentId = hasAgentId() ? getAgentId() : 'default';
+    const sessions = await loadSessionsUnlocked();
 
-  if (!sessions.agents[agentId]) {
-    sessions.agents[agentId] = {
-      lastAccess: new Date().toISOString(),
-      chatgpt: null,
-      gemini: null,
+    if (!sessions.agents[agentId]) {
+      sessions.agents[agentId] = {
+        lastAccess: new Date().toISOString(),
+        chatgpt: null,
+        gemini: null,
+      };
+    }
+
+    const session = sessions.agents[agentId];
+    session.lastAccess = new Date().toISOString();
+    session[kind] = {
+      url,
+      tabId,
+      lastUsed: new Date().toISOString(),
     };
-  }
 
-  const session = sessions.agents[agentId];
-  session.lastAccess = new Date().toISOString();
-  session[kind] = {
-    url,
-    tabId,
-    lastUsed: new Date().toISOString(),
-  };
-
-  await saveRawSessions(sessions);
+    await saveRawSessions(sessions);
+  });
 }
 
 /**
@@ -229,22 +253,24 @@ export async function saveAgentSession(
 export async function clearAgentSession(
   kind: 'chatgpt' | 'gemini',
 ): Promise<void> {
-  const agentId = hasAgentId() ? getAgentId() : 'default';
-  const sessions = await loadSessions();
+  await withSessionMutationLock(async () => {
+    const agentId = hasAgentId() ? getAgentId() : 'default';
+    const sessions = await loadSessionsUnlocked();
 
-  if (sessions.agents[agentId]) {
-    const entry = sessions.agents[agentId][kind];
-    if (entry?.url) {
-      delete entry.tabId;
-      sessions.agents[agentId].lastAccess = new Date().toISOString();
-    } else {
-      sessions.agents[agentId][kind] = null;
+    if (sessions.agents[agentId]) {
+      const entry = sessions.agents[agentId][kind];
+      if (entry?.url) {
+        delete entry.tabId;
+        sessions.agents[agentId].lastAccess = new Date().toISOString();
+      } else {
+        sessions.agents[agentId][kind] = null;
+      }
+      await saveRawSessions(sessions);
+      console.error(
+        `[session-manager] Cleared ${kind} tab metadata for agent: ${agentId}, preserved URL if present`,
+      );
     }
-    await saveRawSessions(sessions);
-    console.error(
-      `[session-manager] Cleared ${kind} tab metadata for agent: ${agentId}, preserved URL if present`,
-    );
-  }
+  });
 }
 
 /**
@@ -253,17 +279,19 @@ export async function clearAgentSession(
 export async function dropAgentSessionUrl(
   kind: 'chatgpt' | 'gemini',
 ): Promise<void> {
-  const agentId = hasAgentId() ? getAgentId() : 'default';
-  const sessions = await loadSessions();
+  await withSessionMutationLock(async () => {
+    const agentId = hasAgentId() ? getAgentId() : 'default';
+    const sessions = await loadSessionsUnlocked();
 
-  if (sessions.agents[agentId]?.[kind]) {
-    sessions.agents[agentId][kind] = null;
-    sessions.agents[agentId].lastAccess = new Date().toISOString();
-    await saveRawSessions(sessions);
-    console.error(
-      `[session-manager] Dropped stale ${kind} URL for agent: ${agentId}`,
-    );
-  }
+    if (sessions.agents[agentId]?.[kind]) {
+      sessions.agents[agentId][kind] = null;
+      sessions.agents[agentId].lastAccess = new Date().toISOString();
+      await saveRawSessions(sessions);
+      console.error(
+        `[session-manager] Dropped stale ${kind} URL for agent: ${agentId}`,
+      );
+    }
+  });
 }
 
 function hasStoredUrl(session: AgentSession): boolean {
@@ -295,64 +323,68 @@ function getSessionAgeMs(session: AgentSession, now: number): number {
  * @returns Number of agents cleaned up
  */
 export async function cleanupStaleSessions(): Promise<number> {
-  const config = getSessionConfig();
-  const sessions = await loadSessions();
+  return await withSessionMutationLock(async () => {
+    const config = getSessionConfig();
+    const sessions = await loadSessionsUnlocked();
 
-  const now = Date.now();
-  const ttlMs = config.sessionTtlMinutes * 60 * 1000;
-  let removedCount = 0;
+    const now = Date.now();
+    const ttlMs = config.sessionTtlMinutes * 60 * 1000;
+    let removedCount = 0;
 
-  for (const [agentId, session] of Object.entries(sessions.agents)) {
-    const age = getSessionAgeMs(session, now);
+    for (const [agentId, session] of Object.entries(sessions.agents)) {
+      const age = getSessionAgeMs(session, now);
 
-    if (age > ttlMs) {
-      if (hasStoredUrl(session)) {
-        if (clearStoredTabIds(session)) {
+      if (age > ttlMs) {
+        if (hasStoredUrl(session)) {
+          if (clearStoredTabIds(session)) {
+            removedCount++;
+            console.error(
+              `[session-manager] Preserved stale agent URLs and cleared tab IDs: ${agentId} (${Math.round(age / 60000)}min old)`,
+            );
+          }
+        } else {
           removedCount++;
+          delete sessions.agents[agentId];
           console.error(
-            `[session-manager] Preserved stale agent URLs and cleared tab IDs: ${agentId} (${Math.round(age / 60000)}min old)`,
+            `[session-manager] Removed stale empty agent: ${agentId} (${Math.round(age / 60000)}min old)`,
           );
         }
-      } else {
+      }
+    }
+
+    // Enforce maxAgents limit
+    const agentIds = Object.keys(sessions.agents);
+    if (agentIds.length > config.maxAgents) {
+      const inactiveSorted = agentIds
+        .filter(
+          agentId => getSessionAgeMs(sessions.agents[agentId], now) > ttlMs,
+        )
+        .sort(
+          (a, b) =>
+            getSessionAgeMs(sessions.agents[b], now) -
+            getSessionAgeMs(sessions.agents[a], now),
+        );
+
+      // Evict only inactive LRU entries. Recent lanes keep URLs even over limit.
+      const toRemove = inactiveSorted.slice(
+        0,
+        agentIds.length - config.maxAgents,
+      );
+      for (const agentId of toRemove) {
         removedCount++;
         delete sessions.agents[agentId];
         console.error(
-          `[session-manager] Removed stale empty agent: ${agentId} (${Math.round(age / 60000)}min old)`,
+          `[session-manager] Removed inactive LRU agent over limit: ${agentId}`,
         );
       }
     }
-  }
 
-  // Enforce maxAgents limit
-  const agentIds = Object.keys(sessions.agents);
-  if (agentIds.length > config.maxAgents) {
-    const inactiveSorted = agentIds
-      .filter(agentId => getSessionAgeMs(sessions.agents[agentId], now) > ttlMs)
-      .sort(
-        (a, b) =>
-          getSessionAgeMs(sessions.agents[b], now) -
-          getSessionAgeMs(sessions.agents[a], now),
-      );
-
-    // Evict only inactive LRU entries. Recent lanes keep URLs even over limit.
-    const toRemove = inactiveSorted.slice(
-      0,
-      agentIds.length - config.maxAgents,
-    );
-    for (const agentId of toRemove) {
-      removedCount++;
-      delete sessions.agents[agentId];
-      console.error(
-        `[session-manager] Removed inactive LRU agent over limit: ${agentId}`,
-      );
+    if (removedCount > 0) {
+      await saveRawSessions(sessions);
     }
-  }
 
-  if (removedCount > 0) {
-    await saveRawSessions(sessions);
-  }
-
-  return removedCount;
+    return removedCount;
+  });
 }
 
 /**
