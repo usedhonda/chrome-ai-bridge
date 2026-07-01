@@ -614,8 +614,36 @@ interface ChatGPTModelState {
   warningText: string;
 }
 
+interface ChatGPTModelEnsureOptions {
+  preserveConversation?: boolean;
+}
+
 function isChatGPTProText(text: string | null | undefined): boolean {
   return /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(text || '');
+}
+
+function getChatGPTConversationId(
+  url: string | null | undefined,
+): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith('chatgpt.com')) return null;
+    const match = parsed.pathname.match(/^\/c\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]).toLowerCase() : null;
+  } catch {
+    const match = url.match(/chatgpt\.com\/c\/([^/?#]+)/i);
+    return match ? decodeURIComponent(match[1]).toLowerCase() : null;
+  }
+}
+
+function isSameChatGPTConversation(
+  a: string | null,
+  b: string | null,
+): boolean {
+  const left = getChatGPTConversationId(a);
+  const right = getChatGPTConversationId(b);
+  return Boolean(left && right && left === right);
 }
 
 function getChatGPTProStateSource(
@@ -652,9 +680,14 @@ async function getChatGPTModelState(
         buttonLabels.find(label => /gpt|chatgpt|model|モデル|pro/i.test(label)) || '';
       const allText = document.body?.innerText || '';
       const proVisible = /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(allText);
-      const proUnavailable =
-        /unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(allText) &&
-        /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(allText);
+      const warningLines = allText
+        .split('\\n')
+        .filter(line =>
+          /(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(line) &&
+          /unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(line)
+        )
+        .slice(0, 3);
+      const proUnavailable = warningLines.length > 0;
       const modelSlugs = Array.from(document.querySelectorAll('[data-message-model-slug]'))
         .map(el => el.getAttribute('data-message-model-slug') || '')
         .filter(Boolean)
@@ -671,11 +704,7 @@ async function getChatGPTModelState(
         modelSlugs,
         proVisible,
         proUnavailable,
-        warningText: allText
-          .split('\\n')
-          .filter(line => /unavailable|not available|limit reached|upgrade|subscribe|上限|利用できません|使えません|アップグレード/i.test(line))
-          .slice(0, 3)
-          .join(' | '),
+        warningText: warningLines.join(' | '),
       };
     })()
   `);
@@ -711,6 +740,15 @@ async function trySelectChatGPTProFromPicker(client: CdpClient): Promise<{
         el.disabled ||
         el.getAttribute?.('aria-disabled') === 'true' ||
         el.getAttribute?.('disabled') === 'true';
+      const priorityOf = (label) => {
+        const normalized = label.replace(/\\s+/g, ' ').trim().toLowerCase();
+        if (/pro extended/.test(normalized)) return 0;
+        if (/pro standard/.test(normalized)) return 1;
+        if (/gpt[-\\s]?5\\.5[^\\n]*pro|chatgpt[-\\s]?5\\.5[^\\n]*pro/.test(normalized)) return 2;
+        if (/gpt[-\\s]?5[^\\n]*pro|chatgpt[-\\s]?5[^\\n]*pro/.test(normalized)) return 3;
+        if (/(?:^|[^a-z])pro(?:[^a-z]|$)/i.test(label)) return 4;
+        return 99;
+      };
       const buttons = Array.from(document.querySelectorAll('button, [role="button"]'))
         .filter(isVisible);
       const picker = buttons.find(btn => {
@@ -737,7 +775,9 @@ async function trySelectChatGPTProFromPicker(client: CdpClient): Promise<{
         return {attempted: true, clicked: false, reason: 'available Pro option not found'};
       }
 
-      const preferred = candidates.find(item => /gpt|chatgpt|5/i.test(item.label)) || candidates[0];
+      const preferred = candidates
+        .map((item, index) => ({...item, priority: priorityOf(item.label), index}))
+        .sort((a, b) => a.priority - b.priority || a.index - b.index)[0];
       preferred.el.click();
       await sleep(1000);
       return {attempted: true, clicked: true, label: preferred.label};
@@ -747,18 +787,26 @@ async function trySelectChatGPTProFromPicker(client: CdpClient): Promise<{
 
 async function ensureChatGPTPreferredModel(
   client: CdpClient,
+  options: ChatGPTModelEnsureOptions = {},
 ): Promise<ChatGPTModelSelection> {
   const currentUrl = await client.evaluate<string>('location.href');
+  const currentIsConversation = isChatGPTConversationUrl(currentUrl);
   if (
-    isChatGPTConversationUrl(currentUrl) ||
+    (currentIsConversation && !options.preserveConversation) ||
     !isChatGPTConfiguredModelUrl(currentUrl)
   ) {
-    console.error(
-      `[ChatGPT] Selecting configured model ${CHATGPT_CONFIG.DEFAULT_MODEL} before query...`,
-    );
-    await navigate(client, CHATGPT_CONFIG.DEFAULT_URL);
-    await new Promise(r => setTimeout(r, 500));
-    console.error('[ChatGPT] Configured model page loaded');
+    if (currentIsConversation && options.preserveConversation) {
+      console.error(
+        `[ChatGPT] Preserving reused conversation while verifying ${CHATGPT_CONFIG.DEFAULT_MODEL} in place: ${currentUrl}`,
+      );
+    } else {
+      console.error(
+        `[ChatGPT] Selecting configured model ${CHATGPT_CONFIG.DEFAULT_MODEL} before query...`,
+      );
+      await navigate(client, CHATGPT_CONFIG.DEFAULT_URL);
+      await new Promise(r => setTimeout(r, 500));
+      console.error('[ChatGPT] Configured model page loaded');
+    }
   }
 
   let state = await getChatGPTModelState(client);
@@ -781,7 +829,13 @@ async function ensureChatGPTPreferredModel(
 
   if (source) {
     const selectedModelLabel =
-      state.selectedLabel || state.urlModel || state.modelSlugs.at(-1) || 'Pro';
+      source === 'url'
+        ? state.urlModel || 'Pro'
+        : source === 'slug'
+          ? state.modelSlugs.find(slug => isChatGPTProText(slug)) ||
+            state.modelSlugs.at(-1) ||
+            'Pro'
+          : state.selectedLabel || state.urlModel || 'Pro';
     console.error(
       `[ChatGPT] Pro model active (${source}): ${selectedModelLabel}`,
     );
@@ -800,19 +854,46 @@ async function ensureChatGPTPreferredModel(
         ? 'Pro option visible but not selectable'
         : 'Pro option not detected';
   console.error(
-    `[ChatGPT] Pro unavailable; falling back to default model: ${fallbackReason}`,
+    `[ChatGPT] MODEL_UNAVAILABLE selectedPro=false: ${fallbackReason}`,
   );
-  if (!isChatGPTConversationUrl(state.url)) {
-    await navigate(client, CHATGPT_CONFIG.BASE_URL);
-    await new Promise(r => setTimeout(r, 500));
+  throw new Error(
+    `MODEL_UNAVAILABLE: ChatGPT Pro model required before send; selectedPro=false; reason=${fallbackReason}`,
+  );
+}
+
+async function getChatGPTConversationReuseContext(client: CdpClient): Promise<{
+  currentUrl: string;
+  preferredUrl: string | null;
+  preserveConversation: boolean;
+}> {
+  const currentUrl = await client.evaluate<string>('location.href');
+  const preferredUrl = (await getPreferredSessionV2('chatgpt')).url;
+  const preserveConversation = isSameChatGPTConversation(
+    currentUrl,
+    preferredUrl,
+  );
+  if (preserveConversation) {
+    console.error(
+      `[ChatGPT] Reusing saved conversation in place: ${preferredUrl}`,
+    );
   }
-  return {
-    prefersPro: true,
-    selectedPro: false,
-    selectedModelLabel: state.selectedLabel || state.urlModel || undefined,
-    selectionSource: 'fallback',
-    fallbackReason,
-  };
+  return {currentUrl, preferredUrl, preserveConversation};
+}
+
+function logChatGPTForkIfNeeded(
+  preserveConversation: boolean,
+  preferredUrl: string | null,
+  finalUrl: string,
+): void {
+  if (
+    preserveConversation &&
+    isChatGPTConversationUrl(finalUrl) &&
+    !isSameChatGPTConversation(preferredUrl, finalUrl)
+  ) {
+    console.error(
+      `[ChatGPT] WARNING: conversation fork detected; preferred=${preferredUrl} final=${finalUrl}`,
+    );
+  }
 }
 
 /**
@@ -1115,9 +1196,10 @@ async function askChatGPTFastInternal(
   await new Promise(r => setTimeout(r, 500));
   console.error('[ChatGPT] Waited 500ms for SPA rendering');
 
-  // 送信前に必ず設定済みモデルの新規チャットへ寄せる。
-  // 既存会話やモデル指定なしページに投入すると、前回コンテキストや別モデルが混ざる。
-  const modelSelection = await ensureChatGPTPreferredModel(client);
+  const reuseContext = await getChatGPTConversationReuseContext(client);
+  const modelSelection = await ensureChatGPTPreferredModel(client, {
+    preserveConversation: reuseContext.preserveConversation,
+  });
 
   // 入力欄が表示されるまで待機してから取得
   const tWaitInput = nowMs();
@@ -2873,6 +2955,11 @@ async function askChatGPTFastInternal(
 
   const finalUrl = await client.evaluate<string>('location.href');
   if (finalUrl && finalUrl.includes('chatgpt.com')) {
+    logChatGPTForkIfNeeded(
+      reuseContext.preserveConversation,
+      reuseContext.preferredUrl,
+      finalUrl,
+    );
     await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
   }
   timings.waitResponseMs = nowMs() - tWaitResp;
@@ -3046,7 +3133,10 @@ async function askChatGPTViaDriver(
   });
 
   await client.waitForFunction(`document.readyState === 'complete'`, 30000);
-  const modelSelection = await ensureChatGPTPreferredModel(client);
+  const reuseContext = await getChatGPTConversationReuseContext(client);
+  const modelSelection = await ensureChatGPTPreferredModel(client, {
+    preserveConversation: reuseContext.preserveConversation,
+  });
 
   // Driver取得・設定
   const driver = getDriver('chatgpt');
@@ -3101,6 +3191,11 @@ async function askChatGPTViaDriver(
   // セッション保存
   const finalUrl = await driver.getCurrentUrl();
   if (finalUrl.includes('chatgpt.com')) {
+    logChatGPTForkIfNeeded(
+      reuseContext.preserveConversation,
+      reuseContext.preferredUrl,
+      finalUrl,
+    );
     await saveAgentSession('chatgpt', getBaseUrl('chatgpt', finalUrl));
   }
 

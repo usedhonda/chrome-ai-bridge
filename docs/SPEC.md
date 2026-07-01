@@ -546,22 +546,29 @@ Even with focus emulation enabled, `Page.bringToFront` is called before DOM-base
 2. Start network capture: interceptor.startCapture()
 3. Wait for page load complete (readyState === 'complete', 30s)
 4. Wait for SPA rendering stabilization (500ms fixed)
-5. Wait for input field to appear (30s)
-6. Wait for page load stability (waitForStableCount: stable if same value 2x)
-7. Get initial message count (user + assistant)
-8. Text input (3-phase fallback)
+5. Determine whether the current `/c/<id>` matches the saved ChatGPT session URL
+6. Ensure Pro model before send
+   - If reusing the same saved `/c/<id>`, preserve the conversation URL and verify/select Pro in place
+   - If not reusing a saved conversation, navigate to the configured model URL (`chatgpt.com/?model=...`)
+   - If Pro cannot be verified or selected, fail closed with `MODEL_UNAVAILABLE`; never send on a weaker model silently
+7. Wait for input field to appear (30s)
+8. Wait for page load stability (waitForStableCount: stable if same value 2x)
+9. Get initial message count (user + assistant)
+10. Text input (3-phase fallback)
    - Phase 1: JavaScript evaluate (textarea.value / innerHTML)
    - Phase 2: CDP Input.insertText
    - Phase 3: CDP Input.dispatchKeyEvent (char by char)
-9. Input verification (check if normalizedQuestion is included)
-10. Search/wait for send button (60s, 500ms interval)
-11. Click via JavaScript btn.click() (CDP fallback available)
-12. Send button click → verify user message count increase
-13. Wait for new assistant message DOM addition (30s)
-14. Response completion detection (polling, **8min**, 1s interval)
-15. Stop network capture: interceptor.stopCaptureAndWait()
-16. Hybrid text selection: network text (primary) vs DOM text (fallback)
-17. Save session and record history
+11. Input verification (check if normalizedQuestion is included)
+12. Search/wait for send button (60s, 500ms interval)
+13. Click via JavaScript btn.click() (CDP fallback available)
+14. Send button click → verify user message count increase
+15. Wait for new assistant message DOM addition (30s)
+16. Response completion detection (polling, **8min**, 1s interval)
+17. Stop network capture: interceptor.stopCaptureAndWait()
+18. Hybrid text selection: network text (primary) vs DOM text (fallback)
+19. Save session and record history
+   - If the reused `/c/<id>` stayed the same, save the same URL again
+   - If ChatGPT forks to a different `/c/<id>`, log the fork before saving the new URL
 ```
 
 **Preventing misidentification on existing chat reconnection** (added in v2.0.10):
