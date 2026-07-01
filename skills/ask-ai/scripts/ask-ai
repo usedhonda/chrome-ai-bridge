@@ -15,7 +15,9 @@ if [ ! -x "$CAB" ]; then
 fi
 
 if [ -z "${CAB_SESSION_ID:-}" ]; then
-  if [ -n "${TMUX:-}" ]; then
+  if [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_CI:-}" ] || [ -n "${CODEX_MANAGED_BY_NPM:-}" ]; then
+    CAB_SESSION_ID="cdx"
+  elif [ -n "${TMUX:-}" ]; then
     _TMUX_SOCKET="${TMUX%%,*}"
     CAB_SESSION_ID="$(basename "$_TMUX_SOCKET")"
     if [ -z "$CAB_SESSION_ID" ] || [ "$CAB_SESSION_ID" = "." ]; then
