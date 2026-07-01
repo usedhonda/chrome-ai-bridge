@@ -159,16 +159,34 @@ export class GeminiDriver extends BaseDriver {
     const maxWaitMs = options?.maxWaitMs ?? 480000;
     const pollIntervalMs = 500;
     const startTime = Date.now();
+    const initialModelResponseCount =
+      (options as {initialModelResponseCount?: number} | undefined)
+        ?.initialModelResponseCount ?? 0;
 
     let sawStopButton = false;
     let lastTextLength = 0;
     let textStableCount = 0;
+    let lastState:
+      | {
+          hasStopButton: boolean;
+          hasMicButton: boolean;
+          hasFeedbackButtons: boolean;
+          sendButtonEnabled: boolean;
+          modelResponseCount: number;
+          lastResponseTextLength: number;
+          inputBoxEmpty: boolean;
+        }
+      | undefined;
 
     while (Date.now() - startTime < maxWaitMs) {
       const state = await this.evaluateWithUtils<{
         hasStopButton: boolean;
+        hasMicButton: boolean;
         hasFeedbackButtons: boolean;
+        sendButtonEnabled: boolean;
+        modelResponseCount: number;
         lastResponseTextLength: number;
+        inputBoxEmpty: boolean;
       }>(`
         const buttons = __collectDeep(['button', '[role="button"]']).nodes.filter(__isVisible);
 
@@ -189,32 +207,104 @@ export class GeminiDriver extends BaseDriver {
           return false;
         })();
 
+        const micButton = (() => {
+          const micImgs = __collectDeep(['img[alt="mic"]']).nodes;
+          for (const micImg of micImgs) {
+            const btn = micImg.closest('button');
+            if (btn && __isVisible(btn)) return btn;
+          }
+          return buttons.find(b => {
+            const label = (b.getAttribute('aria-label') || '').toLowerCase();
+            return label.includes('マイク') ||
+                   label.includes('mic') ||
+                   label.includes('microphone') ||
+                   label.includes('voice');
+          });
+        })();
+
+        const sendBtn = buttons.find(b =>
+          (b.textContent || '').includes('プロンプトを送信') ||
+          (b.textContent || '').includes('送信') ||
+          (b.getAttribute('aria-label') || '').includes('送信') ||
+          (b.getAttribute('aria-label') || '').includes('Send') ||
+          b.querySelector('mat-icon[data-mat-icon-name="send"]') ||
+          b.querySelector('[data-icon="send"]')
+        );
+
         // Feedback buttons (indicate completion)
         const feedbackImgs = __collectDeep(['img[alt="thumb_up"]', 'img[alt="thumb_down"]']).nodes;
-        const hasFeedbackButtons = feedbackImgs.length > 0;
+        const hasFeedbackButtons = feedbackImgs.length > 0 ||
+          buttons.some(b => {
+            const label = (b.getAttribute('aria-label') || '').toLowerCase();
+            return label.includes('良い回答') || label.includes('悪い回答') ||
+                   label.includes('good') || label.includes('bad');
+          });
 
         // Response text length
         const allResponses = __collectDeep(['model-response', '[data-test-id*="response"]', '.response', '.model-response']).nodes;
         const lastResponse = allResponses[allResponses.length - 1];
         const lastResponseTextLength = lastResponse ? (lastResponse.innerText || lastResponse.textContent || '').length : 0;
 
-        return { hasStopButton, hasFeedbackButtons, lastResponseTextLength };
+        const inputSelectors = ['rich-textarea textarea', '.ql-editor', '[contenteditable="true"]', 'textarea'];
+        let inputBoxEmpty = true;
+        for (const sel of inputSelectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const text = el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '');
+            if (text.trim().length > 0) {
+              inputBoxEmpty = false;
+              break;
+            }
+          }
+        }
+
+        return {
+          hasStopButton,
+          hasMicButton: Boolean(micButton && __isVisible(micButton)),
+          hasFeedbackButtons,
+          sendButtonEnabled: Boolean(sendBtn && !__isDisabled(sendBtn)),
+          modelResponseCount: allResponses.length,
+          lastResponseTextLength,
+          inputBoxEmpty,
+        };
       `);
+      lastState = state;
 
       if (state.hasStopButton) {
         sawStopButton = true;
       }
 
       // Check for completion conditions
-      if (!state.hasStopButton && sawStopButton) {
-        // Stop button disappeared after being visible
-        this.log('Response complete (stop button disappeared)');
+      if (
+        sawStopButton &&
+        !state.hasStopButton &&
+        state.hasFeedbackButtons &&
+        state.modelResponseCount > initialModelResponseCount
+      ) {
+        this.log(
+          'Response complete (stop button disappeared, feedback visible)',
+        );
         return;
       }
 
-      if (state.hasFeedbackButtons) {
-        // Feedback buttons appeared
-        this.log('Response complete (feedback buttons visible)');
+      if (
+        sawStopButton &&
+        !state.hasStopButton &&
+        state.hasMicButton &&
+        state.modelResponseCount > initialModelResponseCount
+      ) {
+        this.log('Response complete (stop button disappeared, mic visible)');
+        return;
+      }
+
+      if (
+        sawStopButton &&
+        !state.hasStopButton &&
+        state.sendButtonEnabled &&
+        state.inputBoxEmpty &&
+        state.modelResponseCount > initialModelResponseCount
+      ) {
+        this.log('Response complete (stop button disappeared, send enabled)');
         return;
       }
 
@@ -224,8 +314,11 @@ export class GeminiDriver extends BaseDriver {
         lastTextLength > 0
       ) {
         textStableCount++;
-        if (textStableCount >= 6 && !state.hasStopButton) {
-          // Text stable for 3 seconds and no stop button
+        if (
+          textStableCount >= 10 &&
+          state.modelResponseCount > initialModelResponseCount &&
+          !state.hasStopButton
+        ) {
           this.log('Response complete (text stable)');
           return;
         }
@@ -235,6 +328,12 @@ export class GeminiDriver extends BaseDriver {
       }
 
       await this.sleep(pollIntervalMs);
+    }
+
+    if (lastState?.hasStopButton) {
+      throw new Error(
+        'GEMINI_STUCK_STOP_BUTTON: Previous response appears stuck. Session cleared, please retry.',
+      );
     }
 
     throw new Error(`Gemini: Timed out waiting for response (${maxWaitMs}ms)`);
@@ -307,6 +406,13 @@ export class GeminiDriver extends BaseDriver {
    */
   async needsLogin(): Promise<boolean> {
     return this.evaluateWithUtils<boolean>(`
+      const url = location.href;
+      if (url.includes('accounts.google.com')) return true;
+
+      const textbox = __collectDeep(['[role="textbox"]', 'div[contenteditable="true"]', 'textarea']).nodes
+        .find(__isVisible);
+      if (textbox) return false;
+
       // Check for Google login redirect
       const hasLoginLink = !!document.querySelector('a[href*="accounts.google.com"]');
 

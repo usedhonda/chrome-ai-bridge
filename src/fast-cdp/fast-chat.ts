@@ -3280,6 +3280,19 @@ async function askGeminiViaDriver(
   }
   driver.setClient(client);
 
+  const needsLogin = await driver.needsLogin();
+  logInfo('gemini', '[Driver] Login status', {needsLogin});
+
+  const tUrl = nowMs();
+  const currentUrl = await driver.getCurrentUrl();
+  const preferred = (await getPreferredSessionV2('gemini')).url;
+  if (!currentUrl || !currentUrl.includes('gemini.google.com')) {
+    await navigate(client, preferred || 'https://gemini.google.com/');
+  } else if (preferred && !currentUrl.startsWith(preferred)) {
+    await navigate(client, preferred);
+  }
+  timings.navigateMs = nowMs() - tUrl;
+
   // 入力欄待機
   const tWaitInput = nowMs();
   await client.waitForFunction(
@@ -3294,7 +3307,15 @@ async function askGeminiViaDriver(
   interceptor.startCapture();
 
   let answer: string;
+  let extractEvidence = 'unknown';
   try {
+    const initialModelResponseCount = await client.evaluate<number>(`
+      (() => {
+        ${DOM_UTILS_CODE}
+        return __collectDeep(['model-response', '[data-test-id*="response"]', '.response', '.model-response']).nodes.length;
+      })()
+    `);
+
     // 送信
     const tInput = nowMs();
     const sendResult = await driver.sendPrompt(question);
@@ -3314,11 +3335,15 @@ async function askGeminiViaDriver(
       'gemini-driver-response',
       budgetMs,
     );
-    await driver.waitForResponse({maxWaitMs: driverWaitBudgetMs});
+    await driver.waitForResponse({
+      maxWaitMs: driverWaitBudgetMs,
+      initialModelResponseCount,
+    } as {maxWaitMs: number; initialModelResponseCount: number});
     timings.waitResponseMs = nowMs() - tWaitResp;
 
     // 応答抽出
     const extractResult = await driver.extractResponse({debug});
+    extractEvidence = extractResult.evidence;
     answer = normalizeGeminiResponse(extractResult.text, question);
     logInfo('gemini', '[Driver] Response extracted', {
       length: answer.length,
@@ -3382,9 +3407,87 @@ async function askGeminiViaDriver(
     sendMs: timings.sendMs ?? 0,
     waitResponseMs: timings.waitResponseMs ?? 0,
     totalMs: timings.totalMs ?? 0,
+    navigateMs: timings.navigateMs,
   };
 
-  return {answer: hybridAnswer, timings: fullTimings};
+  let debugInfo: ChatDebugInfo | undefined;
+  if (debug) {
+    const domDebug = await client.evaluate<{
+      articleCount: number;
+      markdowns: Array<{
+        className: string;
+        innerTextLength: number;
+        innerText: string;
+        isResultThinking: boolean;
+      }>;
+      lastArticleHtml: string;
+      lastArticleInnerText: string;
+      url: string;
+      documentTitle: string;
+    }>(`
+      (() => {
+        ${DOM_UTILS_CODE}
+
+        const allResponses = __collectDeep(['model-response', '[data-test-id*="response"]', '.response', '.model-response']).nodes;
+        const lastResponse = allResponses.length > 0 ? allResponses[allResponses.length - 1] : null;
+
+        const markdownElements = lastResponse ? Array.from(lastResponse.querySelectorAll('.markdown')) : [];
+
+        return {
+          articleCount: allResponses.length,
+          markdowns: markdownElements.map(md => ({
+            className: md.className,
+            innerTextLength: (md.innerText || '').length,
+            innerText: md.innerText || '',
+            isResultThinking: false
+          })),
+          lastArticleHtml: lastResponse ? lastResponse.innerHTML : '',
+          lastArticleInnerText: lastResponse ? (lastResponse.innerText || '') : '',
+          url: window.location.href,
+          documentTitle: document.title
+        };
+      })()
+    `);
+
+    debugInfo = {
+      dom: {
+        articleCount: domDebug.articleCount,
+        markdowns: domDebug.markdowns,
+        lastArticleHtml: domDebug.lastArticleHtml,
+        lastArticleInnerText: domDebug.lastArticleInnerText,
+      },
+      extraction: {
+        selectorsTried: [
+          {
+            selector: 'model-response',
+            found: domDebug.articleCount > 0,
+            textLength: domDebug.lastArticleInnerText.length,
+          },
+          {
+            selector: '.markdown',
+            found: domDebug.markdowns.length > 0,
+            textLength: domDebug.markdowns.reduce(
+              (sum, m) => sum + m.innerTextLength,
+              0,
+            ),
+          },
+          {
+            selector: extractEvidence,
+            found: !!answer,
+            textLength: answer.length,
+          },
+        ],
+        finalSelector: hybridAnswer ? extractEvidence : undefined,
+        fallbackUsed:
+          answerSource === 'network' ? 'network-interceptor' : undefined,
+      },
+      timings: fullTimings,
+      url: domDebug.url,
+      documentTitle: domDebug.documentTitle,
+    };
+  }
+
+  return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};
 }
 
 // Driver統合モードの判定

@@ -947,7 +947,7 @@ v2.1 introduces network-level response extraction as the primary path for Gemini
 
 **Hybrid selection**: After capture, the system compares network-extracted text with DOM-extracted text and selects the longer/more complete result. Network text is preferred when available.
 
-**Driver parity**: When `CAI_USE_DRIVERS=1`, `askGeminiViaDriver()` uses the same `NetworkInterceptor` capture and applies the same Gemini normalization before hybrid network-vs-DOM answer selection. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
+**Driver parity**: When `CAI_USE_DRIVERS=1`, `askGeminiViaDriver()` navigates to the saved Gemini session URL before sending, surfaces `driver.needsLogin()` in logs, uses the same `NetworkInterceptor` capture, and applies the same Gemini normalization before hybrid network-vs-DOM answer selection. Gemini driver response waiting also uses the pre-send `model-response` count as a baseline so stale existing responses are not treated as the new turn. The default monolith path remains the default unless `CAI_USE_DRIVERS` is explicitly set.
 
 ### 4.5 Gemini DOM-based Text Extraction (Fallback)
 
@@ -1391,6 +1391,8 @@ V1 sessions (project-based) are automatically migrated to V2 on first load.
 4. Catch in tool handlers (`gemini-web.ts`, `chatgpt-gemini-web.ts`)
 5. Call `askGeminiFast()` again (max 2x)
 
+When `CAI_USE_DRIVERS=1`, `GeminiDriver.waitForResponse()` emits `GEMINI_STUCK_STOP_BUTTON` if the wait budget expires while the stop button remains visible. This keeps the driver path compatible with the same reset-and-retry handling in `src/tools/ai-helpers.ts`.
+
 ### 9.4 Debug Files
 
 **Path**: `.local/chrome-ai-bridge/debug/`
@@ -1419,6 +1421,8 @@ State fields obtained in response completion detection loop:
 | `debug_bodyLen`                   | Length of body.innerText          | Confirm content amount        |
 | `debug_pageUrl`                   | Current URL                       | Verify correct page           |
 | `debug_pageTitle`                 | Page title                        | Verify login status           |
+
+When `CAI_USE_DRIVERS=1`, `askGeminiViaDriver()` also returns `ChatDebugInfo` with Gemini `model-response` counts, markdown details, extraction selectors, final selector evidence, fallback source, timings, URL, and document title.
 
 ---
 
