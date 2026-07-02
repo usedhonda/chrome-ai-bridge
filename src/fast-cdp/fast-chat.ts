@@ -3114,8 +3114,8 @@ async function askChatGPTFastInternal(
 }
 
 /**
- * Driver経由でChatGPTに質問（実験的）
- * 環境変数 CAI_USE_DRIVERS=1 で有効化
+ * Driver経由でChatGPTに質問（デフォルト経路）
+ * CAI_USE_DRIVERS=0 で monolith 経路にフォールバック
  */
 async function askChatGPTViaDriver(
   question: string,
@@ -3490,8 +3490,8 @@ async function askGeminiViaDriver(
   return {answer: hybridAnswer, timings: fullTimings, debug: debugInfo};
 }
 
-// Driver統合モードの判定
-const USE_DRIVERS = process.env.CAI_USE_DRIVERS === '1';
+// Driver統合モードの判定（デフォルト有効。CAI_USE_DRIVERS=0 で monolith にフォールバック）
+const USE_DRIVERS = process.env.CAI_USE_DRIVERS !== '0';
 
 interface PageLoadStatus {
   url: string;
