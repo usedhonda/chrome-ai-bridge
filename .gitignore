@@ -1,14 +1,8 @@
-# >>> project-bootstrap managed >>>
-.cc-status-bar.voice.json
-# <<< project-bootstrap managed <<<
-
 # Claude Code
-CLAUDE.md
 !skills/**/CLAUDE.md
 .claude/
 
 # Codex
-AGENTS.md
 !skills/**/AGENTS.md
 .codex/
 
@@ -253,3 +247,10 @@ docs/.docusaurus/
 
 # Cdx persona (auto-generated)
 .codex/config.toml
+
+# >>> project-bootstrap local-only >>>
+CLAUDE.local.md
+.codex/config.toml
+.local/
+.cc-status-bar.voice.json
+# <<< project-bootstrap local-only <<<
