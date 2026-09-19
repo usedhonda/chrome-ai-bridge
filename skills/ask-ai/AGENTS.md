@@ -1,9 +1,3 @@
-<!-- CDX-PERSONA-AGENTS -->
-
-**Read `.codex/config.toml` in this directory and adopt the persona in its `instructions` field.**
-
-<!-- CDX-PERSONA-AGENTS-END -->
-
 # ask-ai スキル管理
 
 ask-ai CLI を使った AI 質問・議論スキル。chrome-ai-bridge リポジトリに統合済み。
@@ -11,7 +5,7 @@ ask-ai CLI を使った AI 質問・議論スキル。chrome-ai-bridge リポジ
 ## ファイル構成
 
 - `SKILL.md` - スキル本体（CC 用、description でトリガー自動判定）
-- `CLAUDE.md` - プロジェクト管理用
+- `AGENTS.md` - プロジェクト管理用
 - `scripts/ask-ai` - CLI エントリポイント（cab ラッパー）
 - `references/routing-rules.md` - ルーティングルール定義
 - `assets/prompt-template.md` - プロンプトテンプレート
