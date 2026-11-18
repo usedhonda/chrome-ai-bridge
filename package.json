@@ -1,70 +1,46 @@
 {
   "name": "chrome-ai-bridge",
   "version": "3.0.0",
-  "description": "Project-aware ChatGPT Pro and Gemini Thinking workflows using Claude Code or Codex browser tools.",
+  "description": "Project-aware ChatGPT Pro and Gemini Thinking workflows driven by the browser tools of Claude Code or Codex.",
   "type": "module",
   "bin": {
     "chrome-ai-bridge": "./scripts/cli.mjs",
     "cab": "./scripts/cab",
     "ask-ai": "./skills/ask-ai/scripts/ask-ai"
   },
-  "main": "./build/src/browser-use/index.js",
+  "main": "./build/index.js",
   "exports": {
-    ".": "./build/src/browser-use/index.js",
-    "./workflow": "./build/src/browser-use/index.js",
-    "./plugin-api": "./build/src/plugin-api.js"
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./workflow": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    }
   },
   "scripts": {
-    "build": "tsc && node scripts/build-assets.mjs",
-    "build:noext": "npm run build",
-    "typecheck": "tsc --noEmit",
-    "format": "eslint --cache --fix . && prettier --write --cache .",
-    "check-format": "eslint src/browser-use tests && prettier --check src/browser-use tests README.md AGENTS.md docs/SPEC.md docs/README.md docs/tool-reference.md docs/user/setup.md docs/user/workflows.md docs/user/troubleshooting.md docs/roadmap-v3.md skills/ask-ai package.json scripts/cli.mjs scripts/build-assets.mjs scripts/check-browser-docs.mjs",
-    "start": "node scripts/cli.mjs",
-    "start-debug": "node scripts/cli.mjs",
-    "test": "npm run test:browser-use && npm run typecheck",
-    "discord:collect": "node scripts/discord-readonly-collector.mjs",
-    "discord:preflight": "node scripts/discord-readonly-preflight.mjs",
-    "discord:status": "node scripts/discord-readonly-status.mjs",
+    "build": "node -e \"require('node:fs').rmSync('build',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
+    "test": "npm run typecheck && npm run build && node --test tests/*.test.ts",
+    "lint": "eslint .",
+    "format": "eslint --fix . && prettier --write .",
+    "check-format": "eslint . && prettier --check .",
     "docs": "node scripts/check-browser-docs.mjs",
-    "generate-docs": "npm run docs",
-    "build:legacy": "npm run build && node scripts/reload-extension.mjs",
-    "test:browser-use": "npm run build && node --test build/tests/browser-*.test.js",
-    "check-format:legacy": "eslint --cache . && prettier --check --cache .;",
-    "legacy:dev": "CAI_ENV=development node scripts/daemon-wrapper.mjs",
-    "legacy:reload-ext": "node scripts/reload-extension.mjs",
-    "legacy:cleanup": "node scripts/cleanup.mjs",
-    "legacy:restart": "node scripts/cleanup.mjs",
-    "legacy:test:chatgpt": "npm run build && node scripts/test-fast-chat.mjs chatgpt",
-    "legacy:test:gemini": "npm run build && node scripts/test-fast-chat.mjs gemini",
-    "legacy:test:both": "npm run build && node scripts/test-fast-chat.mjs both",
-    "legacy:test:suite": "npm run build && node scripts/test-suite.mjs",
-    "legacy:test:smoke": "npm run build && node scripts/test-suite.mjs --smoke",
-    "legacy:test:regression": "npm run build && node scripts/test-suite.mjs --regression",
-    "legacy:cdp:chatgpt": "npm run build && node scripts/cdp-snapshot.mjs chatgpt",
-    "legacy:cdp:gemini": "npm run build && node scripts/cdp-snapshot.mjs gemini",
-    "legacy:measure:chatgpt": "npm run build && node scripts/measure-timings.mjs chatgpt",
-    "legacy:measure:gemini": "npm run build && node scripts/measure-timings.mjs gemini",
-    "legacy:test:network": "npm run build && node scripts/test-network-intercept.mjs",
-    "legacy:check:extension-discovery": "node scripts/check-extension-discovery.mjs",
-    "dev": "tsc --watch",
-    "test:smoke": "npm run test:browser-use",
-    "test:regression": "npm run test:browser-use"
+    "prepack": "npm run build"
   },
   "files": [
-    "build/src",
-    "build/extension",
+    "build",
+    "!build/**/*.tsbuildinfo",
     "scripts/cli.mjs",
     "scripts/cab",
-    "scripts/legacy-cab",
-    "scripts/legacy-cli.mjs",
-    "scripts/browser-globals-mock.mjs",
     "skills/ask-ai",
-    "docs",
+    "!skills/ask-ai/*.local.md",
+    "docs/*.md",
+    "docs/user",
     "README.md",
     "LICENSE",
-    "!docs/log",
-    "!*.tsbuildinfo"
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",
@@ -85,32 +61,17 @@
     "ai-bridge",
     "cli"
   ],
-  "dependencies": {
-    "debug": "4.4.3",
-    "playwright": "^1.58.1",
-    "ws": "^8.19.0",
-    "yargs": "18.0.0",
-    "zod": "^3.25.76"
-  },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
-    "@stylistic/eslint-plugin": "^5.4.0",
-    "@types/debug": "^4.1.12",
     "@types/node": "^24.3.3",
-    "@types/ws": "^8.18.1",
-    "@types/yargs": "^17.0.33",
-    "@typescript-eslint/eslint-plugin": "^8.43.0",
-    "@typescript-eslint/parser": "^8.43.0",
-    "chokidar": "^4.0.3",
     "eslint": "^9.35.0",
-    "eslint-import-resolver-typescript": "^4.4.4",
-    "eslint-plugin-import": "^2.32.0",
     "globals": "^16.4.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.43.0"
   },
   "engines": {
-    "node": ">=22.12.0"
-  }
+    "node": ">=22.18.0"
+  },
+  "types": "./build/index.d.ts"
 }

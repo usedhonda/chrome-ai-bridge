@@ -2,16 +2,16 @@
 
 ## Required checks
 
-The `Compile and run tests` workflow runs `npm test` on the configured Node.js and operating-system matrix. The command runs deterministic browser-workflow tests and type checking. It does not require a signed-in ChatGPT or Gemini browser. The `[Required] Tests passed` job remains the aggregate result for branch protection.
+The `Compile and run tests` workflow runs `npm test` (typecheck + build + `node:test`) on Node.js 22.18 and 24 across Linux, macOS, and Windows. Typechecking covers both `src/` and `tests/`: Node's type stripping executes tests without checking their types. The `[Required] Tests passed` job is the aggregate result for branch protection. These checks do not require a signed-in ChatGPT or Gemini browser.
 
-## Optional workflow check
+`Check code before submitting` runs `npm run check-format` (ESLint + Prettier) and `npm run docs` (active document links and command reference).
 
-The manually dispatched `Browser workflow checks` workflow runs `npm run test:browser-use`. It checks CLI/state/prompt/PR-verification behavior without live provider sessions. There is no nightly provider login or UI-automation job. The workflow file retains its historical `e2e-browser-tests.yml` filename, but its output is not evidence that ChatGPT Pro or Gemini Thinking was exercised live.
+CI output is not evidence that ChatGPT Pro or Gemini Thinking was exercised live. Use the [live verification recipe](user/workflows.md#live-verification-recipe) in an authorized agent/browser session and record that outcome separately.
 
-Use the [live verification recipe](user/workflows.md#live-verification-recipe) in an authorized agent/browser session to verify actual provider behavior. Record that outcome separately from CI.
+## Release
 
-## Documentation and package checks
+`npm-publish.yml` publishes on a pushed `v*` tag or an explicit manual dispatch through npm Trusted Publishing (OIDC). It runs `npm test` first; `prepack` rebuilds `build/`. The job uses GitHub-hosted runners, `id-token: write`, Node 24, and npm 11.5.1 or newer.
 
-Workflows use `test`, `docs`, and `generate-docs` from `package.json`. Keep their contracts aligned with the active v3 command set. If a workflow needs another command, define the script before referencing it.
+Do not supply a long-lived npm publish token. The default npm registry is used without `setup-node`'s `registry-url` option, which would generate token-based `.npmrc` settings and a placeholder `NODE_AUTH_TOKEN`. The npm CLI tries OIDC before falling back to traditional credentials; the mere presence of that variable does not establish that OIDC will fail.
 
-Release preflight verifies required scripts and runs `npm pack --dry-run` to catch missing package files. A successful package check is not permission to publish or tag a release; follow the requested delivery scope.
+On npm, configure the package's Trusted Publisher for GitHub owner `usedhonda`, repository `chrome-ai-bridge`, workflow filename `npm-publish.yml`, and permission to publish directly with `npm publish`. This job does not declare a GitHub environment, so leave the publisher's environment field unset. See the [official Trusted Publishing guide](https://docs.npmjs.com/trusted-publishers/). Repository tests cannot verify those npm-side settings or a real OIDC exchange. A passing package check is not permission to publish or tag a release.

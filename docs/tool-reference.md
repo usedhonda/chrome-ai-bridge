@@ -66,7 +66,7 @@ Phases are `prepared`, `ready`, `sending`, `submitted`, `completed`, `canceled`,
 
 `fail` is available only in `submitted`, for a final provider failure or missing-capability response. It saves the answer and reason, marks `failed`, preserves the conversation URL, and releases the lane for a corrective follow-up. Use `block` for a temporary interruption while the same task can still continue. Failed output is never reported as completed.
 
-`doctor` checks local setup. It cannot attest to an active agent's browser tools, login state, or current provider mode.
+`doctor` (also available as `health`) checks local setup. Its JSON retains `daemonRequired: false` for CLI compatibility; CAB has no daemon. It cannot attest to an active agent's browser tools, login state, or current provider mode.
 
 ## Adopt an existing conversation
 
@@ -83,7 +83,3 @@ Use a single provider, `chatgpt` or `gemini`, and an observed conversation URL. 
 ## State location
 
 CAB uses `CAB_STATE_DIR`, otherwise `$XDG_STATE_HOME/chrome-ai-bridge`, otherwise `~/.local/state/chrome-ai-bridge`. Files have owner-only permissions and are retained without automatic expiration. Use the same directory for agents that should share project conversations.
-
-## Legacy compatibility
-
-`cab legacy ...` explicitly invokes the earlier implementation. It may require the old CAB extension and daemon and retains the old transport/output behavior. It is not used as an automatic fallback and does not satisfy v3's workflow guarantees. Existing integrations using REST or old session headers must migrate to the lifecycle above.

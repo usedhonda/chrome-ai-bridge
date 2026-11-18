@@ -6,7 +6,7 @@ Version: 3.0.0 · Updated: 2026-11-18
 
 CAB connects an active coding agent to ChatGPT and Gemini through that agent's native browser-use capability. The agent owns page inspection, clicking, typing, and answer capture. CAB owns reproducible prompts, durable project conversations, send-attempt tracking, and output validation.
 
-The standard entry points do not start the old daemon, install the CAB extension, connect to CDP, or parse provider network protocols. The v2 implementation is isolated behind explicit `cab legacy ...` usage. Its previous specification is available in [Git history](https://github.com/usedhonda/chrome-ai-bridge/commits/main/docs/SPEC.md).
+The standard entry points do not start the old daemon, install the CAB extension, connect to CDP, or parse provider network protocols. The v2 implementation has been removed. Its previous specification is available in [Git history](https://github.com/usedhonda/chrome-ai-bridge/commits/main/docs/SPEC.md).
 
 ## Provider contract
 
@@ -95,11 +95,10 @@ Legacy agent-scoped `sessions.json` is never silently reassigned to v3 projects.
 
 Offline tests validate input handling, per-project/provider isolation, prompt policy, transitions, concurrency, persistence, and PR verifier behavior. They cannot establish that a live account has Pro/Thinking, that its browser tools are connected, or that a provider completed a request.
 
-Use the [live verification recipe](user/workflows.md#live-verification-recipe) to check the browser boundary. Report observed behavior and any missing live coverage in the PR. The old extension tests are legacy checks, not evidence for this workflow.
+Use the [live verification recipe](user/workflows.md#live-verification-recipe) to check the browser boundary. Report observed behavior and any missing live coverage in the PR.
 
 ## Reference material
 
 - [Command reference](tool-reference.md)
 - [Setup and migration](user/setup.md)
 - [Shared agent workflow](../skills/ask-ai/SKILL.md)
-- [Design decisions](roadmap-v3.md)

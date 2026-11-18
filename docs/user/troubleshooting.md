@@ -26,7 +26,7 @@ A durable project conversation needs a saved chat. Confirm that the task uses th
 
 For Claude Code, inspect `/chrome` or start with `claude --chrome` after setting up Claude in Chrome. For Codex desktop, inspect the Browser / Chrome integration available in that session. Codex CLI and IDE need a configured browser MCP; see [setup](setup.md).
 
-Do not invent a tool name, revive the CAB daemon implicitly, or open a new browser profile as a substitute for the requested signed-in session. Record the specific missing capability with `cab block RUN --reason TEXT`.
+Do not invent a tool name, fall back to a different automation path, or open a new browser profile as a substitute for the requested signed-in session. Record the specific missing capability with `cab block RUN --reason TEXT`.
 
 ## The page asks for sign-in
 
@@ -78,6 +78,6 @@ For a private repository, authenticate local `gh` or supply `GH_TOKEN` / `GITHUB
 
 Check that both callers use the same `CAB_STATE_DIR` (or the same default state directory), project name, repository, and provider. Then check browser account/profile identity. Import a known old URL explicitly with `import-session`; do not copy expiring v2 agent IDs into new state.
 
-## Legacy commands or documents mention CDP / extension reloads
+## Old instructions mention CDP, extension reloads, or `cab legacy`
 
-Those belong to the previous implementation. The normal v3 workflow does not need the CAB extension or its daemon. `cab legacy ...` exists for explicit migration compatibility. Historical blog posts, extension docs, and scripts are not the native browser workflow; use the current [specification](../SPEC.md) and [command reference](../tool-reference.md).
+Those belong to the removed v2 implementation. Uninstall any old CAB extension and remove old daemon auto-start entries after identifying them. Use the current [specification](../SPEC.md) and [command reference](../tool-reference.md).

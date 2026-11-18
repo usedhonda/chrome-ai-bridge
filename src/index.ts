@@ -1,20 +1,14 @@
-#!/usr/bin/env node
-
 /**
  * @license
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {version} from 'node:process';
-
-const [major, minor] = version.substring(1).split('.').map(Number);
-
-if (major < 22 || (major === 22 && minor < 12)) {
-  console.error(
-    `ERROR: \`chrome-ai-bridge\` does not support Node ${process.version}. Please upgrade to Node 22.12.0 or newer.`,
-  );
-  process.exit(1);
-}
-
-await import('./main.js');
+export {collectContext} from './context.ts';
+export {verifyPullRequest} from './github.ts';
+export {browserPlan} from './plan.ts';
+export {preparePrompt} from './prompts.ts';
+export {StateStore} from './store.ts';
+export * from './types.ts';
+export {canonicalConversationUrl, canonicalRepositoryUrl} from './urls.ts';
+export {Workflow} from './workflow.ts';

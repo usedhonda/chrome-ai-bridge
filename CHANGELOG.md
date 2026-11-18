@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project is a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-ai-bridge) by Google LLC, focusing on multi-AI consultation capabilities.
 
+## [3.0.0] - Unreleased
+
+### Changed (breaking)
+
+- The calling agent (Claude Code or Codex) now operates ChatGPT/Gemini with its own browser tools. `cab` prepares requests, persists per-project conversation URLs and send state, and verifies results (ChatGPT: real GitHub PR; Gemini: final answer).
+- Shared `ask-ai` skill works unchanged from both Claude Code and Codex.
+- Node.js 22.18+ required. Zero runtime dependencies; tests run TypeScript directly via Node type stripping.
+
+### Removed
+
+- The v2 Chrome extension, relay/daemon, CDP drivers, network interception, MCP tool layer, `plugin-api` export, `cab legacy`, and all related scripts and documents.
+- The unrelated Discord read-only collector.
+
 ## [2.2.0] - 2026-02-07
 
 ### Added
