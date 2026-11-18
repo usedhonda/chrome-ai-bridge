@@ -1,3 +1,5 @@
+> Historical v2 design. The normal v3 workflow uses caller-owned browser tools and durable project conversations. See [the current specification](../SPEC.md). The behavior below belongs to the explicit legacy transport.
+
 # Agent Teams と セッション分離 — 並行エージェントの衝突を防ぐ
 
 > chrome-ai-bridge が Agent Teams（複数の Claude Code エージェントの並行動作）をサポートするに至った技術的背景と、セッション分離の設計について。

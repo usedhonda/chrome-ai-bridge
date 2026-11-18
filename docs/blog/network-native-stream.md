@@ -1,3 +1,5 @@
+> Historical v2 design. The normal v3 workflow uses caller-owned browser tools and durable project conversations. See [the current specification](../SPEC.md). The behavior below belongs to the explicit legacy transport.
+
 # なぜ我々はDOMを捨てたのか — Network-Native Stream の話
 
 > chrome-ai-bridge v2.1 の技術的背景と、DOMセレクターからネットワーク傍受への移行について。

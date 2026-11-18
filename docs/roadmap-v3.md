@@ -1,114 +1,46 @@
-# chrome-ai-bridge v3 Roadmap: Network-Native Architecture
+# v3 design decisions
 
-> Source: Three-AI Discussion (Claude + ChatGPT + Gemini), 2026-02-05
+Version 3.0.0 switches the primary integration to caller-owned browser use. This document records the delivered design and its boundaries; see [SPEC.md](SPEC.md) for the contract.
 
----
+## Why the responsibility moved
 
-## Current Constraints Analysis
+The previous implementation maintained a custom Chrome extension, daemon discovery, relay connections, provider DOM drivers, network-response parsers, and expiring agent sessions. Modern coding agents already provide browser interaction. Keeping a second provider automation stack made CAB responsible for interfaces its caller could inspect directly.
 
-### DOM Selector Dependency (Primary Pain Point)
+CAB now concentrates on the parts that need durable, deterministic behavior: project/provider identity, prompt composition, single-send progress, conversation URL persistence, and result verification. The calling agent adapts to the current UI using its own browser tools.
 
-- ChatGPT/Gemini frequently change their DOM structure
-- Selectors like `[data-message-author-role="assistant"]`, `.markdown`, `article` break without notice
-- Response extraction requires complex fallback chains (10+ selectors per site)
-- Thinking mode, streaming animation, Shadow DOM all add complexity
+## Decisions
 
-### Polling-Based Architecture
+| Decision                                 | Result                                                                                   |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Stable project/provider keys             | Claude Code and Codex can continue the same saved conversation.                          |
+| New page for first use                   | Unrelated open chats are not reused for a new project.                                   |
+| Persist URL immediately after acceptance | Long Pro responses and caller restarts do not lose conversation identity.                |
+| Explicit mode observation                | Pro / Thinking requirements survive numbered model changes without silently downgrading. |
+| Durable marker before Send               | Recovery inspects an uncertain submission rather than automatically duplicating it.      |
+| Separate provider output contracts       | ChatGPT completes with a verified PR; Gemini returns its chat answer.                    |
+| Explicit private Gemini code context     | The request contains relevant code despite the missing GitHub connection.                |
+| Explicit legacy path                     | Existing transport remains available for migration without running from normal commands. |
 
-- Response completion detection via 1s interval polling
-- CPU waste during long responses (up to 8 minutes)
-- No streaming capability - must wait for full response before returning
+## Portability boundary
 
-### Background Tab Limitations
+A shared skill plus CLI is portable; a hard-coded browser tool name is not. Claude Code's Chrome integration, Codex desktop browser use, and Codex CLI browser MCPs provide different surfaces. The shared skill uses the capabilities advertised by the current session. It records a concrete blocker if browser access is absent.
 
-- `innerText` returns empty in background tabs
-- Requires `Page.bringToFront` + scroll workarounds
-- Race conditions between React rendering and text extraction
+The standalone CLI prepares and persists work. It does not create a hidden agent, hold an API key for a second model, or invoke browser tools inside another running agent. The active caller performs the full lifecycle before returning the result.
 
----
+## Migration and retained utilities
 
-## Consensus: Network Layer is the Path Forward
+Normal `cab`, `chrome-ai-bridge`, and `ask-ai` commands use v3. Existing REST callers must move to preparation and progress/completion recording. Adopt selected old conversation URLs with `import-session`; do not infer ownership from legacy process-based agent IDs.
 
-**All three AIs agreed**: DOM selectors are a dead end for reliability. Network-layer interception (CDP Network domain) captures the raw response data before it hits the DOM, eliminating selector fragility.
+The old extension/CDP code remains behind explicit `cab legacy ...` usage. Its historical documentation is retained in Git history and labeled as such where still present. The dedicated Discord collector is a separate utility and remains outside the provider workflow redesign.
 
-### Why Network > DOM
+## Known boundaries
 
-| Factor            | DOM Approach                       | Network Approach                      |
-| ----------------- | ---------------------------------- | ------------------------------------- |
-| Selector breakage | High risk every UI update          | Zero - protocol changes rarely        |
-| Streaming         | Impossible (poll after completion) | Native (token-by-token)               |
-| Background tabs   | Broken (empty innerText)           | Works (network layer is tab-agnostic) |
-| Thinking mode     | Complex detection logic            | Clean separation in protocol          |
-| Performance       | CPU polling waste                  | Event-driven, zero waste              |
+- Browser authentication, site permissions, model availability, and actual UI interaction belong to the chosen harness and account.
+- CAB validates recorded workflow state, but cannot independently prove an agent clicked a particular visible mode; the caller must report observed evidence honestly.
+- A browser click and a local state write cannot be one transaction. The `sending` phase preserves that uncertainty and deliberately disallows an automatic second send. A positively observed non-submission can be reconciled explicitly before a new readiness/send sequence.
+- Final provider failures are retained as `failed` outcomes so a corrective follow-up can use the same URL; temporary blockers retain the active run.
+- ChatGPT's GitHub connection does not supply credentials to the local PR verifier. Private PR verification needs local access.
+- Public repository URLs are passed to Gemini as requested; an inaccessible URL must be reported, not treated as read.
+- Offline tests validate the workflow implementation; signed-in live checks validate the provider boundary.
 
----
-
-## Three-Phase Roadmap
-
-### Phase 1: Hybrid Stream PoC (Current)
-
-**Goal**: Prove network interception works alongside existing DOM extraction.
-
-- Add `CdpClient.on()`/`.off()` for CDP event subscription
-- Enable `Network.enable` on tab attach
-- Create `NetworkInterceptor` class for capture lifecycle
-- Observe raw WebSocket/SSE data from ChatGPT/Gemini
-- Implement parsers based on actual protocol format
-- Integrate as parallel path: network preferred, DOM as fallback
-
-**Success Criteria**: Network extraction matches DOM extraction 90%+ of the time.
-
-### Phase 1.5: Streaming Token Delivery
-
-**Goal**: Deliver tokens as they arrive instead of waiting for completion.
-
-- MCP SDK streaming support (if available) or chunked response
-- Token-level callbacks from NetworkInterceptor
-- Progress reporting during long responses
-- Eliminate polling entirely for response completion detection
-
-### Phase 2: Adaptive Selectors (Parallel Track)
-
-**Goal**: Make remaining DOM operations self-healing.
-
-- Use AI to detect input fields and send buttons dynamically
-- Fingerprint-based element matching (position, role, structure)
-- Automatic selector regeneration when patterns break
-- Reduce hard-coded selectors to zero
-
-### Phase 3: Multi-Provider Fabric
-
-**Goal**: Pluggable architecture for any web AI.
-
-- Provider interface: `connect()`, `send()`, `onToken()`, `onComplete()`
-- Site-specific drivers implement the interface
-- Add new AI providers without core changes
-- Community-contributed drivers
-
----
-
-## Notable Proposals from Discussion
-
-### 1. Token-Level AI Diff (ChatGPT)
-
-Compare network-captured tokens vs DOM-extracted text in real-time to detect extraction errors. Can be used for automated quality monitoring.
-
-### 2. Self-Healing Governor (Gemini)
-
-A meta-layer that monitors extraction success rate and automatically switches between network/DOM/hybrid strategies based on real-time reliability metrics.
-
-### 3. Browser-Resident LLM Transport Layer (Claude)
-
-Instead of intercepting at the network level, inject a service worker that sits between the page and the API. Full control over request/response lifecycle without CDP.
-
----
-
-## Discussion Meta-Evaluation
-
-| Aspect           | Claude                      | ChatGPT                   | Gemini                     |
-| ---------------- | --------------------------- | ------------------------- | -------------------------- |
-| Primary Strength | Architecture design         | Creative solutions        | Risk analysis              |
-| Key Contribution | Hybrid fallback pattern     | Token-level diff idea     | Self-healing governor      |
-| Practical Focus  | High (implementation-ready) | Medium (needs refinement) | High (production concerns) |
-
-**Consensus Quality**: Strong - all three converged on network interception as Phase 1, disagreed only on Phase 2+ priorities.
+Future transport integrations should preserve these invariants and use the same state lifecycle. They should not silently bypass observed mode selection, project continuity, or PR verification.

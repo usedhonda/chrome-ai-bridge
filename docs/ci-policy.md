@@ -1,31 +1,17 @@
 # CI policy
 
-This repository uses two CI lanes:
+## Required checks
 
-1. **Required lane (`Compile and run tests`)**
-   - Runs fast, deterministic checks via `npm run test`.
-   - Purpose: catch packaging/protocol regressions without browser session dependencies.
+The `Compile and run tests` workflow runs `npm test` on the configured Node.js and operating-system matrix. The command runs deterministic browser-workflow tests and type checking. It does not require a signed-in ChatGPT or Gemini browser. The `[Required] Tests passed` job remains the aggregate result for branch protection.
 
-2. **Browser E2E lane (`Browser E2E tests`)**
-   - Runs browser-dependent scenarios separately.
-   - Triggered by manual dispatch and nightly schedule.
-   - Marked as best-effort to avoid blocking routine PR merges.
+## Optional workflow check
 
-## Script contracts used by workflows
+The manually dispatched `Browser workflow checks` workflow runs `npm run test:browser-use`. It checks CLI/state/prompt/PR-verification behavior without live provider sessions. There is no nightly provider login or UI-automation job. The workflow file retains its historical `e2e-browser-tests.yml` filename, but its output is not evidence that ChatGPT Pro or Gemini Thinking was exercised live.
 
-The workflows depend on these scripts in `package.json`:
+Use the [live verification recipe](user/workflows.md#live-verification-recipe) in an authorized agent/browser session to verify actual provider behavior. Record that outcome separately from CI.
 
-- `test`
-- `docs`
-- `generate-docs`
+## Documentation and package checks
 
-If any workflow references a new script name, add the script in `package.json` first.
+Workflows use `test`, `docs`, and `generate-docs` from `package.json`. Keep their contracts aligned with the active v3 command set. If a workflow needs another command, define the script before referencing it.
 
-## Release preflight
-
-Release workflows run these checks before publish:
-
-- Verify required npm scripts exist.
-- Run `npm pack --dry-run`.
-
-This catches missing script wiring and packaging issues before `npm publish`.
+Release preflight verifies required scripts and runs `npm pack --dry-run` to catch missing package files. A successful package check is not permission to publish or tag a release; follow the requested delivery scope.
