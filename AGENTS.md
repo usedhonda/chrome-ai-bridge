@@ -36,7 +36,7 @@ Use only browser capabilities advertised by the active harness. Claude's Chrome 
 ## Verification
 
 ```bash
-npm test            # build + node:test (TypeScript runs directly via type stripping)
+npm test            # typecheck + build + node:test (tests run via type stripping)
 npm run typecheck
 npm run check-format
 npm run docs
