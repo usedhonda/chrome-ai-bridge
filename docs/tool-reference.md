@@ -1,72 +1,89 @@
-<!-- AUTO GENERATED DO NOT EDIT - run 'npm run docs' to update-->
+# CLI reference
 
-# Chrome DevTools MCP Tool Reference
+`cab`, `chrome-ai-bridge`, and `ask-ai` expose the same native browser workflow. Resolve the v3 executable once and use it for every command; the examples use `cab` as shorthand. A checkout wrapper must not accidentally switch to a globally installed v2 `cab`. Run that executable with `--help` for its exact syntax. Normal commands return structured work/state information; `prompt` prints the prepared prompt as raw text.
 
-- **[Navigation automation](#navigation-automation)** (5 tools)
-  - [`ask_chatgpt_gemini_web`](#ask_chatgpt_gemini_web)
-  - [`ask_chatgpt_web`](#ask_chatgpt_web)
-  - [`ask_gemini_web`](#ask_gemini_web)
-  - [`get_page_dom`](#get_page_dom)
-  - [`take_cdp_snapshot`](#take_cdp_snapshot)
+## Prepare a request
 
-## Navigation automation
+```bash
+cab prepare PROVIDER \
+  --project NAME \
+  --repo URL \
+  --visibility public|private \
+  --prompt-file PATH
+```
 
-### `ask_chatgpt_gemini_web`
+`PROVIDER` is `chatgpt`, `gemini`, or `both`. A positional prompt can replace `--prompt-file`. Aliases `cab PROVIDER ...` and `cab ask PROVIDER ...` prepare the same workflow; they do not synchronously send a browser message.
 
-**Description:** [RECOMMENDED] Ask ChatGPT and Gemini in parallel via browser (fast CDP path). Use this by default unless user explicitly specifies single AI.
+| Option                         | Meaning                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `--project NAME`               | Required stable project identity shared across caller sessions.                            |
+| `--repo URL`                   | Required GitHub repository URL.                                                            |
+| `--visibility public\|private` | Explicit repository visibility determines prompt policy.                                   |
+| `--prompt-file PATH`           | UTF-8 task text; use for multiline instructions and code.                                  |
+| `--root PATH`                  | Root for selected source context.                                                          |
+| `--context PATH[:START:END]`   | Repeatable source file or 1-based inclusive excerpt; required for private Gemini requests. |
+| `--base BRANCH`                | Requested ChatGPT PR base branch, verified at completion.                                  |
+| `--request-id KEY`             | Identify the same preparation request across retries of the CLI call.                      |
+| `--new-chat`                   | Explicitly start a fresh provider conversation instead of the saved one.                   |
 
-**Parameters:**
+Preparation persists the prompt and reserves the project/provider lane. `both` reserves both lanes together and creates separate provider runs. Selected private source goes only to Gemini's prompt. The returned browser instructions tell the caller whether to open a new page or reuse a saved URL.
 
-- **debug** (boolean) _(optional)_: Return detailed debug info (DOM structure, extraction attempts, timings)
-- **question** (string) **(required)**: Question to ask. Do not include secrets/PII. No mention of MCP/AI.
+## Execute and record browser progress
 
----
+| Command                                                                 | When to use                                                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `cab prompt RUN`                                                        | Read the exact prompt to enter into the browser.                                                                    |
+| `cab ready RUN --url OBSERVED --mode LABEL [--tab HANDLE] [--new-page]` | After opening/resuming and inspecting the required selected mode. `--new-page` is mandatory for a new conversation. |
+| `cab begin-send RUN`                                                    | Immediately before the single browser click that submits the prompt. Writes the durable send-attempt marker.        |
+| `cab sent RUN --url CANONICAL_CHAT`                                     | After the new user message is accepted and the service's conversation URL is visible.                               |
+| `cab complete RUN --answer-file PATH --pr URL`                          | ChatGPT: save final answer after GitHub verifies the actual PR.                                                     |
+| `cab complete RUN --answer-file PATH`                                   | Gemini: save the final chat answer.                                                                                 |
 
-### `ask_chatgpt_web`
+These commands record observed browser events; they do not open pages or click buttons. The calling agent performs browser actions with the tools available in its session. Do not pre-record success or fabricate a mode label, tab handle, chat URL, or PR.
 
-**Description:** Ask ChatGPT only via browser. Note: For general queries, prefer [`ask_chatgpt_gemini_web`](#ask_chatgpt_gemini_web) to get multiple perspectives.
+Before `ready`, confirm that temporary-chat/history-off mode is disabled and the conversation can be saved. For ChatGPT, the selected mode must be Pro. For Gemini, record Thinking / 思考 or an explicit thinking-control label such as `Thinking: High`. A bare `High` does not identify the mode.
 
-**Parameters:**
+`complete` verifies a ChatGPT PR against real GitHub metadata and records head/base information. Private verification needs locally authenticated `gh` or `GH_TOKEN` / `GITHUB_TOKEN`; this is separate from ChatGPT's GitHub connector. A failed verification leaves the run available for completion retry without resubmitting the prompt.
 
-- **createNewChat** (boolean) _(optional)_: Unused (kept for compatibility)
-- **debug** (boolean) _(optional)_: Return detailed debug info (DOM structure, extraction attempts, timings)
-- **projectName** (string) _(optional)_: Unused (kept for compatibility)
-- **question** (string) **(required)**: Question to ask. Do not include secrets/PII. No mention of MCP/AI.
+## Inspect, recover, or stop pre-send work
 
----
+```bash
+cab status
+cab status RUN
+cab resume RUN
+cab block RUN --reason "Observed blocker"
+cab reconcile-not-sent RUN --url OBSERVED_URL --reason "Positive evidence of non-submission"
+cab fail RUN --answer-file answer.md --reason "Final provider failure"
+cab cancel RUN
+cab doctor
+```
 
-### `ask_gemini_web`
+`status` without a run lists stored work. `resume` returns the persisted phase and next-step instructions without modifying or sending anything. `block` adds a reason while preserving the phase and evidence. `cancel` is available only before a send attempt. Neither elapsed time nor a repeated CLI invocation resets a conversation.
 
-**Description:** Ask Gemini only via browser. Note: For general queries, prefer [`ask_chatgpt_gemini_web`](#ask_chatgpt_gemini_web) to get multiple perspectives.
+Phases are `prepared`, `ready`, `sending`, `submitted`, `completed`, `canceled`, and `failed`. A blocker is metadata, not a separate phase. If phase is `sending`, inspect the existing page before any further action: the external click may have succeeded even if its tool call failed.
 
-**Parameters:**
+`reconcile-not-sent` is available only in `sending` and requires an observed URL and positive evidence that no submission occurred. It returns the run to `ready` and records the recovery; it does not authorize another click. Recheck readiness and call `begin-send` separately. A timeout or missing answer alone is insufficient evidence.
 
-- **createNewChat** (boolean) _(optional)_: Unused (kept for compatibility)
-- **debug** (boolean) _(optional)_: Return detailed debug info (DOM structure, extraction attempts, timings)
-- **projectName** (string) _(optional)_: Unused (kept for compatibility)
-- **question** (string) **(required)**: Question to ask. Do not include secrets/PII. No mention of MCP/AI.
+`fail` is available only in `submitted`, for a final provider failure or missing-capability response. It saves the answer and reason, marks `failed`, preserves the conversation URL, and releases the lane for a corrective follow-up. Use `block` for a temporary interruption while the same task can still continue. Failed output is never reported as completed.
 
----
+`doctor` checks local setup. It cannot attest to an active agent's browser tools, login state, or current provider mode.
 
-### `get_page_dom`
+## Adopt an existing conversation
 
-**Description:** Get DOM elements from the connected ChatGPT/Gemini page using CSS selectors. Use this to debug selector issues or find correct element patterns when the UI changes. Returns element counts, attributes, text content, and outer HTML for each selector.
+```bash
+cab import-session PROVIDER \
+  --project NAME \
+  --repo URL \
+  --visibility public|private \
+  --url EXISTING_CONVERSATION_URL
+```
 
-**Parameters:**
+Use a single provider, `chatgpt` or `gemini`, and an observed conversation URL. This explicit migration binds the URL to the project/repository; it does not import old daemon configuration, agent IDs, or TTL policies. Inspect the live conversation before adopting it.
 
-- **selectors** (array) _(optional)_: CSS selectors to query. If empty, uses default selectors for the target.
-- **target** (enum: "chatgpt", "gemini") **(required)**: Which AI to get DOM from
+## State location
 
----
+CAB uses `CAB_STATE_DIR`, otherwise `$XDG_STATE_HOME/chrome-ai-bridge`, otherwise `~/.local/state/chrome-ai-bridge`. Files have owner-only permissions and are retained without automatic expiration. Use the same directory for agents that should share project conversations.
 
-### `take_cdp_snapshot`
+## Legacy compatibility
 
-**Description:** Take a snapshot of what CDP is seeing on the ChatGPT/Gemini page. Use this to debug connection issues or verify page state. Returns URL, title, input field state, button state, message counts, and optionally a screenshot.
-
-**Parameters:**
-
-- **bodyTextLimit** (number) _(optional)_: Max characters of body text to include
-- **includeScreenshot** (boolean) _(optional)_: Include a screenshot (saved to /tmp)
-- **target** (enum: "chatgpt", "gemini") **(required)**: Which AI to take snapshot from
-
----
+`cab legacy ...` explicitly invokes the earlier implementation. It may require the old CAB extension and daemon and retains the old transport/output behavior. It is not used as an automatic fallback and does not satisfy v3's workflow guarantees. Existing integrations using REST or old session headers must migrate to the lifecycle above.

@@ -1,352 +1,53 @@
 # Chrome AI Bridge
 
-## Session Startup Tasks
+## Start here
 
-### Read SPEC.md First - Mandatory
+Read `docs/SPEC.md` before changing the workflow. The active design is v3: the calling agent operates ChatGPT or Gemini with its available browser capability; CAB persists project conversations, constructs prompts, and validates results.
 
-**Execute at session start (before any work):**
+Read the latest relevant work log under `docs/log/claude/` when resuming repository work. Record task start, meaningful milestones, blockers, and completion in a task log there. Use the client-local date/time and keep logs factual. Explicit user instructions take precedence over this guide.
 
-```bash
-cat docs/SPEC.md
-```
+## Product requirements
 
-This project has complex architecture (CDP, Chrome Extension, REST API). SPEC.md contains:
-- Architecture overview and component relationships
-- ChatGPT/Gemini operation flows and selectors
-- Response extraction logic (especially Thinking mode)
-- Timeout values and retry logic
-- Troubleshooting guide
+- A new project gets a new page per provider. Save the actual conversation URL as soon as it appears and reuse it on future requests.
+- Keep project identity stable across agent restarts and Claude Code / Codex. Never use a process ID as durable conversation identity.
+- ChatGPT uses **Pro**. Assume its GitHub connection can read public and private repository URLs. Request a branch and actual PR; verify the PR against GitHub before completion.
+- Gemini uses **Thinking / 思考**, or explicit **High thinking** when the UI presents thinking levels. Public repositories are supplied by URL. Private requests include selected code in the prompt, including on follow-ups. Its output is the chat answer.
+- Record the observed mode label. A subscription badge, a bare `High`, or an unobserved default is not evidence. Do not hard-code numbered models or downgrade silently.
+- Preserve the run and URL when work is blocked. Never automatically resend an uncertain submission, erase state, or create a replacement conversation.
 
-**Always read SPEC.md before investigating issues or making changes.**
+## Native browser workflow
 
-### Chrome Profile Cleanup Check
+Use the shared `skills/ask-ai/SKILL.md` for provider requests. Resolve its bundled wrapper to an absolute path once and use that same executable for every lifecycle command; do not accidentally invoke an older global `cab`. `cab`, `chrome-ai-bridge`, and `ask-ai` expose the same workflow. `prepare` saves a task packet; the calling agent must execute its browser steps before reporting a result.
 
-**Execute at session start:**
+The lifecycle is `prepare`, browser inspection and `ready`, `begin-send`, one browser submission, `sent`, then `complete`. `begin-send` is the durable send-attempt marker and must run immediately before clicking Send. A blocked run preserves its last phase. Use `resume` to inspect recovery instructions. Use `reconcile-not-sent` only after positive observation that a `sending` prompt was not submitted, then recheck readiness before another send attempt. Use `fail` only for a submitted request with a final provider failure; retain its answer and mark `failed`, not completed.
 
-```bash
-# Check profiles unused for 30+ days
-find ~/.cache/chrome-ai-bridge/profiles -maxdepth 1 -type d -mtime +30 2>/dev/null | while read dir; do
-  [ "$dir" != "$HOME/.cache/chrome-ai-bridge/profiles" ] && du -sh "$dir"
-done
-```
+Before recording readiness, confirm that temporary-chat/history-off mode is disabled and that the conversation can be saved. If account settings prevent persistence, record the blocker; do not silently change account-wide privacy settings.
 
-If targets exist: Show list, get user approval, then `rm -rf`.
+Use only browser capabilities advertised by the active harness. Claude's Chrome integration, Codex's desktop Browser, and configured browser MCPs have different APIs. Do not invent tool names, turn on browser permissions in repository settings, or start a new browser profile to replace the user's signed-in session.
 
-### Work State Verification - Mandatory
+## Code and compatibility boundaries
 
-**Execute immediately after context refresh:**
+- Keep normal entry points independent of the legacy daemon, custom Chrome extension, CDP drivers, and network-response parsers.
+- Legacy behavior is an explicit `cab legacy ...` path. Do not fall back to it when a native browser capability is missing.
+- Preserve the separate Discord collector unless a requested change requires modifying it.
+- Keep provider policy, durable state transitions, and browser instructions independently understandable.
+- Do not include prompts, private source, answers, credentials, or real conversation URLs in committed fixtures or work logs.
+- Update the shared skill and user docs whenever the command contract changes. The skill is repository-owned and its changes belong in the same PR; this does not install or edit a personal skill.
 
-```bash
-ls -t docs/log/claude/*.md | head -3
-```
+## Verification
 
-Read latest log, understand previous work, report "Resuming from: [summary]".
-
-### Work Log Recording - Required
-
-Create/update `docs/log/claude/[yymmdd_hhmmss-task.md]` at:
-- Task start, milestone completion, errors, waiting for verification, task completion
-
-**Log format:**
-```markdown
-# [Task Summary]
-
-## Status
-- Date: YYYY-MM-DD HH:MM
-- Status: [in_progress / waiting / completed / error]
-
-## Current Task
-[Description]
-
-## Progress
-- [x] Done
-- [ ] Not done <- here
-
-## Recent Work
-- What was done
-- What to do next
-
-## Blockers
-- [if any]
-```
-
-### Git Commit Before Plan Execution - Mandatory
-
-Before `EnterPlanMode -> ExitPlanMode`:
-1. Check `git status` for uncommitted changes
-2. If changes exist: Ask user "Uncommitted changes found. Commit first?"
-3. Approved -> commit, Rejected -> continue with warning
-
----
-
-## Strict Rules
-
-### chrome-ai-bridge Usage Restrictions - Mandatory
-
-**Chrome AI Bridge is for ChatGPT/Gemini queries only.**
-
-**CLI commands (CC/Cdx 共通):**
-```bash
-ask-ai chatgpt "質問"   # ChatGPT のみ
-ask-ai gemini "質問"    # Gemini のみ
-ask-ai both "質問"      # 両方に並列
-ask-ai health           # デーモン状態確認
-```
-
-CLI パス: `skills/ask-ai/scripts/ask-ai`
-
-**Note:** MCP ツール（`ask_chatgpt_web` 等）は廃止済み。CLI を使うこと。
-一般的なブラウザ操作には Playwright MCP (`mcp__plugin_playwright_playwright__*`) を使用。
-
----
-
-### Deprecated Scripts - Mandatory
-
-**Do not use:**
-- `scripts/start-mcp-from-json.mjs` - Old daemon startup
-- `scripts/configure-codex-mcp.mjs` - Codex only
-- `scripts/codex-mcp-test.mjs` - Codex only
-
-**Use instead:**
-```bash
-npm run test:chatgpt -- "question"
-npm run test:gemini -- "question"
-npm run cdp:chatgpt
-npm run cdp:gemini
-```
-
----
-
-### Extension Version - Mandatory
-
-**Bump `manifest.json` version after any `src/extension/` changes.**
-
-```json
-// src/extension/manifest.json
-"version": "1.1.0",  // <- increment every time
-```
-
-Target files: All files under `src/extension/`
-
----
-
-### Development Flow - Mandatory
-
-**This dev environment uses local path reference, npm publish not needed for dev.**
-
-```bash
-# Run daemon directly from local build
-node $HOME/projects/mcp/chrome-ai-bridge/scripts/cli.mjs
-```
-
-**Standard dev flow:**
-```bash
-vim src/browser.ts       # 1. Edit
-npm run build            # 2. Build
-npm run typecheck        # 3. Type check only
-git add -A && git commit -m "..." && git push  # 4. Push
-```
-
-**Before user verification:**
-- If changes include `src/extension/**`: Run `npm run build` first
-- Only request verification after build completion
-
-**Testing:**
-- `npm test` not needed (slow & existing issues)
-- `npm run typecheck` only
-- Manual verification after Claude Code restart
-
-**npm publish (for user releases only):**
-```bash
-# 1. Update version in package.json
-# 2. git push
-git add -A && git commit -m "chore: bump version" && git push origin main
-# 3. Create & push tag manually
-git tag vX.X.X && git push origin vX.X.X
-# 4. Verify (wait ~30s)
-npm view chrome-ai-bridge version
-```
-
-**Forbidden:**
-- Local `npm publish` (EOTP error - WebAuthn 2FA issue)
-- Relying on auto-tag workflow
-
----
-
-### Efficient Debugging Rules - Mandatory
-
-**Avoid daemon restarts** - Direct execution is faster.
-
-| Situation | Method |
-|-----------|--------|
-| Single function debug | Direct execution script |
-| E2E verification | `cab` CLI |
-| UI element investigation | Manual browser check |
-| Error identification | Logs + direct execution |
-
-**Test questions - BAN avoidance:**
-
-Forbidden:
-- `1+1?` - Obviously a test
-- `Connection test` - Automation trace
-- `Hello` / `OK` - Meaningless
-
-Recommended:
-```
-How do I deep copy an object in JavaScript? Include code example.
-How to read files asynchronously in Python?
-Explain generic types in TypeScript briefly.
-```
-
-**Direct execution scripts:**
 ```bash
 npm run build
-npm run test:chatgpt
-npm run test:gemini
-npm run test:both
-npm run test:network -- chatgpt  # Network intercept test
-npm run test:network -- gemini   # Network intercept test
+npm run typecheck
+npm run test:browser-use
 ```
 
-**Log monitoring:**
-```bash
-tail -f .local/debug.log
-```
+Use focused tests for meaningful workflow risks: project isolation, continuation after restart, uncertain sends, private Gemini context, and PR validation. Do not run the legacy live provider scripts as evidence for the native browser workflow.
 
----
+Follow `docs/user/workflows.md` for an authorized live check. Record the browser/harness, observed model label, conversation URL persistence, and actual PR verification. Distinguish offline checks from live provider validation in the PR. Do not claim a live test passed without observing it.
 
-### Test Suite - Regression Prevention
+If modifying the legacy extension, increment `src/extension/manifest.json` and build its artifacts before asking anyone to reload it. No extension reload is needed for changes limited to the v3 workflow.
 
-**継続的テストスイート** - 過去の問題再発を防ぐ。
+## Delivery
 
-```bash
-# 基本動作確認（smoke）
-npm run test:smoke
-
-# 過去の問題再発確認（regression）
-npm run test:regression
-
-# 全シナリオ実行
-npm run test:suite
-
-# 特定シナリオのみ
-npm run test:suite -- --id=chatgpt-thinking-mode
-
-# デバッグ情報付き
-npm run test:suite -- --debug
-```
-
-**シナリオ定義**: `scripts/test-scenarios.json`
-**レポート保存先**: `.local/chrome-ai-bridge/test-reports/`
-
-**タグ一覧:**
-| タグ | 説明 |
-|------|------|
-| `smoke` | 基本動作確認（新規チャット、並列クエリ） |
-| `regression` | 過去の問題再発確認（既存チャット再接続、Thinkingモード） |
-| `chatgpt` | ChatGPT関連のみ |
-| `gemini` | Gemini関連のみ |
-
-**新しい失敗パターンが見つかったら:**
-1. `scripts/test-scenarios.json` にシナリオ追加
-2. `npm run test:suite -- --id=<新シナリオID>` で動作確認
-
----
-
-### ChatGPT/Gemini Question Construction - Required
-
-Include:
-1. **Context**: Project, tech stack, situation
-2. **Problem**: Symptoms, error messages
-3. **Tried**: Solutions attempted and results
-4. **Question**: Numbered, specific
-5. **Expected format**: Code examples, steps, comparison table
-
-**Good example:**
-```
-chrome-ai-bridge project: EOTP error during npm publish.
-
-Environment:
-- npm 11.3.0 / Node.js 24.2.0
-- 2FA: WebAuthn (Touch ID) only
-
-Tried:
-1. npm login --auth-type=web -> Success
-2. npm publish --auth-type=web -> EOTP error
-
-Questions:
-1. Why EOTP error even with auth-type=web?
-2. Can I publish with Touch ID only?
-3. Is Trusted Publishing (OIDC) a good alternative?
-
-Provide code examples or specific steps.
-```
-
-### Timestamp Rule for Logs
-
-Use: `date '+%y%m%d_%H%M%S'` (client local time)
-Don't use: `TZ='Asia/Tokyo' date '...'` (no timezone forcing)
-
----
-
-### AI Query Default Behavior
-
-**Rule:** When user says "ask AI", use `ask-ai both "質問"` (both AIs in parallel).
-
-**Trigger patterns for single AI:**
-- "ChatGPTに聞いて" → `ask-ai chatgpt "質問"`
-- "Geminiに聞いて" → `ask-ai gemini "質問"`
-
-**Trigger patterns for multi-AI (三者議論):**
-- "三者議論して"
-- "深掘りして"
-- "複数のAIに聞いて"
-
-**Forbidden:**
-- Asking "Which AI should I ask?"
-- Using parallel query for simple questions
-
----
-
-## Codex Defaults (Codex 向け)
-
-### Chrome Instance
-- Use the **already running** Chrome instance unless explicitly instructed otherwise.
-- Do **not** launch a new Chrome profile unless the user asks.
-- When loading the extension for local testing, default to `build/extension`.
-- For Codex-driven checks, proceed without re-asking these basics.
-- Only ask when blocked (missing config, missing tool, permission/GUI restriction, or conflicting explicit user instruction).
-
-### Daemon Verification
-- Goal: **open an existing Chrome tab to ChatGPT and verify send/receive via the daemon from Codex**.
-- Before asking the user, **inspect local config** (`codex-config.toml`, `server.json`) to find the daemon config.
-- If a ChatGPT tab is required, open it in the existing Chrome without asking again.
-- If a required action cannot be performed from Codex (e.g., GUI permission), report the exact blocker and the minimal user action needed.
-- When requesting an extension reload, always include the extension version from `src/extension/manifest.json`.
-- Never instruct the user to reload the extension before running `npm run build` and confirming the version is updated.
-- When reporting extension status, always state: (1) build done, (2) manifest version, (3) reload required.
-- If the task is unfinished and can be continued without user intervention, keep iterating until success or a concrete blocker.
-- If progress stalls, propose switching to Playwright-style transport/flow when:
-  - Two successive fixes fail to improve `pages`/`snapshot`.
-  - `browser.pages()` remains empty after target/attach fixes.
-  - OOM or reconnect loops recur.
-
-### Verification Steps
-1. Ensure the daemon is running.
-2. In the existing Chrome, open a new tab to `https://chatgpt.com`.
-3. Verify the extension can interact with the page (open, focus, send message, receive response).
-4. Report the exact observed behavior and any errors.
-
-### Change Discipline
-- Do not trade away existing working behavior unless explicitly approved.
-- Prefer the option that preserves current auto-connect paths and avoids manual steps.
-- If a change has potential regressions, clearly list the tradeoffs and get approval before proceeding.
-- Do not propose designs that are knowingly weaker than Playwright's extension2 baseline when the goal is speed/reliability.
-
----
-
-## References
-
-- **Technical spec**: `docs/SPEC.md`
-- **Project overview**: `docs/SPEC.md` (Project Overview section)
-- **Development workflow details**: `docs/SPEC.md` (Development section)
+Use a feature branch and a PR. Explain the user-visible behavior, migration, validation performed, and remaining limitations. Preserve unrelated work. Do not publish to npm, tag a release, or merge unless requested. Local development uses the checkout's CLI and does not require npm publication.

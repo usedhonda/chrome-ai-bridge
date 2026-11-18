@@ -1,25 +1,24 @@
-# Routing Rules
+# Provider routing
 
-## Default
+Use the user's explicit provider first. The same lifecycle applies through `ask-ai` or `cab`; these aliases prepare work for the calling agent's browser tools.
 
-- 「AIに聞いて」→ `ask-ai both "質問"`（両方に並列）
+| Request                                                           | Provider                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ChatGPTに依頼 / ChatGPTに聞いて / C in established ask-ai context | `chatgpt`                                                        |
+| Geminiに聞いて / G in established ask-ai context                  | `gemini`                                                         |
+| 両方に聞いて / AIに聞いて with no provider specified              | `both`                                                           |
+| クロス議論 / D in established discussion context                  | Separate provider requests with the same stable project identity |
 
-## Explicit provider override
+Do not infer that a single letter in unrelated text invokes this workflow. Preserve the requested task scope and use known project/repository context.
 
-- 「ChatGPTに聞いて」「C」→ `ask-ai chatgpt "質問"`
-- 「Geminiに聞いて」「G」→ `ask-ai gemini "質問"`
-- 「クロス議論」「D」→ クロス議論モード（SKILL.md 参照）
+## Output contract is part of routing
 
-## Auto-upgrade to cross-discussion
+ChatGPT uses Pro and must produce an actual branch / PR as well as its chat answer. Gemini uses Thinking or explicit High thinking and returns its answer in chat. For a request that only needs discussion and does not authorize repository changes, use Gemini when compatible with the user's provider choice; otherwise clarify the requested deliverable rather than inventing a code change merely to obtain a PR.
 
-以下のいずれかに該当する場合、クロス議論モードに切り替える:
+For private repositories, each Gemini request needs selected code context. `both` does not make the private repository accessible to Gemini and does not require sending the selected code to ChatGPT.
 
-1. 比較、クロスチェック、複数の視点を求めている
-2. 選択肢の最終選定（アーキテクチャ/ツール/設計）
-3. リスク評価やトレードオフの検討
-4. キーワード: `compare`, `cross-check`, `second opinion`, `tradeoff`, `pros and cons`, `比較`, `クロス議論`, `反証`, `別視点`
+## Multiple perspectives
 
-## Cost and speed control
+When the user requests comparison or cross-discussion, keep each provider's conversation URL. Ask focused follow-ups about an actual unresolved point instead of imposing a fixed number of rounds. Cross-check claims against the repository and observed results. Do not assume a provider is faster or more accurate for every task.
 
-- 低リスク/単純な事実確認 → 単一AI（ユーザー指定がなければ both）
-- 重要な判断 → クロス議論を推奨
+Do not start parallel operations against the same provider conversation. Independent ChatGPT and Gemini tabs may run concurrently. A completed Gemini answer never substitutes for the ChatGPT PR requirement.

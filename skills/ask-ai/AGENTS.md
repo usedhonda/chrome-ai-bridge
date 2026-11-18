@@ -1,53 +1,12 @@
-# ask-ai スキル管理
+# ask-ai maintenance
 
-ask-ai CLI を使った AI 質問・議論スキル。chrome-ai-bridge リポジトリに統合済み。
+This directory is the repository-owned shared skill for Claude Code and Codex. Changes are versioned with chrome-ai-bridge; editing it does not install or overwrite a personal skill.
 
-## ファイル構成
-
-- `SKILL.md` - スキル本体（CC 用、description でトリガー自動判定）
-- `AGENTS.md` - プロジェクト管理用
-- `scripts/ask-ai` - CLI エントリポイント（cab ラッパー）
-- `references/routing-rules.md` - ルーティングルール定義
-- `assets/prompt-template.md` - プロンプトテンプレート
-
-## 運用
-
-- `~/.claude/skills/ask-ai/` はこのディレクトリへのシンボリックリンク
-- cab は symlink 経由で絶対パス解決される
-
-## ask-ai CLI 使い方（CC / Cdx 共通）
-
-### コマンド
-
-| コマンド                | 動作                         |
-| ----------------------- | ---------------------------- |
-| `ask-ai chatgpt "質問"` | ChatGPT のみに質問           |
-| `ask-ai gemini "質問"`  | Gemini のみに質問            |
-| `ask-ai both "質問"`    | 両方に並列で質問             |
-| `ask-ai health`         | cab デーモンのステータス確認 |
-| `ask-ai --help`         | ヘルプ表示                   |
-
-### トリガーワード → コマンド対応
-
-| トリガー                 | コマンド                          |
-| ------------------------ | --------------------------------- |
-| 「AIに聞いて」           | `ask-ai both "質問"`              |
-| 「ChatGPTに聞いて」「C」 | `ask-ai chatgpt "質問"`           |
-| 「Geminiに聞いて」「G」  | `ask-ai gemini "質問"`            |
-| 「クロス議論」「D」      | クロス議論モード（SKILL.md 参照） |
-
-### 実行例
-
-```bash
-# 単純質問
-ask-ai chatgpt "useEffectの使い方を教えて"
-ask-ai both "async/awaitの違いは？"
-
-# ヘルスチェック
-ask-ai health
-```
-
-### 注意
-
-- デーモン管理（起動・停止）は cab 側が自動で担当。ask-ai 側での管理は不要
-- cab は同リポジトリ内の `scripts/cab` を参照
+- Keep `SKILL.md` focused on the complete native-browser workflow. Its frontmatter contains `name` and `description` only.
+- Keep `scripts/ask-ai` a wrapper for the canonical CAB command contract. Do not add a separate daemon client or provider parser here.
+- Resolve the skill-relative script to an absolute path once and use the same executable for all lifecycle commands. Respect a returned structured `commandPrefix`. Do not hard-code `~/.claude` for both harnesses or switch to an older global `cab`.
+- Discover browser tools from the active session. Do not add a Bash-only tool allowlist or guessed Claude/Codex tool identifiers.
+- Preserve project URLs, mode evidence, the pre-send marker, private Gemini context, and provider-specific completion requirements. Require a saved, non-temporary conversation before readiness.
+- Keep `references/routing-rules.md` and `assets/prompt-template.md` consistent with the CLI and `docs/tool-reference.md`.
+- Never treat preparation or a prose promise of a PR as task completion. Keep blocked state reviewable. Document explicit non-submission reconciliation separately from final provider failure so recovery neither duplicates a send nor strands a project.
+- Validate examples against the current CLI and include the skill changes in the feature PR.

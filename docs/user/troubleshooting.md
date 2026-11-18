@@ -1,271 +1,83 @@
-# Troubleshooting Guide
+# Troubleshooting v3
 
-## Extension Not Loading
-
-### Symptoms
-
-- Extension icon not visible in Chrome toolbar
-- MCP server cannot connect to extension
-
-### Solutions
-
-1. **Install the Chrome extension**
-   - Open `chrome://extensions/`
-   - Enable "Developer mode" (toggle in top-right)
-   - Click "Load unpacked" and select `build/extension/` directory
-   - Verify the extension appears and is enabled
-
-2. **Validate manifest syntax**
-   - Must be valid Manifest V3
-   - Check for JSON syntax errors
-   - Required fields: `manifest_version`, `name`, `version`
-
-3. **Check extension errors**
-   - Open `chrome://extensions/`
-   - Click "Errors" under the chrome-ai-bridge extension
-   - Check Service Worker console for errors
-
-4. **Rebuild if needed**
-   ```bash
-   npm run build
-   ```
-   Then reload the extension in `chrome://extensions/`
-
-## MCP Server Not Starting
-
-### Check version
+Start with:
 
 ```bash
-npx chrome-ai-bridge@latest --version
+cab doctor
+cab status
+cab resume RUN
 ```
 
-### Clear npx cache
+`doctor` checks local setup. The active coding agent must inspect the browser capability and signed-in page itself.
 
-```bash
-npx clear-npx-cache
-# or
-rm -rf ~/.npm/_npx
-```
+## A command returned instructions instead of an answer
 
-### Verify MCP configuration
+`prepare`, including the `chatgpt` / `gemini` / `both` aliases, saves a work packet. The active agent must follow it using its browser tools, then call `ready`, `begin-send`, `sent`, and `complete`. Use the [shared ask-ai skill](../../skills/ask-ai/SKILL.md) so the agent carries out that sequence. Running the CLI in a terminal alone does not operate another agent's browser session.
 
-```bash
-cat ~/.claude.json | jq '.mcpServers'
-```
+## The checkout and global CLI behave differently
 
-### Common issues
+Use the absolute v3 wrapper or Node/script prefix you started with for every lifecycle command. A `cab` installed earlier on `PATH` may still be v2. Read the returned command prefix when available and do not switch executables between preparation and completion.
 
-1. **Stale cache** - Clear npx cache and restart
-2. **Invalid JSON** - Validate `~/.claude.json` syntax
-3. **Port conflict** - Check if port 8766 is already in use:
-   ```bash
-   lsof -i :8766 | grep LISTEN
-   ```
-4. **Stale processes** - Cleanup old MCP server processes (namespace-safe by default):
-   ```bash
-   npm run cleanup
-   # Use only when you intentionally want to kill every namespace:
-   npm run cleanup -- --all
-   ```
+## The page is in temporary-chat or history-off mode
 
-## Extension Connection Issues
+A durable project conversation needs a saved chat. Confirm that the task uses the provider's normal saved conversation mode before recording readiness. Do not submit while persistence is disabled. If account settings prevent this, record a blocker; do not silently change account-wide privacy settings.
 
-### Symptoms
+## Browser tools are missing
 
-- "Extension not connected" error
-- MCP tools not responding
+For Claude Code, inspect `/chrome` or start with `claude --chrome` after setting up Claude in Chrome. For Codex desktop, inspect the Browser / Chrome integration available in that session. Codex CLI and IDE need a configured browser MCP; see [setup](setup.md).
 
-### Solutions
+Do not invent a tool name, revive the CAB daemon implicitly, or open a new browser profile as a substitute for the requested signed-in session. Record the specific missing capability with `cab block RUN --reason TEXT`.
 
-1. **Verify Discovery Server is running**
+## The page asks for sign-in
 
-   ```bash
-   curl http://127.0.0.1:8766/mcp-discovery
-   ```
+Keep the run and page. Use the harness's supported sign-in handoff, then inspect the page again. CAB state stores conversation identity, not authentication cookies. Switching agents or sharing its state directory does not sign a separate browser profile into the service.
 
-   Expected response:
+## Pro or Thinking cannot be confirmed
 
-   ```json
-   {"wsUrl": "ws://127.0.0.1:XXXXX", ...}
-   ```
+Inspect the conversation's model/mode selector. A ChatGPT Pro plan badge is not selected-mode evidence. For Gemini, select Thinking / 思考 or explicit High thinking when the UI exposes thinking levels. Record the actual label; use wording such as `Thinking: High` only when that is what the control establishes.
 
-2. **Check port 8766 availability**
+Do not silently accept Fast, Auto, a lower mode, or a numbered model assumed to be equivalent. If account limits or access prevent the required mode, preserve a blocker in the same run. [Google's model guide](https://support.google.com/gemini/answer/18648722) documents that models, thinking controls, and automatic fallback can vary.
 
-   ```bash
-   lsof -i :8766 | grep LISTEN
-   ```
+## The provider is still thinking
 
-3. **Click extension icon** to trigger reconnection
+Wait in the existing conversation and check the current rendered state. Save the conversation URL as soon as it exists; do not wait until the answer is finished. Capture the final answer, not interim reasoning or the preceding turn. A long wait does not authorize a second submission or a fresh chat.
 
-4. **Restart Chrome** to reload the Service Worker
+## A send call timed out or the agent restarted
 
-5. **Check extension permissions** in `chrome://extensions/`
+Run `cab resume RUN`. If the phase is `sending`, the marker means a browser submission may already have happened. Inspect the original tab hint or saved URL for the exact new user message. If it was accepted, record `sent` with the observed conversation URL. If it is still uncertain, keep a blocker. A second `begin-send` cannot grant another send.
 
-## Hot-Reload Not Working (Developers)
+If inspection positively establishes that the prompt was **not submitted**, use `cab reconcile-not-sent RUN --url OBSERVED_URL --reason EVIDENCE`. It returns a `sending` run to `ready`; recheck the actual page and mode and call `begin-send` before another click. A timeout, missing tab, or missing answer does not establish non-submission.
 
-### Verify development mode
+If the phase is `submitted`, continue waiting or capture the existing final response. If it is `completed`, return the saved result. If a submitted task has a final provider failure, save the response with `cab fail RUN --answer-file answer.md --reason TEXT`; it becomes `failed` and a corrective follow-up can use the retained URL. This prevents recovery from creating a duplicate PR task.
 
-```bash
-ps aux | grep daemon-wrapper | grep CAI_ENV=development
-```
+## A new request is rejected because work is active
 
-### Check tsc -w is running
+Another run owns that project/provider conversation. Inspect `status` and resume it. A pre-send request can be canceled if it is no longer wanted; a request that may have been sent must be reconciled. A final provider failure can be recorded with `fail` to permit corrective follow-up. Use separate project names for genuinely independent tasks, not to bypass an unresolved send.
 
-```bash
-ps aux | grep 'tsc -w'
-```
+## A saved tab no longer exists
 
-### Manually restart wrapper
+Open the saved conversation URL in the signed-in browser. The tab handle is only a hint. If the conversation itself is unavailable, preserve the URL and record the error. `--new-chat` is an explicit decision to start over, not an automatic repair.
 
-```bash
-pkill -f daemon-wrapper
-# Then restart AI client (Cmd+R)
-```
+## Gemini rejects private repository preparation
 
-## ChatGPT/Gemini Integration Issues
+A private URL alone is insufficient. Supply selected `--context` files or excerpts under `--root`, even for follow-ups. Verify paths and line ranges. If context exceeds the supported bounds, narrow it or split the task. Do not paste an entire checkout, secrets, or unrelated files to avoid choosing relevant code.
 
-### Login required
+For `both`, the private context requirement comes from Gemini; only its prompt receives that selected code.
 
-- First use requires manual login in browser
-- MCP will prompt when login is needed
-- Credentials are saved in browser profile
+## ChatGPT returned an answer but no PR
 
-### Response not captured
+The ChatGPT output contract requires an actual branch and PR. If ChatGPT is still carrying out the task, keep observing it. If its final answer reports a missing connector capability or another final failure, save that answer with `cab fail RUN --answer-file answer.md --reason TEXT`. The result is `failed`, and a corrective follow-up can use the same conversation. Use `block` for temporary interruptions. Do not call the task completed just because its prose sounds finished.
 
-- Wait for response to complete
-- Check network connectivity
-- Verify ChatGPT/Gemini service is available
-- Try running with debug mode: `{ "question": "...", "debug": true }`
+## A PR URL was rejected
 
-### Empty response (background tab)
+Check that it is an actual PR in the requested repository, with an appropriate non-default head branch and the requested base when `--base` was supplied. `cab complete` reads GitHub metadata; a fabricated, inaccessible, unrelated, or mismatched link is not accepted.
 
-- v2.1+ uses network extraction which is unaffected by background tab throttling
-- If DOM fallback is used, `Page.bringToFront` handles this automatically
-- See SPEC.md Section 13 Problem 4 for details
+For a private repository, authenticate local `gh` or supply `GH_TOKEN` / `GITHUB_TOKEN` through the environment. ChatGPT's GitHub connection does not automatically authenticate this local verifier. Do not place tokens in prompts or command-line URLs. Once access is fixed, retry **completion**, not the browser send.
 
-## Network Extraction Issues
+## Claude Code and Codex open different conversations
 
-### Symptoms
+Check that both callers use the same `CAB_STATE_DIR` (or the same default state directory), project name, repository, and provider. Then check browser account/profile identity. Import a known old URL explicitly with `import-session`; do not copy expiring v2 agent IDs into new state.
 
-- Network interceptor captures frames but text is empty
-- Falling back to DOM extraction when network should work
+## Legacy commands or documents mention CDP / extension reloads
 
-### Diagnosis
-
-```bash
-# Test network extraction directly
-npm run test:network -- chatgpt
-npm run test:network -- gemini
-```
-
-Check the output for:
-
-- **Tracked requests**: Verify API URLs are being captured
-- **Extracted text**: Verify text is non-empty
-- **Frame count**: Should be > 0 for API responses
-
-### Common causes
-
-1. **`Network.enable` not called**: Ensure it's called in both tab reuse and new tab paths in `fast-chat.ts`
-2. **API endpoint changed**: Check URL patterns in `network-interceptor.ts`:
-   - ChatGPT: `/backend-api/f/conversation`
-   - Gemini: `/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate`
-3. **Response body unavailable**: Some redirects or cancelled requests don't have response bodies (expected)
-
-## Performance Issues
-
-### Slow startup
-
-- First connection requires extension handshake (~2-3s)
-- Subsequent connections reuse existing tabs (faster)
-
-### Memory usage
-
-- Close unused browser tabs
-- Restart MCP server periodically
-- Kill stale processes (namespace-safe): `npm run cleanup`
-
-### Many panes / many MCP clients (OOM or timeout under load)
-
-When running many panes at once, tune IPC overload protection on the Primary:
-
-```bash
-export CAI_IPC_MAX_SESSIONS=20
-export CAI_IPC_RESERVED_INIT_SLOTS=2
-export CAI_IPC_MAX_QUEUE=64
-export CAI_IPC_QUEUE_WAIT_TIMEOUT_MS=45000
-export CAI_IPC_SESSION_IDLE_MS=1800000
-export CAI_EXEC_MAX_CONCURRENCY=3
-export CAI_STARTUP_PROCESS_THRESHOLD=8
-export CAI_STARTUP_DELAY_JITTER_MS=1500
-export CAI_PRIMARY_IDLE_MS=0
-```
-
-Expected overload errors:
-
-- `SERVER_CAPACITY_EXCEEDED`: session capacity is full and no initialize waiter slot is available
-- `SERVER_QUEUE_FULL`: initialize queue is full
-- `SERVER_BUSY_TIMEOUT`: queued initialize request waited too long
-
-Recommended startup sequence for large tmux workspaces:
-
-1. Start 2 panes -> verify basic tool call
-2. Scale to 4 panes -> verify health
-3. Scale to 8 panes -> verify no repeated reconnect loops
-4. Scale to 20 panes
-
-If you still see intermittent `Transport closed` after long idle time, verify:
-
-- `CAI_PRIMARY_IDLE_MS=0` (prevents Primary auto-exit while clients are still open)
-- `CAI_IPC_SESSION_IDLE_MS` is not too short for your usage pattern
-
-## Debug Mode
-
-Enable verbose logging:
-
-```bash
-DEBUG=mcp:* npx chrome-ai-bridge@latest
-```
-
-Or check debug files:
-
-```bash
-ls .local/chrome-ai-bridge/debug/
-```
-
-## Still Having Issues?
-
-1. Check [GitHub Issues](https://github.com/usedhonda/chrome-ai-bridge/issues)
-2. Search existing discussions
-3. Create a new issue with:
-   - Error message
-   - Configuration used
-   - Steps to reproduce
-   - Output of `npm run test:network -- chatgpt` (if relevant)
-
-## Auto-Recovery Tuning (v2.3.x+)
-
-If you see frequent `tools/call` timeout around 60 seconds:
-
-```bash
-# Keep internal waits under client deadline (defaults shown)
-export CAI_MCP_TOOL_BUDGET_MS=50000
-export CAI_RESPONSE_WAIT_MAX_MS=40000
-export CAI_MCP_BUDGET_RESERVE_MS=3000
-```
-
-If startup gets stuck behind an unhealthy Primary:
-
-```bash
-# Auto-heal unhealthy primary older than this threshold (ms)
-export CAI_PRIMARY_SELF_HEAL_MIN_AGE_MS=20000
-```
-
-Cross-project isolation:
-
-- Lock namespace is now derived from project scope (git root/cwd) automatically.
-- You can force explicit isolation with:
-
-```bash
-export CAI_NAMESPACE=my-project-name
-```
+Those belong to the previous implementation. The normal v3 workflow does not need the CAB extension or its daemon. `cab legacy ...` exists for explicit migration compatibility. Historical blog posts, extension docs, and scripts are not the native browser workflow; use the current [specification](../SPEC.md) and [command reference](../tool-reference.md).

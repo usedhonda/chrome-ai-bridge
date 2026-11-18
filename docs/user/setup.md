@@ -1,204 +1,110 @@
-# MCP Setup Guide for chrome-ai-bridge
+# Setup and migration
 
-## 📦 Installation
+## Requirements
 
-First, install the package globally (optional):
+- Node.js 22.12 or newer.
+- Claude Code or Codex with an available browser-use capability.
+- A browser session signed in to ChatGPT and/or Gemini, with the requested mode available and saved conversations enabled. Temporary-chat/history-off mode cannot provide the required durable conversation.
+- ChatGPT's GitHub connection for both public and private repository work.
+- For private PR verification, local GitHub access through authenticated `gh`, `GH_TOKEN`, or `GITHUB_TOKEN`.
 
-```bash
-npm install -g chrome-ai-bridge
-```
+The normal workflow does not use the custom CAB Chrome extension or daemon. A harness's own browser integration may use its own standard extension.
 
-## 🔧 MCP Configuration
-
-### For Claude Code (Recommended)
-
-```bash
-claude mcp add chrome-ai-bridge npx chrome-ai-bridge@latest
-```
-
-This automatically creates the configuration and handles everything for you.
-
-### For Other MCP Clients (Manual Setup)
-
-#### Global Configuration (Recommended)
-
-Add to the **root level** of your MCP client configuration file:
-
-```json
-{
-  "mcpServers": {
-    "chrome-ai-bridge": {
-      "command": "npx",
-      "args": ["chrome-ai-bridge@latest"]
-    }
-  }
-}
-```
-
-**Benefits of global configuration:**
-
-- ✅ Applies to all projects automatically
-- ✅ Single source of truth for MCP settings
-- ✅ Easy to maintain and update
-- ✅ No need to configure per-project
-
-**Configuration file locations:**
-
-- **Claude Code**: `~/.claude.json` (global mcpServers section)
-- **Cursor**: `~/.cursor/extensions_config.json`
-- **VS Code Copilot**: `.vscode/settings.json` or global settings
-- **Cline**: Follow Cline's MCP setup guide
-
-### For Codex (Gemini-first ask-ai skill)
-
-1. Add MCP server in Codex:
+## Run from this checkout
 
 ```bash
-codex mcp add chrome-ai-bridge -- npx chrome-ai-bridge@latest
+npm ci
+npm run build
+node scripts/cli.mjs doctor
+node scripts/cli.mjs --help
 ```
 
-2. Verify MCP registration:
+`./scripts/cab` and `./skills/ask-ai/scripts/ask-ai` are equivalent entry points. Resolve an absolute path once and use that same executable throughout the run, including readiness and completion. The docs use `cab` as shorthand for it. Do not switch to an older globally installed `cab`. A package installation exposes `cab`, `chrome-ai-bridge`, and `ask-ai` on `PATH`.
+
+`doctor` checks local workflow setup; it cannot inspect browser tools inside an active agent session or prove that ChatGPT/Gemini is signed in. Ask the active agent to inspect its actual browser capability as well.
+
+## Claude Code
+
+Use Claude Code's [official Chrome integration](https://code.claude.com/docs/en/chrome). Enable it with:
 
 ```bash
-codex mcp list
+claude --chrome
 ```
 
-3. Install this repository's `ask-ai` skill into your Codex skills directory:
+Use `/chrome` to inspect connection status, select the browser, or reconnect. It uses Claude in Chrome and requires a direct Anthropic account signed in through `/login`. Keep using the browser profile where ChatGPT and Gemini are signed in.
+
+Do not set repository environment variables to force-enable browser integration. Anthropic explicitly documents that a project cannot enable Claude in Chrome for the user. Follow the harness's normal setup and site permissions.
+
+## Codex
+
+In the desktop app, use the available Browser or connected Chrome integration. The built-in browser uses its own profile; use the [browser extension](https://learn.chatgpt.com/docs/chrome-extension) when the task needs the user's existing signed-in Chrome tabs. [Official Browser documentation](https://learn.chatgpt.com/docs/browser) distinguishes these surfaces and states that the built-in Browser is not available in Codex CLI or IDE extension.
+
+For Codex CLI or IDE, configure a browser MCP. One supported option is [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp):
 
 ```bash
-mkdir -p ~/.codex/skills/ask-ai
-cp -R skills/ask-ai/* ~/.codex/skills/ask-ai/
+codex mcp add playwright -- npx -y @playwright/mcp@latest --extension
 ```
 
-4. Restart Codex session.
+Extension mode requires the standard [Playwright extension](https://github.com/microsoft/playwright/tree/main/packages/extension) and connects to existing browser sessions. Starting Playwright in its default separate profile does not inherit the user's signed-in Chrome session. The configured MCP must run on a machine that can access the selected browser.
 
-5. Use the skill behavior:
-   - Default is Gemini-first.
-   - Cross-discussion requests should use ChatGPT+Gemini parallel query.
+See the [official Codex MCP guide](https://learn.chatgpt.com/docs/extend/mcp) for configuration and connection status. CAB does not require a particular MCP server name or copy Claude-specific tool names into Codex instructions.
 
-#### Project-Specific Configuration (Not Recommended)
+## Make the shared skill discoverable
 
-For Claude Code, you can also add project-specific configuration, but it's generally not needed:
+The canonical skill is `skills/ask-ai/` in this repository. The same directory can be used by both agents. Replace the example checkout path with the absolute path on your machine:
 
-```json
-{
-  "mcpServers": {
-    "chrome-ai-bridge": {
-      "command": "npx",
-      "args": ["chrome-ai-bridge@latest"]
-    }
-  },
-  "projects": {
-    "/path/to/your/project": {
-      "mcpServers": {
-        "chrome-ai-bridge": {
-          "command": "npx",
-          "args": ["chrome-ai-bridge@latest"]
-        }
-      }
-    }
-  }
-}
+```bash
+mkdir -p ~/.claude/skills
+ln -s /absolute/path/to/chrome-ai-bridge/skills/ask-ai ~/.claude/skills/ask-ai
 ```
 
-**Note:** Project-specific settings override global settings. Use this only if you need different configurations for different projects
-
-### Configuration Note (v2.0.0+)
-
-> **⚠️ v2.0.0 Breaking Change**
->
-> v2.0.0 switched to Chrome extension mode. The following CLI options from v1.x are **no longer supported**:
->
-> - `--headless`, `--channel`, `--loadExtension`, `--loadExtensionsDir`
-> - `--loadSystemExtensions`, `--isolated`, `--userDataDir`
->
-> See [README.md](../../README.md) for the new setup process using the Chrome extension.
-
-## 🚀 Usage Examples (Global Configuration)
-
-All examples below use **global configuration** in `~/.claude.json`. These configurations apply to all your projects.
-
-### Basic Setup (Zero Configuration)
-
-```json
-{
-  "mcpServers": {
-    "chrome-ai-bridge": {
-      "command": "npx",
-      "args": ["chrome-ai-bridge@latest"]
-    }
-  }
-}
+```bash
+mkdir -p ~/.agents/skills
+ln -s /absolute/path/to/chrome-ai-bridge/skills/ask-ai ~/.agents/skills/ask-ai
 ```
 
-## 🔌 Chrome Extension Setup
+If a destination already exists, inspect it before changing it. Do not overwrite a different personal skill. Both [Claude Code](https://code.claude.com/docs/en/skills) and [Codex](https://learn.chatgpt.com/docs/build-skills) document symlinked skill directories. Repository-scoped alternatives are `.claude/skills/ask-ai` and `.agents/skills/ask-ai` in the project where the agent runs.
 
-Before using chrome-ai-bridge, install the Chrome extension:
+After the skill is available, ask the agent to use `ask-ai` for the repository task. The agent must execute the browser workflow and record its result; merely showing a generated prompt does not complete the task.
 
-1. Build the extension: `npm run build`
-2. Open `chrome://extensions/` in Chrome
-3. Enable "Developer mode" (toggle in top-right)
-4. Click "Load unpacked" and select the `build/extension/` directory
-5. Open ChatGPT and/or Gemini tabs and log in
+## Share durable conversations across agents
 
-> **v2.1 Note**: Network-native response extraction is enabled automatically. No additional configuration is needed — responses are captured at the network protocol level for improved reliability.
+Choose the same stable project name and state directory in both harnesses. Defaults are:
 
-## 🔄 After Configuration
+| Setting                        | State location                     |
+| ------------------------------ | ---------------------------------- |
+| `CAB_STATE_DIR` set            | The specified directory            |
+| Otherwise `XDG_STATE_HOME` set | `$XDG_STATE_HOME/chrome-ai-bridge` |
+| Otherwise                      | `~/.local/state/chrome-ai-bridge`  |
 
-1. **Restart your MCP client** (Claude Code, Cursor, etc.) to load the new configuration
-2. Look for the MCP tools in your client's interface
-3. You should see "chrome-ai-bridge" tools available
+For an explicit shared location on one machine:
 
-## 📝 Available Tools
+```bash
+export CAB_STATE_DIR=/absolute/path/to/cab-state
+```
 
-Once configured, you can use these tools:
+Run state contains prompts, selected code, answers, and conversation URLs. Keep it outside tracked repository files. Browser cookies and authentication are managed by the browser integration, not by CAB's state directory. Sharing CAB state alone does not sign another browser into either service.
 
-### AI Consultation Tools
+## Migrate from v2
 
-- `ask_chatgpt_web` - Ask ChatGPT via browser
-- `ask_gemini_web` - Ask Gemini via browser
-- `ask_chatgpt_gemini_web` - Ask both AIs in parallel (recommended)
+1. Build v3 and make sure your calling agent has browser tools.
+2. Inspect each existing conversation you want to retain and identify its project and repository.
+3. Import that conversation explicitly:
 
-> Codex `ask-ai` skill policy in this repository:
->
-> - Default routing: `ask_gemini_web`
-> - Cross-discussion mode: `ask_chatgpt_gemini_web`
+```bash
+cab import-session chatgpt \
+  --project my-project \
+  --repo https://github.com/owner/repository \
+  --visibility private \
+  --url https://chatgpt.com/c/OBSERVED_CONVERSATION_ID
+```
 
-### Debug Tools
+For Gemini, use `gemini` and its observed `https://gemini.google.com/app/...` conversation URL. The next request still verifies the required mode. Old `x-cab-session` IDs, environment-based agent IDs, and session TTLs do not define v3 projects.
 
-- `take_cdp_snapshot` - Get CDP page state for debugging
-- `get_page_dom` - Query DOM elements with CSS selectors
+Normal commands no longer auto-start a daemon or return provider answers through REST. Update integrations to follow the [CLI lifecycle](../tool-reference.md). `cab legacy ...` is an explicit compatibility path for the previous implementation; it does not offer v3's project, mode, or output guarantees. Disable old auto-start entries only after identifying the relevant process/configuration; a v3 invocation does not remove them.
 
-## 💡 Example Commands
+## First verification
 
-Once configured, you can say things like:
+Run `cab doctor`, then follow the [live verification recipe](workflows.md#live-verification-recipe) using an actual authorized task. Keep the new conversation URL, observed mode label, and final PR or answer in the run state. Offline build/tests and live browser verification are separate checks.
 
-- "Ask ChatGPT how to implement OAuth in Node.js"
-- "Ask Gemini to review this architecture"
-- "Ask both AIs for their opinions on this approach"
-- "Take a CDP snapshot of ChatGPT page"
-
-## 🐛 Troubleshooting
-
-### MCP not showing in client
-
-1. **For Claude Code**: Use `claude mcp list` to verify installation
-2. Make sure the configuration is valid
-3. Restart your MCP client completely
-
-### Extension not connecting
-
-1. Verify the Chrome extension is installed in `chrome://extensions/`
-2. Check that ChatGPT/Gemini tabs are open and logged in
-3. Click the extension icon to check connection status
-
-### ChatGPT/Gemini not responding
-
-1. Ensure you're logged in to both services
-2. Try refreshing the ChatGPT/Gemini tab
-3. Check for rate limiting or service issues
-
-## 📚 More Information
-
-- **This Fork**: [GitHub](https://github.com/usedhonda/chrome-ai-bridge) | [npm](https://www.npmjs.com/package/chrome-ai-bridge)
-- **Original Project**: [GitHub](https://github.com/ChromeDevTools/chrome-ai-bridge)
+Integration documentation was checked on 2026-11-18. Availability can vary by harness, account, organization, and rollout; inspect the capabilities supplied by the session you are using.

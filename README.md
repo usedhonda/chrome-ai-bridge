@@ -3,314 +3,188 @@
 [![npm](https://img.shields.io/npm/v/chrome-ai-bridge.svg)](https://npmjs.org/package/chrome-ai-bridge)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-> **Requires Chrome Extension** — This CLI tool controls ChatGPT/Gemini tabs via a browser extension.
+**v3: use ChatGPT and Gemini through your coding agent's browser tools, with durable project conversations.**
 
-Let your AI assistant (Claude Code, Cursor, etc.) consult ChatGPT and Gemini for second opinions.
+Claude Code or Codex operates the browser. `cab` prepares the provider-specific request, saves its progress and conversation URL, and checks the result. The normal workflow needs no chrome-ai-bridge extension, background daemon, CDP endpoint, or intercepted provider API.
 
----
+## Provider behavior
+
+| Provider | Required mode                                                          | Public repository       | Private repository                                      | Completed result                                                             |
+| -------- | ---------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| ChatGPT  | Pro                                                                    | Pass the repository URL | Pass the repository URL; GitHub connection is assumed   | Chat answer **and an actual branch / pull request**, verified against GitHub |
+| Gemini   | Thinking / 思考; explicit High thinking if the UI uses thinking levels | Pass the repository URL | Include selected source files or excerpts in the prompt | Chat answer with code / patch and explanation                                |
+
+A new project opens a new page for each provider. Once the service creates a conversation URL, CAB saves it immediately. Later requests reuse that conversation, including after an agent or terminal restart. Tab handles are optional hints; the saved URL is the durable identity. Conversations do not expire on a timer.
+
+Mode selection is based on the visible UI, not a fixed model version. A Pro subscription badge is not proof that the ChatGPT conversation uses Pro. Gemini's `Thinking: High` is valid evidence when the UI exposes a thinking-level control; a bare `High` label is not.
 
 ## How it works
 
-```
-Your AI Assistant → cab CLI / daemon → Chrome Extension → ChatGPT/Gemini tabs
-```
+1. **Prepare:** CAB saves a run and builds the exact prompt and browser instructions.
+2. **Operate:** the calling agent opens or resumes the correct page, selects the required mode, and sends the prompt with its available browser tools.
+3. **Record:** the agent records readiness, the send attempt, and the observed conversation URL with CAB.
+4. **Complete:** the agent captures the final answer; CAB verifies ChatGPT's PR or saves Gemini's chat result.
 
-1. **Chrome Extension** (you install) bridges the daemon and browser
-2. **`cab` CLI / daemon** (npm package) receives requests from your AI assistant via REST API
-3. **Extension** controls ChatGPT/Gemini tabs via CDP (Chrome DevTools Protocol)
+The bundled [ask-ai skill](skills/ask-ai/SKILL.md) tells the agent to carry out the whole sequence. A standalone `cab prepare` command returns a **work packet**, not an AI answer. CAB cannot call tools inside another agent's session; the active agent must execute the browser steps. It must continue until completion or a recorded, concrete blocker.
 
-**Why an extension?** ChatGPT and Gemini don't have free public APIs. The extension automates the web UI while you stay logged in.
+## Setup
 
----
-
-## What is this?
-
-chrome-ai-bridge is a CLI tool and daemon that gives AI assistants the ability to:
-
-- **Consult other AIs**: Ask ChatGPT and Gemini questions via browser
-- **Get multiple perspectives**: Query both AIs in parallel for second opinions
-- **Debug connections**: Inspect page state via CDP snapshots
-
-> **v2.0.0 Breaking Change**: This version uses a Chrome extension for browser communication instead of Puppeteer. Previous CLI options (`--headless`, `--loadExtensionsDir`, etc.) are no longer supported.
-
----
-
-## What's New in v2.1 — Network-Native Stream
-
-**UI changes? No problem. Responses won't break anymore.**
-
-v2.1 introduces a fundamentally new approach to response extraction. Instead of reading text from the page (DOM), chrome-ai-bridge now intercepts the actual network communication between your browser and ChatGPT/Gemini.
-
-### Before vs After
-
-|                     | v2.0 (DOM extraction)                | v2.1 (Network interception)         |
-| ------------------- | ------------------------------------ | ----------------------------------- |
-| **How it works**    | Read HTML elements via CSS selectors | Intercept API responses directly    |
-| **When UI changes** | Breaks (selectors become invalid)    | Unaffected                          |
-| **Output format**   | Plain text only                      | Markdown, LaTeX, structured content |
-| **Thinking mode**   | Complex filtering needed             | Naturally separated by protocol     |
-| **Reliability**     | Depends on page rendering            | Depends on API protocol (stable)    |
-
-### Architecture
-
-```
-v2.0:  CDP → DOM querySelector → innerText
-v2.1:  CDP → Network.loadingFinished → getResponseBody → Protocol Parser
-                                                              │
-                                          ┌───────────────────┴────────────────┐
-                                          ▼                                    ▼
-                                ChatGPT SSE Parser              Gemini Chunked Parser
-                              (delta_encoding v1)             (StreamGenerate format)
-```
-
-Network extraction is the primary path. DOM extraction remains as an automatic fallback — no configuration needed.
-
-> **Privacy**: All data stays local. Network interception happens within your browser via CDP. No data is sent to external servers.
-
----
-
-## Quick Start
-
-> **Both steps are required** — The extension and daemon work together.
-
-### Step 1: Install Chrome Extension
-
-Build and install the extension from this repository:
+Use Node.js 22.12 or newer. To run this branch from a checkout:
 
 ```bash
-# Clone the repository
-git clone https://github.com/usedhonda/chrome-ai-bridge.git
-cd chrome-ai-bridge
-
-# Install dependencies and build
-npm install && npm run build
+npm ci
+npm run build
+node scripts/cli.mjs --help
 ```
 
-Then load the extension in Chrome:
+`node scripts/cli.mjs`, `scripts/cab`, and `skills/ask-ai/scripts/ask-ai` expose the same commands. After a package installation, use `cab`, `chrome-ai-bridge`, or `ask-ai`. Examples below use `cab` as shorthand: when running from a checkout, substitute the same absolute executable path or Node/script prefix throughout. Do not switch from a v3 checkout to an older global `cab` halfway through a run.
 
-1. Open `chrome://extensions/` in Chrome
-2. Enable **"Developer mode"** (toggle in top-right)
-3. Click **"Load unpacked"**
-4. Select the `build/extension/` folder from this repository
+Enable a browser capability in your agent and sign in to the target services:
 
-You should see "Chrome AI Bridge" appear in your extensions list.
+- **Claude Code:** use its Claude in Chrome integration (`claude --chrome` or `/chrome`).
+- **Codex in the desktop app:** use the available Browser / connected Chrome capability.
+- **Codex CLI or IDE:** configure a browser MCP, such as Playwright MCP. The app's built-in Browser is not supplied by the CLI.
 
-### Step 2: Install the `cab` CLI
+These integrations have different tool names. The shared skill uses the browser tools advertised by the current session. See [setup](docs/user/setup.md) for skill installation and the official integration references.
+
+## Start a project
+
+Write the requested work to a UTF-8 text file, then prepare it:
 
 ```bash
-npm install -g chrome-ai-bridge
+cab prepare chatgpt \
+  --project my-project \
+  --repo https://github.com/owner/repository \
+  --visibility private \
+  --base main \
+  --prompt-file task.txt
 ```
 
-### Step 3: Connect the Extension
-
-1. Open ChatGPT (https://chatgpt.com) or Gemini (https://gemini.google.com) in Chrome
-2. Log in to both services
-3. The extension will automatically connect when the daemon starts
-
-### Step 4: Verify it works
+For Gemini with a private repository, select the relevant code explicitly:
 
 ```bash
-cab ask chatgpt "How do I implement OAuth in Node.js?"
+cab prepare gemini \
+  --project my-project \
+  --repo https://github.com/owner/repository \
+  --visibility private \
+  --root /absolute/path/to/repository \
+  --context src/service.ts \
+  --context src/types.ts:20:100 \
+  --prompt-file task.txt
 ```
 
----
+`--project` is required and should stay stable across Claude Code and Codex. A repository name or a stable project path is suitable. Gemini private requests require code context on follow-ups too, so the prompt describes the current code rather than relying on an inaccessible URL or stale excerpts. Context is bounded and selected by the caller; CAB does not dump a repository automatically.
 
-## Features
+Use `both` to prepare separate ChatGPT and Gemini runs. Only Gemini's prompt receives the selected private code. Both provider lanes are reserved together, and their browser operations can proceed in parallel when each has its own tab.
 
-### Multi-AI Consultation
-
-Ask ChatGPT or Gemini questions directly from your AI assistant:
-
-```
-"Ask ChatGPT how to implement OAuth in Node.js"
-"Ask Gemini to review this architecture decision"
-"Ask both AIs for their opinions on this approach"
-```
-
-| Feature                 | Description                                               |
-| ----------------------- | --------------------------------------------------------- |
-| **Parallel queries**    | Ask both AIs simultaneously with `ask_chatgpt_gemini_web` |
-| **Session persistence** | Conversations continue across tool calls                  |
-| **Auto-logging**        | All Q&A saved to `.local/chrome-ai-bridge/history.jsonl`  |
-
-### Debugging Tools
-
-Inspect the connection state and page content:
-
-| Tool                | Description                                      |
-| ------------------- | ------------------------------------------------ |
-| `take_cdp_snapshot` | Get page state (URL, title, input/button status) |
-| `get_page_dom`      | Query DOM elements with CSS selectors            |
-
----
-
-## Tools Reference
-
-### Available Tools (5)
-
-| Tool                     | Description                            |
-| ------------------------ | -------------------------------------- |
-| `ask_chatgpt_web`        | Ask ChatGPT via browser                |
-| `ask_gemini_web`         | Ask Gemini via browser                 |
-| `ask_chatgpt_gemini_web` | Ask both AIs in parallel (recommended) |
-| `take_cdp_snapshot`      | Debug: Get CDP page state              |
-| `get_page_dom`           | Debug: Query DOM elements              |
-
-### Recommended Usage
-
-For general queries, use `ask_chatgpt_gemini_web` to get multiple perspectives:
-
-```
-User: "Ask AI about React best practices"
-→ Claude uses ask_chatgpt_gemini_web (queries both in parallel)
-```
-
-Only use individual tools when explicitly requested:
-
-```
-User: "Ask ChatGPT specifically about this"
-→ Claude uses ask_chatgpt_web
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-| Variable              | Description                                |
-| --------------------- | ------------------------------------------ |
-| `CAI_DISABLE_WEB_LLM` | Set `true` to disable ChatGPT/Gemini tools |
-
----
-
-## For Developers
-
-### Local Development
+Aliases are available:
 
 ```bash
-git clone https://github.com/usedhonda/chrome-ai-bridge.git
-cd chrome-ai-bridge
-npm install && npm run build
+cab chatgpt --project my-project --repo https://github.com/owner/repository --visibility public "Implement the requested change and open a PR."
+cab ask gemini --project my-project --repo https://github.com/owner/repository --visibility public "Review the error handling and explain a patch."
 ```
 
-For local development, run the daemon directly:
+## Agent execution lifecycle
+
+Use the returned run ID in place of `RUN`. The following commands record browser actions; they do not perform those actions themselves.
 
 ```bash
-node /path/to/chrome-ai-bridge/scripts/cli.mjs
+cab prompt RUN
 ```
 
-### Commands
+Read the exact prepared prompt. Open a new page if instructed, otherwise reopen the saved conversation URL. Confirm the conversation is saved: temporary-chat or history-off mode must not be active. Inspect the rendered page and select the required mode. Then record the actual URL, mode label, and optional tab handle:
 
 ```bash
-npm run build      # Build TypeScript
-npm run typecheck  # Type check only
-npm run test:smoke # Basic operation check
-npm run format     # Format code
+cab ready RUN --url https://chatgpt.com/ --mode Pro --tab TAB_HANDLE --new-page
+cab begin-send RUN
 ```
 
-### Project Structure
-
-```
-chrome-ai-bridge/
-├── src/
-│   ├── fast-cdp/        # CDP client and AI chat logic
-│   ├── extension/       # Chrome extension source
-│   ├── main.ts          # Daemon entry point
-│   └── index.ts         # Main exports
-├── scripts/
-│   └── cli.mjs          # CLI entry point
-└── docs/                # Documentation
-```
-
-### Testing
+`--new-page` is required for a new conversation. After `begin-send` succeeds, click Send once with the native browser tool. Once the submitted message and canonical conversation URL are visible:
 
 ```bash
-# Test ChatGPT connection
-npm run test:chatgpt -- "TypeScript generics explanation"
-
-# Test Gemini connection
-npm run test:gemini -- "Python async file reading"
-
-# Test both
-npm run test:both
-
-# CDP snapshot for debugging
-npm run cdp:chatgpt
-npm run cdp:gemini
+cab sent RUN --url https://chatgpt.com/c/OBSERVED_CONVERSATION_ID
 ```
 
----
+Save the **final answer**, preserving code and formatting, to a UTF-8 file. Complete ChatGPT with the PR it actually created:
 
-## Documentation
+```bash
+cab complete RUN --answer-file answer.md --pr https://github.com/owner/repository/pull/123
+```
 
-| Guide                                                                 | Description                                 |
-| --------------------------------------------------------------------- | ------------------------------------------- |
-| [Technical Spec](docs/SPEC.md)                                        | Detailed architecture and implementation    |
-| [Setup Guide](docs/user/setup.md)                                     | Detailed setup and configuration            |
-| [Troubleshooting](docs/user/troubleshooting.md)                       | Problem solving                             |
-| [CI Policy](docs/ci-policy.md)                                        | Required checks and browser E2E lane policy |
-| [Technical Spec - Architecture](docs/SPEC.md#1-architecture-overview) | Extension architecture                      |
+CAB checks the actual GitHub PR and records its head and base branch. The PR must belong to the expected repository; a plausible-looking link or a promise to create one does not count. Private PR verification needs local GitHub access through authenticated `gh`, `GH_TOKEN`, or `GITHUB_TOKEN`. This is separate from ChatGPT's GitHub connection.
 
----
+Gemini completes with its chat answer:
 
-## Troubleshooting
+```bash
+cab complete RUN --answer-file answer.md
+```
 
-### Extension not connecting
+See [command reference](docs/tool-reference.md) and [workflows](docs/user/workflows.md) for recovery and follow-ups.
 
-1. Check that the extension is installed and enabled in `chrome://extensions/`
-2. Verify ChatGPT/Gemini tabs are open and logged in
-3. Check the extension popup for connection status
-
-### Daemon not responding
+## Resume without duplicate sends
 
 ```bash
 cab status
-# or restart:
-cab daemon restart
+cab resume RUN
 ```
 
-### ChatGPT/Gemini not responding
+Resume is read-only. It reports the recorded phase and what the agent should inspect next. A repeated `begin-send` does not authorize a second submission. If the click may have succeeded, inspect the existing tab or saved conversation before doing anything else. Do not replace a slow Pro run with another model or another chat.
 
-- Ensure you're logged in to both services
-- Try refreshing the ChatGPT/Gemini tab
-- Check for rate limiting or service issues
+Record a blocker without discarding progress:
 
-**More:** [docs/user/troubleshooting.md](docs/user/troubleshooting.md)
-
----
-
-## Architecture (v2.0.0)
-
-```
-┌─────────────────┐       REST API      ┌──────────────────┐
-│  Claude Code    │ ◀──────────────────▶│  Chrome AI Bridge│
-│  (cab CLI)      │                     │  (Node.js)       │
-└─────────────────┘                     └────────┬─────────┘
-                                                 │
-                                                 ▼
-                                      ┌──────────────────┐
-                                      │ Chrome Extension │
-                                      │ (CDP via WebSocket)│
-                                      └────────┬─────────┘
-                                               │
-                               ┌───────────────┴───────────────┐
-                               ▼                               ▼
-                    ┌─────────────────┐             ┌─────────────────┐
-                    │  ChatGPT Tab    │             │  Gemini Tab     │
-                    └─────────────────┘             └─────────────────┘
+```bash
+cab block RUN --reason "The selected browser session needs sign-in."
 ```
 
----
+Use `cab cancel RUN` only before a send attempt. If inspection positively establishes that the prompt was **not** submitted, reconcile the `sending` run before checking readiness and trying again:
 
-## Credits
+```bash
+cab reconcile-not-sent RUN --url OBSERVED_URL --reason "Evidence that no submission occurred"
+```
 
-Originally forked from [Chrome DevTools MCP](https://github.com/anthropics/anthropic-quickstarts/tree/main/mcp-devtools) by Google LLC. This fork focuses on multi-AI consultation capabilities via Chrome extension.
+A timeout, missing tab, or missing answer is not that evidence. If the provider has instead returned a **final** blocker or failure after submission, retain its answer and release the lane for a corrective follow-up:
 
-The extension source code is located at `src/extension/` and is built to `build/extension/`.
+```bash
+cab fail RUN --answer-file answer.md --reason "Provider's final failure"
+```
 
----
+This records `failed`, never a successful completion. Use `block` for temporary problems while the original request can still continue. Use `--new-chat` on a later prepare only when a fresh conversation is explicitly intended. `--request-id` allows callers to identify the same preparation request when recovering from an uncertain CLI result.
 
-## License
+## State and migration
 
-Apache-2.0
+State is stored under `CAB_STATE_DIR`, otherwise `$XDG_STATE_HOME/chrome-ai-bridge`, otherwise `~/.local/state/chrome-ai-bridge`. State files use owner-only permissions and contain prompts and answers as well as conversation URLs. Use the same state directory and project name when switching agents on one machine.
+
+Existing v2 conversations can be adopted explicitly after inspecting the saved URL:
+
+```bash
+cab import-session chatgpt \
+  --project my-project \
+  --repo https://github.com/owner/repository \
+  --visibility private \
+  --url https://chatgpt.com/c/OBSERVED_CONVERSATION_ID
+```
+
+Old agent IDs, expiring sessions, and daemon configuration are not imported implicitly. The old implementation remains available only through explicit `cab legacy ...` commands for migration. Its transport and output behavior do not implement the v3 guarantees.
+
+## Development and verification
+
+```bash
+npm run build
+npm run typecheck
+npm run test:browser-use
+cab doctor
+```
+
+Offline tests exercise workflow state, prompt policy, and result validation. They cannot prove that a signed-in provider UI accepted a prompt or that an account exposes the requested model. Use the [live verification recipe](docs/user/workflows.md#live-verification-recipe) to check those boundaries and record what was actually observed.
+
+## Documentation
+
+- [Architecture and invariants](docs/SPEC.md)
+- [Setup and migration](docs/user/setup.md)
+- [Workflows and live verification](docs/user/workflows.md)
+- [Command reference](docs/tool-reference.md)
+- [Troubleshooting](docs/user/troubleshooting.md)
+- [v3 design decisions](docs/roadmap-v3.md)
+- [Separate Discord collector](docs/user/discord-readonly-collector.md)
+
+Apache-2.0. Historical implementation and documentation remain available in Git history.

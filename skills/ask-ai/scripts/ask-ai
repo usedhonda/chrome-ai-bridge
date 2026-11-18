@@ -1,36 +1,4 @@
-#!/usr/bin/env bash
-# ask-ai: Thin wrapper around cab (Chrome AI Bridge CLI)
-# Usage: ask-ai <chatgpt|gemini|both> "question"
-#        ask-ai health    Check daemon status
-#        ask-ai --help    Show help
-
-# Resolve symlinks to get the real script path (macOS compatible)
-_SELF="$(realpath "$0" 2>/dev/null || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$0")"
-SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
-CAB="$SCRIPT_DIR/../../../scripts/cab"
-
-if [ ! -x "$CAB" ]; then
-  echo "ERROR: cab not found at $CAB" >&2
-  exit 1
-fi
-
-if [ -z "${CAB_SESSION_ID:-}" ]; then
-  if [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_CI:-}" ] || [ -n "${CODEX_MANAGED_BY_NPM:-}" ]; then
-    CAB_SESSION_ID="cdx"
-  elif [ -n "${TMUX:-}" ]; then
-    _TMUX_SOCKET="${TMUX%%,*}"
-    CAB_SESSION_ID="$(basename "$_TMUX_SOCKET")"
-    if [ -z "$CAB_SESSION_ID" ] || [ "$CAB_SESSION_ID" = "." ]; then
-      CAB_SESSION_ID="default"
-    fi
-  else
-    CAB_SESSION_ID="default"
-  fi
-fi
-export CAB_SESSION_ID
-
-case "${1:-}" in
-  health|--health) exec "$CAB" health ;;
-  --help|-h|"")    exec "$CAB" --help ;;
-  *)               exec "$CAB" "$@" ;;
-esac
+#!/usr/bin/env node
+// Node resolves this module relative to its real path, including symlink installs.
+// Project identity is explicit and shared across harnesses; no process/thread lane.
+import '../../../scripts/cli.mjs';
