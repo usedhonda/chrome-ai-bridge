@@ -31,9 +31,12 @@
     "scripts/cli.mjs",
     "scripts/cab",
     "skills/ask-ai",
-    "docs",
+    "!skills/ask-ai/*.local.md",
+    "docs/*.md",
+    "docs/user",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",
