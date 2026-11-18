@@ -26,7 +26,7 @@ import {Workflow} from './workflow.js';
 export const HELP = `chrome-ai-bridge v3 — native browser-use workflow for Claude Code and Codex
 
 The calling agent performs browser actions with its own authenticated browser tools.
-Preparing a task does not send it. No CAB extension or daemon starts by default.
+Preparing a task does not send it. CAB never drives a browser itself.
 
   cab prepare <chatgpt|gemini|both> "task" --project NAME --repo URL --visibility public|private
   cab prepare <provider> --prompt-file FILE --project NAME --repo URL --visibility public|private
@@ -45,7 +45,6 @@ Preparing a task does not send it. No CAB extension or daemon starts by default.
   cab status [RUN] [--project NAME]
   cab import-session <provider> --project NAME --repo URL --visibility public|private --url CHAT_URL
   cab doctor                      Check local workflow setup (does not probe browser login)
-  cab legacy <command>            Explicit v2 extension/daemon compatibility path
 
 Aliases: cab <provider> ... and cab ask <provider> ... both prepare browser work.
 Use --prompt-file - or --answer-file - for stdin. Files preserve code formatting.
@@ -233,7 +232,6 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       stateDirectory: store.directory,
       stateReadable: true,
       node: process.version,
-      daemonRequired: false,
       browserStatus:
         'not-probed: use the calling agent’s native browser or configured browser MCP',
       requiredCapabilities: [
@@ -319,7 +317,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
   if (!Object.hasOwn(options, command)) {
     throw new WorkflowError(
       'UNKNOWN_COMMAND',
-      `Unknown command ${JSON.stringify(command)}. Legacy daemon commands require 'cab legacy'. See cab --help.`,
+      `Unknown command ${JSON.stringify(command)}. See cab --help.`,
     );
   }
   const {positionals, values} = parse(rest, options[command]);
