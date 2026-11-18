@@ -8,7 +8,7 @@ const currentYear = new Date().getFullYear();
 const licenseHeader = `
 /**
  * @license
- * Copyright ${currentYear} Google LLC
+ * Copyright ${currentYear} usedhonda
  * SPDX-License-Identifier: Apache-2.0
  */
 `;

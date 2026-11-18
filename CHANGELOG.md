@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-This project is a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-ai-bridge) by Google LLC, focusing on multi-AI consultation capabilities.
+This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
 ## [3.0.1] - 2026-11-18
 
@@ -238,4 +238,4 @@ First published v3 release. The `v3.0.0` Git tag marks an intermediate commit an
 
 ## Pre-fork History
 
-For changes before this fork, see the [original Chrome DevTools MCP changelog](https://github.com/ChromeDevTools/chrome-ai-bridge/blob/main/CHANGELOG.md).
+For changes before this fork, see the [original Chrome DevTools MCP changelog](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/CHANGELOG.md).

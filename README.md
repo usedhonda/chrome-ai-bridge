@@ -184,4 +184,8 @@ Offline tests exercise workflow state, prompt policy, and result validation. The
 - [Command reference](docs/tool-reference.md)
 - [Troubleshooting](docs/user/troubleshooting.md)
 
-Apache-2.0. Historical implementation and documentation remain available in Git history.
+## Origin and license
+
+This repository began as a fork of Google's [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp). Since v3 it is an independent project with a different purpose: it no longer exposes Chrome DevTools, runs an MCP server, or shares runtime code with upstream. Only a few upstream development config files remain, and they keep their original Google LLC notices.
+
+Apache-2.0. Earlier implementations and documentation remain available in Git history.

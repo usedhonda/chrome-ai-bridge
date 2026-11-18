@@ -46,7 +46,7 @@
     "type": "git",
     "url": "https://github.com/usedhonda/chrome-ai-bridge.git"
   },
-  "author": "usedhonda (forked from Google LLC)",
+  "author": "usedhonda",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/usedhonda/chrome-ai-bridge/issues"
