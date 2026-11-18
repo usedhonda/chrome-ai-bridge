@@ -83,7 +83,3 @@ Use a single provider, `chatgpt` or `gemini`, and an observed conversation URL. 
 ## State location
 
 CAB uses `CAB_STATE_DIR`, otherwise `$XDG_STATE_HOME/chrome-ai-bridge`, otherwise `~/.local/state/chrome-ai-bridge`. Files have owner-only permissions and are retained without automatic expiration. Use the same directory for agents that should share project conversations.
-
-## Legacy compatibility
-
-`cab legacy ...` explicitly invokes the earlier implementation. It may require the old CAB extension and daemon and retains the old transport/output behavior. It is not used as an automatic fallback and does not satisfy v3's workflow guarantees. Existing integrations using REST or old session headers must migrate to the lifecycle above.

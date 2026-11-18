@@ -27,9 +27,8 @@ Use only browser capabilities advertised by the active harness. Claude's Chrome 
 
 ## Code and compatibility boundaries
 
-- Keep normal entry points independent of the legacy daemon, custom Chrome extension, CDP drivers, and network-response parsers.
-- Legacy behavior is an explicit `cab legacy ...` path. Do not fall back to it when a native browser capability is missing.
-- Preserve the separate Discord collector unless a requested change requires modifying it.
+- CAB never drives a browser itself: no daemon, custom Chrome extension, CDP driver, or provider network parser. Do not reintroduce one as a fallback when a native browser capability is missing.
+- Keep runtime dependencies at zero; use `node:` built-ins.
 - Keep provider policy, durable state transitions, and browser instructions independently understandable.
 - Do not include prompts, private source, answers, credentials, or real conversation URLs in committed fixtures or work logs.
 - Update the shared skill and user docs whenever the command contract changes. The skill is repository-owned and its changes belong in the same PR; this does not install or edit a personal skill.
@@ -37,16 +36,15 @@ Use only browser capabilities advertised by the active harness. Claude's Chrome 
 ## Verification
 
 ```bash
-npm run build
+npm test            # build + node:test (TypeScript runs directly via type stripping)
 npm run typecheck
-npm run test:browser-use
+npm run check-format
+npm run docs
 ```
 
-Use focused tests for meaningful workflow risks: project isolation, continuation after restart, uncertain sends, private Gemini context, and PR validation. Do not run the legacy live provider scripts as evidence for the native browser workflow.
+Use focused tests for meaningful workflow risks: project isolation, continuation after restart, uncertain sends, private Gemini context, and PR validation. Offline tests are not evidence that a live provider UI behaved as expected.
 
 Follow `docs/user/workflows.md` for an authorized live check. Record the browser/harness, observed model label, conversation URL persistence, and actual PR verification. Distinguish offline checks from live provider validation in the PR. Do not claim a live test passed without observing it.
-
-If modifying the legacy extension, increment `src/extension/manifest.json` and build its artifacts before asking anyone to reload it. No extension reload is needed for changes limited to the v3 workflow.
 
 ## Delivery
 

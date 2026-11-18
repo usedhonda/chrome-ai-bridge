@@ -29,7 +29,7 @@ The bundled [ask-ai skill](skills/ask-ai/SKILL.md) tells the agent to carry out 
 
 ## Setup
 
-Use Node.js 22.12 or newer. To run this branch from a checkout:
+Use Node.js 22.18 or newer. To run this branch from a checkout:
 
 ```bash
 npm ci
@@ -164,14 +164,13 @@ cab import-session chatgpt \
   --url https://chatgpt.com/c/OBSERVED_CONVERSATION_ID
 ```
 
-Old agent IDs, expiring sessions, and daemon configuration are not imported implicitly. The old implementation remains available only through explicit `cab legacy ...` commands for migration. Its transport and output behavior do not implement the v3 guarantees.
+Old agent IDs, expiring sessions, and daemon configuration are not imported implicitly. The v2 extension/daemon implementation has been removed; it remains only in Git history.
 
 ## Development and verification
 
 ```bash
-npm run build
+npm test
 npm run typecheck
-npm run test:browser-use
 cab doctor
 ```
 
@@ -184,7 +183,5 @@ Offline tests exercise workflow state, prompt policy, and result validation. The
 - [Workflows and live verification](docs/user/workflows.md)
 - [Command reference](docs/tool-reference.md)
 - [Troubleshooting](docs/user/troubleshooting.md)
-- [v3 design decisions](docs/roadmap-v3.md)
-- [Separate Discord collector](docs/user/discord-readonly-collector.md)
 
 Apache-2.0. Historical implementation and documentation remain available in Git history.

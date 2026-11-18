@@ -2,13 +2,13 @@
 
 ## Requirements
 
-- Node.js 22.12 or newer.
+- Node.js 22.18 or newer.
 - Claude Code or Codex with an available browser-use capability.
 - A browser session signed in to ChatGPT and/or Gemini, with the requested mode available and saved conversations enabled. Temporary-chat/history-off mode cannot provide the required durable conversation.
 - ChatGPT's GitHub connection for both public and private repository work.
 - For private PR verification, local GitHub access through authenticated `gh`, `GH_TOKEN`, or `GITHUB_TOKEN`.
 
-The normal workflow does not use the custom CAB Chrome extension or daemon. A harness's own browser integration may use its own standard extension.
+CAB has no Chrome extension or daemon of its own. A harness's own browser integration may use its own standard extension.
 
 ## Run from this checkout
 
@@ -101,7 +101,7 @@ cab import-session chatgpt \
 
 For Gemini, use `gemini` and its observed `https://gemini.google.com/app/...` conversation URL. The next request still verifies the required mode. Old `x-cab-session` IDs, environment-based agent IDs, and session TTLs do not define v3 projects.
 
-Normal commands no longer auto-start a daemon or return provider answers through REST. Update integrations to follow the [CLI lifecycle](../tool-reference.md). `cab legacy ...` is an explicit compatibility path for the previous implementation; it does not offer v3's project, mode, or output guarantees. Disable old auto-start entries only after identifying the relevant process/configuration; a v3 invocation does not remove them.
+Normal commands no longer auto-start a daemon or return provider answers through REST. Update integrations to follow the [CLI lifecycle](../tool-reference.md). The v2 implementation has been removed. Disable old auto-start entries only after identifying the relevant process/configuration; a v3 invocation does not remove them.
 
 ## First verification
 
