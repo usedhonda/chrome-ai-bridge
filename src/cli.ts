@@ -13,15 +13,19 @@ import {
   MAX_ANSWER_BYTES,
   MAX_PROMPT_BYTES,
   readTextFile,
-} from './context.js';
-import {verifyPullRequest} from './github.js';
-import {browserPlan as makeBrowserPlan} from './plan.js';
-import {preparePrompt} from './prompts.js';
-import {StateStore} from './store.js';
-import type {Provider, Repository, Run, Visibility} from './types.js';
-import {WorkflowError} from './types.js';
-import {canonicalRepositoryUrl} from './urls.js';
-import {Workflow} from './workflow.js';
+} from './context.ts';
+import {verifyPullRequest} from './github.ts';
+import {browserPlan as makeBrowserPlan} from './plan.ts';
+import {preparePrompt} from './prompts.ts';
+import {StateStore} from './store.ts';
+import type {Provider, Repository, Run, Visibility} from './types.ts';
+import {WorkflowError} from './types.ts';
+import {canonicalRepositoryUrl} from './urls.ts';
+import {Workflow} from './workflow.ts';
+
+const {version: VERSION} = JSON.parse(
+  fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as {version: string};
 
 export const HELP = `chrome-ai-bridge v3 — native browser-use workflow for Claude Code and Codex
 
@@ -162,7 +166,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     return;
   }
   if (argv[0] === '--version') {
-    process.stdout.write('3.0.0\n');
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
   let [command, ...rest] = argv;
@@ -227,7 +231,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     assertPositionals(rest, 0);
     await store.read();
     json({
-      version: '3.0.0',
+      version: VERSION,
       transport: 'caller-owned-browser',
       stateDirectory: store.directory,
       stateReadable: true,

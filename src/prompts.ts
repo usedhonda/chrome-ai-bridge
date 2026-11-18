@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {MAX_PROMPT_BYTES, fencedText} from './context.js';
-import type {SourceContext} from './context.js';
-import type {PreparedInput, Provider, Repository} from './types.js';
-import {WorkflowError} from './types.js';
+import {MAX_PROMPT_BYTES, fencedText} from './context.ts';
+import type {SourceContext} from './context.ts';
+import type {PreparedInput, Provider, Repository} from './types.ts';
+import {WorkflowError} from './types.ts';
 
 export interface PromptInput {
   project: string;

@@ -21,9 +21,9 @@ import {
   fencedText,
   MAX_CONTEXT_BYTES,
   readTextFile,
-} from '../src/browser-use/context.js';
-import {preparePrompt} from '../src/browser-use/prompts.js';
-import type {Repository} from '../src/browser-use/types.js';
+} from '../src/context.ts';
+import {preparePrompt} from '../src/prompts.ts';
+import type {Repository} from '../src/types.ts';
 
 const repository: Repository = {
   url: 'https://github.com/example/project',

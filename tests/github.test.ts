@@ -11,9 +11,9 @@ import {
   parsePullRequestUrl,
   validatePullRequestPayload,
   verifyPullRequest,
-} from '../src/browser-use/github.js';
-import type {Repository} from '../src/browser-use/types.js';
-import {WorkflowError} from '../src/browser-use/types.js';
+} from '../src/github.ts';
+import type {Repository} from '../src/types.ts';
+import {WorkflowError} from '../src/types.ts';
 
 const repository: Repository = {
   url: 'https://github.com/usedhonda/chrome-ai-bridge',

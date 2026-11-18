@@ -6,12 +6,12 @@
  */
 
 const [major, minor] = process.versions.node.split('.').map(Number);
-if (major < 22 || (major === 22 && minor < 12)) {
-  console.error('chrome-ai-bridge requires Node.js 22.12.0 or newer.');
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error('chrome-ai-bridge requires Node.js 22.18.0 or newer.');
   process.exitCode = 1;
 } else {
   try {
-    const {runCli, cliError} = await import('../build/src/browser-use/cli.js');
+    const {runCli, cliError} = await import('../build/cli.js');
     await runCli().catch(cliError);
   } catch (error) {
     console.error(

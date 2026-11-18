@@ -12,7 +12,7 @@ import path from 'node:path';
 import {test} from 'node:test';
 import type {TestContext} from 'node:test';
 
-const packageRoot = path.resolve(import.meta.dirname, '..', '..');
+const packageRoot = path.resolve(import.meta.dirname, '..');
 const entrypoint = path.join(packageRoot, 'scripts', 'cli.mjs');
 const repository = 'https://github.com/example/project';
 

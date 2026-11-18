@@ -8,8 +8,8 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type {ContextFile} from './types.js';
-import {WorkflowError} from './types.js';
+import type {ContextFile} from './types.ts';
+import {WorkflowError} from './types.ts';
 
 export const MAX_CONTEXT_BYTES = 256 * 1024;
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;

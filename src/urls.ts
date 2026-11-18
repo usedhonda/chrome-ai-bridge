@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {Provider} from './types.js';
-import {WorkflowError} from './types.js';
+import type {Provider} from './types.ts';
+import {WorkflowError} from './types.ts';
 
 function parseHttps(value: string): URL {
   if (typeof value !== 'string' || value.trim() !== value) {

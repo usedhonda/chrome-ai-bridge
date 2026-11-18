@@ -115,11 +115,11 @@ export interface WorkflowState {
 }
 
 export class WorkflowError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-  ) {
+  override name = 'WorkflowError';
+  readonly code: string;
+
+  constructor(code: string, message: string) {
     super(message);
-    this.name = 'WorkflowError';
+    this.code = code;
   }
 }

@@ -7,8 +7,8 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 
-import type {Repository, VerifiedPullRequest} from './types.js';
-import {WorkflowError} from './types.js';
+import type {Repository, VerifiedPullRequest} from './types.ts';
+import {WorkflowError} from './types.ts';
 
 const execFileAsync = promisify(execFile);
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -216,7 +216,7 @@ async function readFromApi(
   if (!response.body) {
     throw new Error('Missing API body.');
   }
-  const reader = response.body.getReader();
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   const parts: Uint8Array[] = [];
   let bytes = 0;
   try {

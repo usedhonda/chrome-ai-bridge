@@ -11,9 +11,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 
-import type {WorkflowState} from './types.js';
-import {WorkflowError} from './types.js';
-import {canonicalConversationUrl, canonicalRepositoryUrl} from './urls.js';
+import type {WorkflowState} from './types.ts';
+import {WorkflowError} from './types.ts';
+import {canonicalConversationUrl, canonicalRepositoryUrl} from './urls.ts';
 
 const MAX_STATE_BYTES = 64 * 1024 * 1024;
 

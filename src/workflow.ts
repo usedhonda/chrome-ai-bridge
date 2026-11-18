@@ -6,7 +6,7 @@
 
 import {createHash, randomUUID} from 'node:crypto';
 
-import {StateStore} from './store.js';
+import {StateStore} from './store.ts';
 import type {
   CompletionEvidence,
   ContextFile,
@@ -18,15 +18,15 @@ import type {
   Run,
   VerifiedPullRequest,
   WorkflowState,
-} from './types.js';
-import {WorkflowError} from './types.js';
+} from './types.ts';
+import {WorkflowError} from './types.ts';
 import {
   canonicalConversationUrl,
   canonicalNewChatUrl,
   canonicalRepositoryUrl,
   providerHome,
   validateMode,
-} from './urls.js';
+} from './urls.ts';
 
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -219,7 +219,11 @@ function validatePullRequest(
 }
 
 export class Workflow {
-  constructor(readonly store = new StateStore()) {}
+  readonly store: StateStore;
+
+  constructor(store = new StateStore()) {
+    this.store = store;
+  }
 
   async prepare(input: PreparedInput): Promise<Run> {
     return this.store.mutate(state => this.prepareInState(state, input));
@@ -317,7 +321,7 @@ export class Workflow {
       ...(previous && requiresNewPage
         ? {previousConversationUrl: previous.url}
         : {}),
-      openUrl: requiresNewPage ? providerHome(provider) : previous!.url,
+      openUrl: requiresNewPage ? providerHome(provider) : previous.url,
       requiresNewPage,
       newChat: Boolean(input.newChat),
       createdAt: now,

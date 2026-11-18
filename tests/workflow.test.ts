@@ -11,19 +11,15 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
-import {StateStore} from '../src/browser-use/store.js';
-import type {
-  PreparedInput,
-  Run,
-  VerifiedPullRequest,
-} from '../src/browser-use/types.js';
-import {WorkflowError} from '../src/browser-use/types.js';
+import {StateStore} from '../src/store.ts';
+import type {PreparedInput, Run, VerifiedPullRequest} from '../src/types.ts';
+import {WorkflowError} from '../src/types.ts';
 import {
   canonicalConversationUrl,
   canonicalRepositoryUrl,
   validateMode,
-} from '../src/browser-use/urls.js';
-import {Workflow} from '../src/browser-use/workflow.js';
+} from '../src/urls.ts';
+import {Workflow} from '../src/workflow.ts';
 
 const repository = {
   url: 'https://github.com/example/project',
@@ -390,9 +386,8 @@ test('malformed durable state fails without being replaced', async t => {
 
 test('independent processes cannot both prepare a send for the same project', async t => {
   const {directory, workflow} = await fixture(t);
-  const workflowUrl = new URL('../src/browser-use/workflow.js', import.meta.url)
-    .href;
-  const storeUrl = new URL('../src/browser-use/store.js', import.meta.url).href;
+  const workflowUrl = new URL('../src/workflow.ts', import.meta.url).href;
+  const storeUrl = new URL('../src/store.ts', import.meta.url).href;
   const script = `import {Workflow} from ${JSON.stringify(workflowUrl)}; import {StateStore} from ${JSON.stringify(storeUrl)}; const workflow = new Workflow(new StateStore(process.argv[1])); try { const run = await workflow.prepare(JSON.parse(process.argv[2])); console.log(JSON.stringify({id:run.id})); } catch(e) { console.log(JSON.stringify({code:e.code})); }`;
   const child = () =>
     new Promise<{id?: string; code?: string}>((resolve, reject) => {

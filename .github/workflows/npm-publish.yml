@@ -1,5 +1,6 @@
 name: Publish to npm
 
+# Trusted Publishing (OIDC). Do not set NODE_AUTH_TOKEN: it overrides OIDC and causes EOTP.
 on:
   push:
     tags:
@@ -13,29 +14,19 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Update npm to latest (requires 11.5.1+ for OIDC)
+      - name: Update npm (11.5.1+ is required for OIDC)
         run: npm install -g npm@latest
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Preflight checks
-        run: |
-          node -e "const pkg=require('./package.json'); if (!pkg.scripts?.build) { console.error('Missing npm script: build'); process.exit(1); }"
-          npm pack --dry-run
-
-      - name: Build
-        run: npm run build
+      - run: npm test
 
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

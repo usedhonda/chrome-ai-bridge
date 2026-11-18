@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {Run} from './types.js';
+import type {Run} from './types.ts';
 
 export function browserPlan(
   run: Run,
