@@ -22,7 +22,7 @@
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('build',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc",
-    "test": "npm run build && node --test tests/*.test.ts",
+    "test": "npm run typecheck && npm run build && node --test tests/*.test.ts",
     "lint": "eslint .",
     "format": "eslint --fix . && prettier --write .",
     "check-format": "eslint . && prettier --check .",

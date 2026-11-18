@@ -66,7 +66,7 @@ Phases are `prepared`, `ready`, `sending`, `submitted`, `completed`, `canceled`,
 
 `fail` is available only in `submitted`, for a final provider failure or missing-capability response. It saves the answer and reason, marks `failed`, preserves the conversation URL, and releases the lane for a corrective follow-up. Use `block` for a temporary interruption while the same task can still continue. Failed output is never reported as completed.
 
-`doctor` checks local setup. It cannot attest to an active agent's browser tools, login state, or current provider mode.
+`doctor` (also available as `health`) checks local setup. Its JSON retains `daemonRequired: false` for CLI compatibility; CAB has no daemon. It cannot attest to an active agent's browser tools, login state, or current provider mode.
 
 ## Adopt an existing conversation
 

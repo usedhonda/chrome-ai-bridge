@@ -233,6 +233,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
     json({
       version: VERSION,
       transport: 'caller-owned-browser',
+      daemonRequired: false,
       stateDirectory: store.directory,
       stateReadable: true,
       node: process.version,
