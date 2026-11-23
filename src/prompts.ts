@@ -29,7 +29,7 @@ export interface PromptInput {
 /** Premises carried into a new conversation that replaces a saved one. */
 export interface Continuation {
   /** The caller's account of where the work stands and what was decided. */
-  handoff: string;
+  handoff?: string;
   /** The requested work of the previous run when it ended without success. */
   unfinishedRequest?: string;
   /** Pull requests that CAB verified in earlier runs of this project. */
@@ -52,10 +52,11 @@ function continuationSection(continuation: Continuation): string[] {
     '',
     '## Continuation from an earlier conversation',
     'This is a new conversation. The earlier conversation for this project was replaced (for example because it reached its length limit) and you cannot see it. Treat the material below as the established premises. Do not redo finished work, and do not assume anything from the earlier conversation that is not written here.',
-    '',
-    '### Handoff',
-    continuation.handoff.trim(),
+    'Progress or verification reported in the earlier conversation is not evidence for this one. Check branches, commits and PRs on GitHub before relying on them.',
   ];
+  if (continuation.handoff?.trim()) {
+    sections.push('', '### Handoff', continuation.handoff.trim());
+  }
   if (continuation.pullRequests.length > 0) {
     sections.push(
       '',

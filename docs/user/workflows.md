@@ -52,14 +52,14 @@ Use `--new-chat` only when a fresh conversation is intended. It is not a recover
 
 ## Conversation length limit
 
-When ChatGPT states that the conversation reached its length limit, do not keep using it. Close the run (`cancel` before a send; `fail` with the visible text after an accepted one), check the working branch and PR on GitHub, and write a handoff file: the goal and the user's own observations, progress (branch, commits, PR, what was and was not verified), decisions and constraints, and the remaining work. Then prepare the same work again with a new request ID:
+When ChatGPT states that the conversation reached its length limit, do not keep using it. Close the run (`cancel` before a send; `fail` with the visible text after an accepted one), and check the working branch and PR on GitHub. The new conversation starts from zero, so write a self-contained request: the goal and the user's own observations, repository, base, scope and constraints, the minimum verification, the GitHub-confirmed progress (branch, commits, PR), and the remaining work. Progress reported in the old conversation is not evidence. Put it in the prompt file, or the progress part in an optional handoff file, and prepare the same work again with a new request ID:
 
 ```bash
 cab prepare chatgpt --project service-hardening --repo https://github.com/owner/service \
   --visibility private --prompt-file task.txt --new-chat --handoff-file handoff.md
 ```
 
-CAB adds the handoff, the unfinished previous request in full, and earlier verified PRs to the new prompt. `--new-chat` without `--handoff-file` is rejected.
+CAB adds the handoff, the unfinished previous request in full, and earlier verified PRs to the new prompt.
 
 ## Gemini with private code
 

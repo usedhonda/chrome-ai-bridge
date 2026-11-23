@@ -25,7 +25,7 @@ cab prepare PROVIDER \
 | `--base BRANCH`                | Requested ChatGPT PR base branch, verified at completion.                                  |
 | `--request-id KEY`             | Identify the same preparation request across retries of the CLI call.                      |
 | `--new-chat`                   | Explicitly start a fresh provider conversation instead of the saved one.                   |
-| `--handoff-file PATH`          | Required with `--new-chat`: premises the earlier conversation established.                 |
+| `--handoff-file PATH`          | With `--new-chat`: progress and premises from the earlier conversation.                    |
 
 Preparation persists the prompt and reserves the project/provider lane. `both` reserves both lanes together and creates separate provider runs. Selected private source goes only to Gemini's prompt. The returned browser instructions tell the caller whether to open a new page or reuse a saved URL.
 

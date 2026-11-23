@@ -459,7 +459,14 @@ test('a conversation that reached its length limit rolls over with the earlier p
     ...taskArgs('chatgpt', 'length-limit', 'public', 'Finish the work.'),
     '--new-chat',
   ];
-  w.fail(next, 'HANDOFF_REQUIRED');
+  w.fail(
+    [
+      ...taskArgs('chatgpt', 'length-limit', 'public', 'Finish the work.'),
+      '--handoff-file',
+      'limit.md',
+    ],
+    'HANDOFF_WITHOUT_NEW_CHAT',
+  );
   fs.writeFileSync(
     path.join(w.directory, 'handoff.md'),
     'Branch feat/melody has one commit; the PR is not open yet.\n',

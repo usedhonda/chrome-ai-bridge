@@ -42,7 +42,7 @@ Preparing a task does not send it. CAB never drives a browser itself.
   cab prepare <chatgpt|gemini|both> "task" --project NAME --repo URL --visibility public|private
   cab prepare <provider> --prompt-file FILE --project NAME --repo URL --visibility public|private
     [--context PATH[:START:END]]... [--root DIR] [--base BRANCH]
-    [--request-id KEY] [--new-chat --handoff-file FILE]
+    [--request-id KEY] [--new-chat [--handoff-file FILE]]
   cab ready RUN --url OBSERVED_URL --mode OBSERVED_MODE_LABEL [--tab HANDLE] [--new-page]
   cab begin-send RUN
   cab sent RUN --url CANONICAL_CHAT_URL
@@ -157,7 +157,7 @@ function localRevision(root: string): string | undefined {
 function continuation(
   runs: Run[],
   provider: Provider,
-  handoff: string,
+  handoff: string | undefined,
 ): Continuation {
   const own = runs
     .filter(run => run.provider === provider)
@@ -232,18 +232,17 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       );
     }
     const newChat = values['new-chat'] === true;
-    if (newChat !== (typeof values['handoff-file'] === 'string')) {
+    const handoffFile = values['handoff-file'];
+    if (typeof handoffFile === 'string' && !newChat) {
       throw new WorkflowError(
-        'HANDOFF_REQUIRED',
-        'A new chat needs --handoff-file with the premises the earlier conversation established, and --handoff-file is only for --new-chat.',
+        'HANDOFF_WITHOUT_NEW_CHAT',
+        '--handoff-file carries premises into a new conversation; use it with --new-chat.',
       );
     }
-    const handoff = newChat
-      ? readTextFile(values['handoff-file'] as string, MAX_PROMPT_BYTES)
-      : '';
-    if (newChat && !handoff.trim()) {
-      throw new WorkflowError('HANDOFF_REQUIRED', 'The handoff file is empty.');
-    }
+    const handoff =
+      typeof handoffFile === 'string'
+        ? readTextFile(handoffFile, MAX_PROMPT_BYTES)
+        : undefined;
     const projectRuns = newChat ? (await workflow.status(project)).runs : [];
     const root = typeof values.root === 'string' ? values.root : process.cwd();
     const context = specs.length ? collectContext(root, specs) : [];

@@ -70,7 +70,7 @@ export function browserPlan(
       break;
     case 'failed':
       steps.push(
-        'This operation ended with the provider’s final blocker/failure, not a successful deliverable. Return the recorded failure. Prepare a corrective follow-up with the same project to keep the saved conversation. If it failed because the conversation reached its length limit, prepare the follow-up with --new-chat and --handoff-file instead.',
+        'This operation ended with the provider’s final blocker/failure, not a successful deliverable. Return the recorded failure. Prepare a corrective follow-up with the same project to keep the saved conversation. If it failed because the conversation reached its length limit, prepare a self-contained follow-up with --new-chat instead.',
       );
       break;
   }
@@ -81,7 +81,7 @@ export function browserPlan(
         : `Save the final chat response and run ${command} complete ${run.id} --answer-file PATH. Gemini's output is chat/code, not a remote PR.`,
       `If login, mode, access, or result is blocked, use ${command} block ${run.id} --reason REASON. Resume this operation; do not silently switch conversations or downgrade modes.`,
       `If the provider has finished with a final blocker instead of the requested deliverable, record ${command} fail ${run.id} --answer-file PATH --reason REASON. This records failure and preserves the conversation for a corrective follow-up.`,
-      `If the provider states that this conversation reached its length limit, do not keep using it. Close this operation (cancel before a send; after an accepted send, fail with the visible text as the answer), check the branch and PR on GitHub, write a handoff file with the goal, progress, decisions and constraints, and prepare the same work again with --new-chat --handoff-file FILE.`,
+      `If the provider states that this conversation reached its length limit, do not keep using it. Close this operation (cancel before a send; after an accepted send, fail with the visible text as the answer), check the branch and PR on GitHub, and prepare the same work again with --new-chat. The new prompt must stand on its own: the goal, scope and constraints, and the progress confirmed on GitHub, in --prompt-file or --handoff-file.`,
     );
   }
   return {
