@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
-## [Unreleased]
+## [3.0.3] - 2026-11-23
 
 ### Added
 
