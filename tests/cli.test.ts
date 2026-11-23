@@ -478,6 +478,6 @@ test('a conversation that reached its length limit rolls over with the earlier p
   const prompt = w.success(['prompt', rolled.runId]);
   assert.match(prompt, /## Continuation from an earlier conversation/);
   assert.match(prompt, /Branch feat\/melody has one commit/);
-  assert.ok(prompt.includes(original), 'the unfinished request is carried');
+  assert.ok(!prompt.includes(original), 'the latest request is the only task');
   assert.ok(prompt.indexOf('Finish the work.') < prompt.indexOf('### Handoff'));
 });

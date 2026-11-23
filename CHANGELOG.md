@@ -8,7 +8,7 @@ This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeD
 
 ### Added
 
-- When the provider says a conversation reached its length limit, `ask-ai` closes the run and continues in a new conversation instead of reusing the old one. With `--new-chat`, the new prompt carries the unfinished previous request in full, PRs verified in earlier runs, and an optional `--handoff-file`.
+- When the provider says a conversation reached its length limit, `ask-ai` closes the run and continues in a new conversation instead of reusing the old one. With `--new-chat`, the new prompt is self-contained: CAB adds PRs verified in earlier runs, a note that earlier progress is not evidence, and an optional `--handoff-file`.
 
 ## [3.0.2] - 2026-11-18
 

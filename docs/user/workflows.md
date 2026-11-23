@@ -59,7 +59,7 @@ cab prepare chatgpt --project service-hardening --repo https://github.com/owner/
   --visibility private --prompt-file task.txt --new-chat --handoff-file handoff.md
 ```
 
-CAB adds the handoff, the unfinished previous request in full, and earlier verified PRs to the new prompt.
+CAB adds the handoff and earlier verified PRs; it does not copy the previous request, so the new prompt is the only instruction.
 
 ## Gemini with private code
 

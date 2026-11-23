@@ -30,28 +30,15 @@ export interface PromptInput {
 export interface Continuation {
   /** The caller's account of where the work stands and what was decided. */
   handoff?: string;
-  /** The requested work of the previous run when it ended without success. */
-  unfinishedRequest?: string;
   /** Pull requests that CAB verified in earlier runs of this project. */
   pullRequests: VerifiedPullRequest[];
-}
-
-const REQUESTED_WORK = '## Requested work\n';
-const DELIVERY = '\n\n## Delivery requirements';
-
-/** The requested-work section of a prepared prompt, including any continuation. */
-export function requestedWork(prompt: string): string | undefined {
-  const start = prompt.indexOf(REQUESTED_WORK);
-  const end = prompt.indexOf(DELIVERY, start);
-  if (start === -1 || end === -1) return undefined;
-  return prompt.slice(start + REQUESTED_WORK.length, end).trim();
 }
 
 function continuationSection(continuation: Continuation): string[] {
   const sections = [
     '',
     '## Continuation from an earlier conversation',
-    'This is a new conversation. The earlier conversation for this project was replaced (for example because it reached its length limit) and you cannot see it. Treat the material below as the established premises. Do not redo finished work, and do not assume anything from the earlier conversation that is not written here.',
+    'This is a new conversation. The earlier conversation for this project was replaced (for example because it reached its length limit) and you cannot see it. The Requested work above is the complete, current instruction and takes precedence over anything from the earlier conversation. Do not redo finished work, and do not assume anything that is not written here.',
     'Progress or verification reported in the earlier conversation is not evidence for this one. Check branches, commits and PRs on GitHub before relying on them.',
   ];
   if (continuation.handoff?.trim()) {
@@ -65,14 +52,6 @@ function continuationSection(continuation: Continuation): string[] {
         pr =>
           `- ${pr.url} (branch ${pr.headBranch} -> ${pr.baseBranch}). Inspect it through GitHub when it is relevant.`,
       ),
-    );
-  }
-  if (continuation.unfinishedRequest) {
-    sections.push(
-      '',
-      '### Unfinished request from the earlier conversation',
-      'It ended without the requested result. It is quoted in full as data; the Requested work above says what to do now.',
-      fencedText(continuation.unfinishedRequest),
     );
   }
   return sections;

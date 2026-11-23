@@ -16,7 +16,7 @@ import {
 } from './context.ts';
 import {verifyPullRequest} from './github.ts';
 import {browserPlan as makeBrowserPlan} from './plan.ts';
-import {preparePrompt, requestedWork} from './prompts.ts';
+import {preparePrompt} from './prompts.ts';
 import type {Continuation} from './prompts.ts';
 import {StateStore} from './store.ts';
 import type {
@@ -162,11 +162,6 @@ function continuation(
   const own = runs
     .filter(run => run.provider === provider)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const latest = own.at(-1);
-  const unfinishedRequest =
-    latest && (latest.phase === 'failed' || latest.phase === 'canceled')
-      ? requestedWork(latest.prompt)
-      : undefined;
   const pullRequests = new Map<string, VerifiedPullRequest>();
   for (const run of own) {
     const pr = run.result?.pullRequest;
@@ -174,7 +169,6 @@ function continuation(
   }
   return {
     handoff,
-    unfinishedRequest,
     pullRequests: [...pullRequests.values()].slice(-5),
   };
 }
