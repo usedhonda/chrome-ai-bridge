@@ -425,3 +425,59 @@ test('invalid repository URLs, missing source, and binary input cannot create wo
   assert.deepEqual(status.projects, []);
   assert.deepEqual(status.runs, []);
 });
+
+test('a conversation that reached its length limit rolls over with the earlier premises', t => {
+  const w = workspace(t);
+  const original = 'Add the foreground melody ranking and open a draft PR.';
+  const first = JSON.parse(
+    w.success(taskArgs('chatgpt', 'length-limit', 'public', original)),
+  ) as Plan;
+  w.success([
+    'ready',
+    first.runId,
+    '--url',
+    'https://chatgpt.com/',
+    '--mode',
+    'Pro',
+    '--new-page',
+  ]);
+  w.success(['begin-send', first.runId]);
+  w.success(['sent', first.runId, '--url', 'https://chatgpt.com/c/limit-hit']);
+  fs.writeFileSync(
+    path.join(w.directory, 'limit.md'),
+    'The conversation reached its length limit.\n',
+  );
+  w.success([
+    'fail',
+    first.runId,
+    '--answer-file',
+    'limit.md',
+    '--reason',
+    'Conversation length limit before the PR.',
+  ]);
+  const next = [
+    ...taskArgs('chatgpt', 'length-limit', 'public', 'Finish the work.'),
+    '--new-chat',
+  ];
+  w.fail(
+    [
+      ...taskArgs('chatgpt', 'length-limit', 'public', 'Finish the work.'),
+      '--handoff-file',
+      'limit.md',
+    ],
+    'HANDOFF_WITHOUT_NEW_CHAT',
+  );
+  fs.writeFileSync(
+    path.join(w.directory, 'handoff.md'),
+    'Branch feat/melody has one commit; the PR is not open yet.\n',
+  );
+  const rolled = JSON.parse(
+    w.success([...next, '--handoff-file', 'handoff.md']),
+  ) as Plan;
+  assert.equal(rolled.navigation.newPage, true);
+  const prompt = w.success(['prompt', rolled.runId]);
+  assert.match(prompt, /## Continuation from an earlier conversation/);
+  assert.match(prompt, /Branch feat\/melody has one commit/);
+  assert.ok(!prompt.includes(original), 'the latest request is the only task');
+  assert.ok(prompt.indexOf('Finish the work.') < prompt.indexOf('### Handoff'));
+});

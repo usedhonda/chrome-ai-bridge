@@ -6,7 +6,12 @@
 
 import {MAX_PROMPT_BYTES, fencedText} from './context.ts';
 import type {SourceContext} from './context.ts';
-import type {PreparedInput, Provider, Repository} from './types.ts';
+import type {
+  PreparedInput,
+  Provider,
+  Repository,
+  VerifiedPullRequest,
+} from './types.ts';
 import {WorkflowError} from './types.ts';
 
 export interface PromptInput {
@@ -18,6 +23,38 @@ export interface PromptInput {
   revision?: string;
   requestId?: string;
   newChat?: boolean;
+  continuation?: Continuation;
+}
+
+/** Premises carried into a new conversation that replaces a saved one. */
+export interface Continuation {
+  /** The caller's account of where the work stands and what was decided. */
+  handoff?: string;
+  /** Pull requests that CAB verified in earlier runs of this project. */
+  pullRequests: VerifiedPullRequest[];
+}
+
+function continuationSection(continuation: Continuation): string[] {
+  const sections = [
+    '',
+    '## Continuation from an earlier conversation',
+    'This is a new conversation. The earlier conversation for this project was replaced (for example because it reached its length limit) and you cannot see it. The Requested work above is the complete, current instruction and takes precedence over anything from the earlier conversation. Do not redo finished work, and do not assume anything that is not written here.',
+    'Progress or verification reported in the earlier conversation is not evidence for this one. Check branches, commits and PRs on GitHub before relying on them.',
+  ];
+  if (continuation.handoff?.trim()) {
+    sections.push('', '### Handoff', continuation.handoff.trim());
+  }
+  if (continuation.pullRequests.length > 0) {
+    sections.push(
+      '',
+      '### Pull requests verified in earlier runs',
+      ...continuation.pullRequests.map(
+        pr =>
+          `- ${pr.url} (branch ${pr.headBranch} -> ${pr.baseBranch}). Inspect it through GitHub when it is relevant.`,
+      ),
+    );
+  }
+  return sections;
 }
 
 export function preparePrompt(input: PromptInput): PreparedInput {
@@ -56,10 +93,15 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     '',
     '## Requested work',
     input.question,
+    ...(input.continuation ? continuationSection(input.continuation) : []),
     '',
     '## Delivery requirements',
   ];
   if (provider === 'chatgpt') {
+    if (input.continuation)
+      sections.push(
+        'Conversations can reach a length limit before the work is done. Commit progress to the working branch early so that it survives if this conversation also stops.',
+      );
     sections.push(
       'Use the existing GitHub connection to access this repository by URL, whether public or private.',
       'Implement the requested work on a new working branch in that repository, commit the changes, and open a real pull request against the base branch. For a follow-up on an existing task, update its working branch and PR when appropriate.',

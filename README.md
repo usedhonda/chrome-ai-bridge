@@ -148,7 +148,7 @@ A timeout, missing tab, or missing answer is not that evidence. If the provider 
 cab fail RUN --answer-file answer.md --reason "Provider's final failure"
 ```
 
-This records `failed`, never a successful completion. Use `block` for temporary problems while the original request can still continue. Use `--new-chat` on a later prepare only when a fresh conversation is explicitly intended. `--request-id` allows callers to identify the same preparation request when recovering from an uncertain CLI result.
+This records `failed`, never a successful completion. Use `block` for temporary problems while the original request can still continue. Use `--new-chat` on a later prepare only when a fresh conversation is explicitly intended, or when the provider says the conversation reached its length limit. `--request-id` allows callers to identify the same preparation request when recovering from an uncertain CLI result.
 
 ## State and migration
 

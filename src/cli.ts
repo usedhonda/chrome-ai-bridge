@@ -17,8 +17,15 @@ import {
 import {verifyPullRequest} from './github.ts';
 import {browserPlan as makeBrowserPlan} from './plan.ts';
 import {preparePrompt} from './prompts.ts';
+import type {Continuation} from './prompts.ts';
 import {StateStore} from './store.ts';
-import type {Provider, Repository, Run, Visibility} from './types.ts';
+import type {
+  Provider,
+  Repository,
+  Run,
+  VerifiedPullRequest,
+  Visibility,
+} from './types.ts';
 import {WorkflowError} from './types.ts';
 import {canonicalRepositoryUrl} from './urls.ts';
 import {Workflow} from './workflow.ts';
@@ -35,7 +42,7 @@ Preparing a task does not send it. CAB never drives a browser itself.
   cab prepare <chatgpt|gemini|both> "task" --project NAME --repo URL --visibility public|private
   cab prepare <provider> --prompt-file FILE --project NAME --repo URL --visibility public|private
     [--context PATH[:START:END]]... [--root DIR] [--base BRANCH]
-    [--request-id KEY] [--new-chat]
+    [--request-id KEY] [--new-chat [--handoff-file FILE]]
   cab ready RUN --url OBSERVED_URL --mode OBSERVED_MODE_LABEL [--tab HANDLE] [--new-page]
   cab begin-send RUN
   cab sent RUN --url CANONICAL_CHAT_URL
@@ -72,6 +79,7 @@ const prepareOptions = {
   base: {type: 'string'},
   'request-id': {type: 'string'},
   'new-chat': {type: 'boolean'},
+  'handoff-file': {type: 'string'},
 } satisfies Record<string, Option>;
 
 function parse(argv: string[], options: Record<string, Option>) {
@@ -145,6 +153,26 @@ function localRevision(root: string): string | undefined {
   }
 }
 
+/** Premises for a new conversation, taken from this project's saved runs. */
+function continuation(
+  runs: Run[],
+  provider: Provider,
+  handoff: string | undefined,
+): Continuation {
+  const own = runs
+    .filter(run => run.provider === provider)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const pullRequests = new Map<string, VerifiedPullRequest>();
+  for (const run of own) {
+    const pr = run.result?.pullRequest;
+    if (pr) pullRequests.set(pr.url, pr);
+  }
+  return {
+    handoff,
+    pullRequests: [...pullRequests.values()].slice(-5),
+  };
+}
+
 function json(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -197,6 +225,19 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
         'ChatGPT uses its connected repository URL. --context is for Gemini; no source files were read.',
       );
     }
+    const newChat = values['new-chat'] === true;
+    const handoffFile = values['handoff-file'];
+    if (typeof handoffFile === 'string' && !newChat) {
+      throw new WorkflowError(
+        'HANDOFF_WITHOUT_NEW_CHAT',
+        '--handoff-file carries premises into a new conversation; use it with --new-chat.',
+      );
+    }
+    const handoff =
+      typeof handoffFile === 'string'
+        ? readTextFile(handoffFile, MAX_PROMPT_BYTES)
+        : undefined;
+    const projectRuns = newChat ? (await workflow.status(project)).runs : [];
     const root = typeof values.root === 'string' ? values.root : process.cwd();
     const context = specs.length ? collectContext(root, specs) : [];
     const revision = context.length ? localRevision(root) : undefined;
@@ -212,7 +253,10 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
           typeof values['request-id'] === 'string'
             ? values['request-id']
             : undefined,
-        newChat: values['new-chat'] === true,
+        newChat,
+        continuation: newChat
+          ? continuation(projectRuns, p, handoff)
+          : undefined,
       }),
     );
     const runs = await workflow.prepareMany(inputs);

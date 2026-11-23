@@ -14,6 +14,7 @@ Read the latest relevant work log under `docs/log/claude/` when resuming reposit
 - Gemini uses **Thinking / 思考**, or explicit **High thinking** when the UI presents thinking levels. Public repositories are supplied by URL. Private requests include selected code in the prompt, including on follow-ups. Its output is the chat answer.
 - Record the observed mode label. A subscription badge, a bare `High`, or an unobserved default is not evidence. Do not hard-code numbered models or downgrade silently.
 - Preserve the run and URL when work is blocked. Never automatically resend an uncertain submission, erase state, or create a replacement conversation.
+- The one exception: when the provider states that a conversation reached its length limit, close that run and continue in a new conversation with `--new-chat` and a self-contained prompt (goal, scope, constraints, GitHub-confirmed progress; optionally `--handoff-file`). The new prompt is the only authoritative request; CAB adds only verified PRs and a note that earlier progress is not evidence.
 
 ## Native browser workflow
 
