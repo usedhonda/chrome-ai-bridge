@@ -50,6 +50,17 @@ Switching Claude Code to Codex does not require a new chat. Use the same state d
 
 Use `--new-chat` only when a fresh conversation is intended. It is not a recovery action for slow generation, a disconnected tool, or a lost tab handle.
 
+## Conversation length limit
+
+When ChatGPT states that the conversation reached its length limit, do not keep using it. Close the run (`cancel` before a send; `fail` with the visible text after an accepted one), check the working branch and PR on GitHub, and write a handoff file: the goal and the user's own observations, progress (branch, commits, PR, what was and was not verified), decisions and constraints, and the remaining work. Then prepare the same work again with a new request ID:
+
+```bash
+cab prepare chatgpt --project service-hardening --repo https://github.com/owner/service \
+  --visibility private --prompt-file task.txt --new-chat --handoff-file handoff.md
+```
+
+CAB adds the handoff, the unfinished previous request in full, and earlier verified PRs to the new prompt. `--new-chat` without `--handoff-file` is rejected.
+
 ## Gemini with private code
 
 Gemini has no GitHub connection in this workflow. Select the source necessary to answer the task and supply it on every request, including follow-ups:

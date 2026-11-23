@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
+## [Unreleased]
+
+### Added
+
+- When the provider says a conversation reached its length limit, `ask-ai` closes the run and continues in a new conversation instead of reusing the old one. `--new-chat` now requires `--handoff-file`; the new prompt carries the handoff, the unfinished previous request in full, and PRs verified in earlier runs.
+
 ## [3.0.2] - 2026-11-18
 
 ### Changed

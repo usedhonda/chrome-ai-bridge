@@ -56,7 +56,7 @@ Another run owns that project/provider conversation. Inspect `status` and resume
 
 ## A saved tab no longer exists
 
-Open the saved conversation URL in the signed-in browser. The tab handle is only a hint. If the conversation itself is unavailable, preserve the URL and record the error. `--new-chat` is an explicit decision to start over, not an automatic repair.
+Open the saved conversation URL in the signed-in browser. The tab handle is only a hint. If the conversation itself is unavailable, preserve the URL and record the error. `--new-chat` is an explicit decision to start over, not an automatic repair. The exception is a conversation the provider says has reached its length limit; see the workflow guide.
 
 ## Gemini rejects private repository preparation
 

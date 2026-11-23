@@ -16,9 +16,16 @@ import {
 } from './context.ts';
 import {verifyPullRequest} from './github.ts';
 import {browserPlan as makeBrowserPlan} from './plan.ts';
-import {preparePrompt} from './prompts.ts';
+import {preparePrompt, requestedWork} from './prompts.ts';
+import type {Continuation} from './prompts.ts';
 import {StateStore} from './store.ts';
-import type {Provider, Repository, Run, Visibility} from './types.ts';
+import type {
+  Provider,
+  Repository,
+  Run,
+  VerifiedPullRequest,
+  Visibility,
+} from './types.ts';
 import {WorkflowError} from './types.ts';
 import {canonicalRepositoryUrl} from './urls.ts';
 import {Workflow} from './workflow.ts';
@@ -35,7 +42,7 @@ Preparing a task does not send it. CAB never drives a browser itself.
   cab prepare <chatgpt|gemini|both> "task" --project NAME --repo URL --visibility public|private
   cab prepare <provider> --prompt-file FILE --project NAME --repo URL --visibility public|private
     [--context PATH[:START:END]]... [--root DIR] [--base BRANCH]
-    [--request-id KEY] [--new-chat]
+    [--request-id KEY] [--new-chat --handoff-file FILE]
   cab ready RUN --url OBSERVED_URL --mode OBSERVED_MODE_LABEL [--tab HANDLE] [--new-page]
   cab begin-send RUN
   cab sent RUN --url CANONICAL_CHAT_URL
@@ -72,6 +79,7 @@ const prepareOptions = {
   base: {type: 'string'},
   'request-id': {type: 'string'},
   'new-chat': {type: 'boolean'},
+  'handoff-file': {type: 'string'},
 } satisfies Record<string, Option>;
 
 function parse(argv: string[], options: Record<string, Option>) {
@@ -145,6 +153,32 @@ function localRevision(root: string): string | undefined {
   }
 }
 
+/** Premises for a new conversation, taken from this project's saved runs. */
+function continuation(
+  runs: Run[],
+  provider: Provider,
+  handoff: string,
+): Continuation {
+  const own = runs
+    .filter(run => run.provider === provider)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const latest = own.at(-1);
+  const unfinishedRequest =
+    latest && (latest.phase === 'failed' || latest.phase === 'canceled')
+      ? requestedWork(latest.prompt)
+      : undefined;
+  const pullRequests = new Map<string, VerifiedPullRequest>();
+  for (const run of own) {
+    const pr = run.result?.pullRequest;
+    if (pr) pullRequests.set(pr.url, pr);
+  }
+  return {
+    handoff,
+    unfinishedRequest,
+    pullRequests: [...pullRequests.values()].slice(-5),
+  };
+}
+
 function json(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -197,6 +231,20 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
         'ChatGPT uses its connected repository URL. --context is for Gemini; no source files were read.',
       );
     }
+    const newChat = values['new-chat'] === true;
+    if (newChat !== (typeof values['handoff-file'] === 'string')) {
+      throw new WorkflowError(
+        'HANDOFF_REQUIRED',
+        'A new chat needs --handoff-file with the premises the earlier conversation established, and --handoff-file is only for --new-chat.',
+      );
+    }
+    const handoff = newChat
+      ? readTextFile(values['handoff-file'] as string, MAX_PROMPT_BYTES)
+      : '';
+    if (newChat && !handoff.trim()) {
+      throw new WorkflowError('HANDOFF_REQUIRED', 'The handoff file is empty.');
+    }
+    const projectRuns = newChat ? (await workflow.status(project)).runs : [];
     const root = typeof values.root === 'string' ? values.root : process.cwd();
     const context = specs.length ? collectContext(root, specs) : [];
     const revision = context.length ? localRevision(root) : undefined;
@@ -212,7 +260,10 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
           typeof values['request-id'] === 'string'
             ? values['request-id']
             : undefined,
-        newChat: values['new-chat'] === true,
+        newChat,
+        continuation: newChat
+          ? continuation(projectRuns, p, handoff)
+          : undefined,
       }),
     );
     const runs = await workflow.prepareMany(inputs);

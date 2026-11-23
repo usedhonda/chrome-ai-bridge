@@ -43,6 +43,8 @@ First use opens a **new page** even when other provider tabs exist. Confirm that
 
 There is no session TTL or automatic reset. A missing tab can be reopened at the saved conversation URL. An inaccessible saved conversation is a blocker; it is not permission to create a new one. `--new-chat` and `import-session` are explicit conversation changes.
 
+A conversation that the provider states has reached its length limit is the one case for an unprompted `--new-chat`: ChatGPT Pro can hit it within a single long task, and continuing there does not recover. The caller closes the run (`cancel` before a send, `fail` after an accepted one), checks the branch and PR on GitHub, and prepares the same work with `--new-chat --handoff-file FILE`. `--new-chat` always requires a nonempty handoff. CAB adds a continuation section after the requested work: the handoff, the requested work of the previous run when it ended `failed` or `canceled`, quoted in full, and up to five PRs verified in earlier runs. ChatGPT is also asked to commit progress early. The old URL is archived once the new conversation is accepted.
+
 ## Run lifecycle
 
 | Phase       | Evidence / action                                                      | Next normal step                                        |
