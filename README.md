@@ -9,14 +9,14 @@ Claude Code or Codex operates the browser. `cab` prepares the provider-specific 
 
 ## Provider behavior
 
-| Provider | Required mode                                                          | Public repository       | Private repository                                      | Completed result                                                             |
-| -------- | ---------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| ChatGPT  | Pro                                                                    | Pass the repository URL | Pass the repository URL; GitHub connection is assumed   | Chat answer **and an actual branch / pull request**, verified against GitHub |
-| Gemini   | Thinking / 思考; explicit High thinking if the UI uses thinking levels | Pass the repository URL | Include selected source files or excerpts in the prompt | Chat answer with code / patch and explanation                                |
+| Provider | Required mode                        | Public repository       | Private repository                                      | Completed result                                                             |
+| -------- | ------------------------------------ | ----------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| ChatGPT  | Pro                                  | Pass the repository URL | Pass the repository URL; GitHub connection is assumed   | Chat answer **and an actual branch / pull request**, verified against GitHub |
+| Gemini   | Neon model with 思考レベル 高 (High) | Pass the repository URL | Include selected source files or excerpts in the prompt | Chat answer with code / patch and explanation                                |
 
 A new project opens a new page for each provider. Once the service creates a conversation URL, CAB saves it immediately. Later requests reuse that conversation, including after an agent or terminal restart. Tab handles are optional hints; the saved URL is the durable identity. Conversations do not expire on a timer.
 
-Mode selection is based on the visible UI, not a fixed model version. A Pro subscription badge is not proof that the ChatGPT conversation uses Pro. Gemini's `Thinking: High` is valid evidence when the UI exposes a thinking-level control; a bare `High` label is not.
+Mode selection is based on the visible UI, not a fixed model version. A Pro subscription badge is not proof that the ChatGPT conversation uses Pro. For Gemini, record both the Neon model and the high thinking level, such as `Neon, 思考レベル: 高`; a bare `High` label is not evidence.
 
 ## How it works
 

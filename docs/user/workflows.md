@@ -78,10 +78,10 @@ cab prepare gemini \
 
 CAB builds a prompt containing the selected code. Ranges are 1-based and inclusive. Select enough definitions and call sites for the question; the bridge does not upload or crawl a private repository automatically. A rejected size limit means narrow the excerpt or split the task, not silently omit files.
 
-Open a new Gemini page on first use or the saved URL on continuation. Confirm it is a saved, non-temporary conversation. Select Thinking / 思考. If the current UI exposes thinking levels instead, explicitly choose High thinking and record evidence identifying that control, for example:
+Open a new Gemini page on first use or the saved URL on continuation. Confirm it is a saved, non-temporary conversation. In the model picker select Neon (詳細な分析), then under 思考レベル select 高. Record both, for example:
 
 ```bash
-cab ready RUN --url https://gemini.google.com/app --mode 'Thinking: High' --tab TAB_HANDLE --new-page
+cab ready RUN --url https://gemini.google.com/app --mode 'Neon, 思考レベル: 高' --tab TAB_HANDLE --new-page
 cab begin-send RUN
 ```
 

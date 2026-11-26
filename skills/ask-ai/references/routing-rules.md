@@ -13,7 +13,7 @@ Do not infer that a single letter in unrelated text invokes this workflow. Prese
 
 ## Output contract is part of routing
 
-ChatGPT uses Pro and must produce an actual branch / PR as well as its chat answer. Gemini uses Thinking or explicit High thinking and returns its answer in chat. For a request that only needs discussion and does not authorize repository changes, use Gemini when compatible with the user's provider choice; otherwise clarify the requested deliverable rather than inventing a code change merely to obtain a PR.
+ChatGPT uses Pro and must produce an actual branch / PR as well as its chat answer. Gemini uses the Neon model with high thinking level and returns its answer in chat. For a request that only needs discussion and does not authorize repository changes, use Gemini when compatible with the user's provider choice; otherwise clarify the requested deliverable rather than inventing a code change merely to obtain a PR.
 
 For private repositories, each Gemini request needs selected code context. `both` does not make the private repository accessible to Gemini and does not require sending the selected code to ChatGPT.
 
