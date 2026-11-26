@@ -46,7 +46,7 @@ async function fixture(t: {after: (callback: () => Promise<void>) => void}) {
 async function submit(workflow: Workflow, run: Run, url: string): Promise<Run> {
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: run.provider === 'chatgpt' ? 'GPT Pro' : 'Thinking',
+    modeLabel: run.provider === 'chatgpt' ? 'GPT Pro' : 'Neon, 思考レベル: 高',
     newPage: run.requiresNewPage,
     tabId: 'tab-123',
   });
@@ -78,7 +78,7 @@ test('conversation identity persists across processes and follow-up failures', a
   await assert.rejects(
     restarted.ready(next.id, {
       url: 'https://gemini.google.com/app/other',
-      modeLabel: 'Thinking',
+      modeLabel: 'Neon, 思考レベル: 高',
     }),
     code('CONVERSATION_MISMATCH'),
   );
@@ -95,12 +95,15 @@ test('beginSend is single-use and unknown submissions cannot be canceled or retr
   const run = await workflow.prepare(input);
   await assert.rejects(workflow.beginSend(run.id), code('SEND_NOT_AUTHORIZED'));
   await assert.rejects(
-    workflow.ready(run.id, {url: run.openUrl, modeLabel: 'Thinking'}),
+    workflow.ready(run.id, {
+      url: run.openUrl,
+      modeLabel: 'Neon, 思考レベル: 高',
+    }),
     code('NEW_PAGE_REQUIRED'),
   );
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Thinking',
+    modeLabel: 'Neon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -150,7 +153,7 @@ test('positive not-sent reconciliation recovers a pre-click crash without author
   const run = await workflow.prepare(input);
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Thinking',
+    modeLabel: 'Neon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -175,7 +178,7 @@ test('positive not-sent reconciliation recovers a pre-click crash without author
   );
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Thinking',
+    modeLabel: 'Neon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -344,18 +347,26 @@ test('URL and mode validation reject unrelated pages and credential-bearing URLs
     canonicalRepositoryUrl('https://github.com/example/project/tree/main'),
   );
   assert.equal(validateMode('chatgpt', 'GPT-6 Pro'), 'GPT-6 Pro');
-  assert.equal(validateMode('gemini', 'High thinking'), 'High thinking');
-  assert.equal(validateMode('gemini', '思考モード'), '思考モード');
+  assert.equal(
+    validateMode('gemini', 'Neon, 思考レベル: 高'),
+    'Neon, 思考レベル: 高',
+  );
+  assert.equal(
+    validateMode('gemini', '4 Neon, Thinking level: High'),
+    '4 Neon, Thinking level: High',
+  );
   for (const label of [
     'Fast',
     'Pro',
     'High',
-    'Thinking: Low',
-    'Thinking: Medium',
-    'Thinking: Auto',
-    '思考: 中',
-    'Thinking unavailable',
-    'Thinking disabled',
+    'Neon',
+    'Thinking: High',
+    'Neon, 思考レベル: 標準',
+    'Neon, 思考レベル: 低',
+    'Hydrogen, 思考レベル: 高',
+    'Carbon, Thinking level: High',
+    '自動モード, 思考レベル: 高',
+    'Neon unavailable, 思考レベル: 高',
   ])
     assert.throws(() => validateMode('gemini', label));
   for (const label of [

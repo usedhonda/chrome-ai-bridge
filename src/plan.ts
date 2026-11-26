@@ -14,7 +14,7 @@ export function browserPlan(
   const mode =
     run.provider === 'chatgpt'
       ? 'Pro'
-      : 'Thinking / 思考 (or explicit Thinking: High)';
+      : 'the Neon model with 思考レベル 高 (Thinking level: High)';
   const command = `cab`;
   const steps: string[] = [];
   if (run.blocked) {

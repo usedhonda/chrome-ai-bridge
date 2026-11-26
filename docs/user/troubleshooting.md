@@ -32,9 +32,9 @@ Do not invent a tool name, fall back to a different automation path, or open a n
 
 Keep the run and page. Use the harness's supported sign-in handoff, then inspect the page again. CAB state stores conversation identity, not authentication cookies. Switching agents or sharing its state directory does not sign a separate browser profile into the service.
 
-## Pro or Thinking cannot be confirmed
+## Pro or Neon cannot be confirmed
 
-Inspect the conversation's model/mode selector. A ChatGPT Pro plan badge is not selected-mode evidence. For Gemini, select Thinking / 思考 or explicit High thinking when the UI exposes thinking levels. Record the actual label; use wording such as `Thinking: High` only when that is what the control establishes.
+Inspect the conversation's model/mode selector. A ChatGPT Pro plan badge is not selected-mode evidence. For Gemini, select the Neon model and, under 思考レベル, 高. Record both, such as `Neon, 思考レベル: 高`.
 
 Do not silently accept Fast, Auto, a lower mode, or a numbered model assumed to be equivalent. If account limits or access prevent the required mode, preserve a blocker in the same run. [Google's model guide](https://support.google.com/gemini/answer/18648722) documents that models, thinking controls, and automatic fallback can vary.
 

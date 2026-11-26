@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
+## [Unreleased]
+
+### Changed
+
+- Gemini requests now require the Neon model with 思考レベル 高 (High thinking), recorded as both, such as `Neon, 思考レベル: 高`. The former Thinking mode label is no longer accepted, and Hydrogen, Carbon, Auto and lower thinking levels are rejected.
+
 ## [3.0.3] - 2026-11-23
 
 ### Added

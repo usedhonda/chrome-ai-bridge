@@ -110,7 +110,7 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     );
   } else {
     sections.push(
-      'Use thinking mode for this work. You do not have a connected GitHub account in this workflow.',
+      'Think this through in depth. You do not have a connected GitHub account in this workflow.',
       repository.visibility === 'private'
         ? 'This repository is private. Work from the explicit source context below; the URL identifies the repository but does not grant access. Do not claim to have inspected files that were not provided.'
         : 'Use the public repository URL to inspect the relevant code. If you cannot access it, identify the missing source context rather than inventing repository contents.',

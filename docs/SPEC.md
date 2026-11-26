@@ -10,17 +10,17 @@ The standard entry points do not start the old daemon, install the CAB extension
 
 ## Provider contract
 
-| Property                 | ChatGPT                                        | Gemini                                                                |
-| ------------------------ | ---------------------------------------------- | --------------------------------------------------------------------- |
-| Required mode            | Pro                                            | Thinking / 思考; explicit High thinking if the UI has thinking levels |
-| Initial page             | New page at `https://chatgpt.com/`             | New page at `https://gemini.google.com/app`                           |
-| Subsequent navigation    | Saved conversation URL                         | Saved conversation URL                                                |
-| Public repository input  | Repository URL                                 | Repository URL                                                        |
-| Private repository input | Repository URL; connector assumed              | Selected source/excerpts included in the prompt                       |
-| Output                   | Final answer plus actual GitHub branch / PR    | Final chat answer, including code or patch                            |
-| Completion check         | Answer plus verified PR in expected repository | Nonempty final answer                                                 |
+| Property                 | ChatGPT                                        | Gemini                                          |
+| ------------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| Required mode            | Pro                                            | Neon model with 思考レベル 高 (High)            |
+| Initial page             | New page at `https://chatgpt.com/`             | New page at `https://gemini.google.com/app`     |
+| Subsequent navigation    | Saved conversation URL                         | Saved conversation URL                          |
+| Public repository input  | Repository URL                                 | Repository URL                                  |
+| Private repository input | Repository URL; connector assumed              | Selected source/excerpts included in the prompt |
+| Output                   | Final answer plus actual GitHub branch / PR    | Final chat answer, including code or patch      |
+| Completion check         | Answer plus verified PR in expected repository | Nonempty final answer                           |
 
-Mode names are semantic requirements. Read the current UI and record its actual selected label. ChatGPT's plan name does not prove selected mode. For Gemini's thinking-level UI, use evidence such as `Thinking: High`, not an ambiguous `High`. If the required mode is unavailable, preserve a blocker rather than silently choosing another model. Never pin a numbered model release.
+Mode names are semantic requirements. Read the current UI and record its actual selected label. ChatGPT's plan name does not prove selected mode. For Gemini, the model (Neon) and the thinking level (高 / High) are separate controls; record both, for example `Neon, 思考レベル: 高`, not an ambiguous `High`. If the required mode is unavailable, preserve a blocker rather than silently choosing another model. Never pin a numbered model release.
 
 ## Components and ownership
 
@@ -95,7 +95,7 @@ Legacy agent-scoped `sessions.json` is never silently reassigned to v3 projects.
 
 ## Validation boundaries
 
-Offline tests validate input handling, per-project/provider isolation, prompt policy, transitions, concurrency, persistence, and PR verifier behavior. They cannot establish that a live account has Pro/Thinking, that its browser tools are connected, or that a provider completed a request.
+Offline tests validate input handling, per-project/provider isolation, prompt policy, transitions, concurrency, persistence, and PR verifier behavior. They cannot establish that a live account has Pro/Neon, that its browser tools are connected, or that a provider completed a request.
 
 Use the [live verification recipe](user/workflows.md#live-verification-recipe) to check the browser boundary. Report observed behavior and any missing live coverage in the PR.
 
