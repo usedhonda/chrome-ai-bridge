@@ -41,18 +41,24 @@ function geminiRole(repository: Repository): string[] {
     '## Your role and limits in this workflow',
     '- A coding agent (Claude Code or Codex) working in the local checkout is consulting you through this chat. It reads your answer and applies any changes itself.',
     `- You cannot read this repository. You have no GitHub connection, and you should not try to fetch or browse it${repository.visibility === 'public' ? ', even though it is public' : ''}: the URL above only identifies it. The code you can rely on is what this conversation contains.`,
-    '- Do not ask for repository access and do not reply only that you cannot access it. Answer from the material provided. If something essential is missing, name the exact files, functions or line ranges needed, and still answer what you can.',
-    '- You do not implement anything: no branch, commit or pull request, and no offer or instructions to create one. Implementation pull requests are handled separately by ChatGPT Pro. Your deliverable is this chat answer.',
+    '- Do not ask for repository access and do not reply only that you cannot access it. Answer from the material provided. When unseen files, types, callers or build settings matter, state each assumption explicitly so the agent can check it locally. If something essential is missing, name the exact files, symbols or line ranges needed, and still answer what you can.',
+    '- You do not touch git or GitHub: no branch, commit or pull request, and no offer or instructions to create one. Implementation pull requests are a separate ChatGPT Pro workflow; do not leave work for it. Your deliverable is a complete, self-contained technical answer in this chat.',
+    '- In a continuing conversation, the newest copy of a file supersedes earlier copies. Do not base changes on an older excerpt of a file that was sent again or changed since.',
     '- You cannot run the project. Distinguish checks you reasoned through from tests the agent should run.',
   ];
 }
 
-function continuationSection(continuation: Continuation): string[] {
+function continuationSection(
+  continuation: Continuation,
+  provider: Provider,
+): string[] {
   const sections = [
     '',
     '## Continuation from an earlier conversation',
     'This is a new conversation. The earlier conversation for this project was replaced (for example because it reached its length limit) and you cannot see it. The Requested work above is the complete, current instruction and takes precedence over anything from the earlier conversation. Do not redo finished work, and do not assume anything that is not written here.',
-    'Progress or verification reported in the earlier conversation is not evidence for this one. Check branches, commits and PRs on GitHub before relying on them.',
+    provider === 'chatgpt'
+      ? 'Progress or verification reported in the earlier conversation is not evidence for this one. Check branches, commits and PRs on GitHub before relying on them.'
+      : 'Progress or verification reported in the earlier conversation is not evidence for this one. Rely only on the handoff and the source context in this message, and name any missing files or diffs.',
   ];
   if (continuation.handoff?.trim()) {
     sections.push('', '### Handoff', continuation.handoff.trim());
@@ -61,9 +67,10 @@ function continuationSection(continuation: Continuation): string[] {
     sections.push(
       '',
       '### Pull requests verified in earlier runs',
-      ...continuation.pullRequests.map(
-        pr =>
-          `- ${pr.url} (branch ${pr.headBranch} -> ${pr.baseBranch}). Inspect it through GitHub when it is relevant.`,
+      ...continuation.pullRequests.map(pr =>
+        provider === 'chatgpt'
+          ? `- ${pr.url} (branch ${pr.headBranch} -> ${pr.baseBranch}). Inspect it through GitHub when it is relevant.`
+          : `- ${pr.url} (branch ${pr.headBranch} -> ${pr.baseBranch}). Reference only; do not fetch it.`,
       ),
     );
   }
@@ -107,7 +114,9 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     '',
     '## Requested work',
     input.question,
-    ...(input.continuation ? continuationSection(input.continuation) : []),
+    ...(input.continuation
+      ? continuationSection(input.continuation, provider)
+      : []),
     '',
     '## Delivery requirements',
   ];
@@ -119,7 +128,7 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     sections.push(
       'Use the existing GitHub connection to access this repository by URL, whether public or private.',
       'Implement the requested work on a new working branch in that repository, commit the changes, and open a real pull request against the base branch. For a follow-up on an existing task, update its working branch and PR when appropriate.',
-      'Return the branch name, the actual GitHub pull request URL, a concise explanation of the changes, and the verification results. A chat-only proposal, patch, or promise to create a PR does not complete this task.',
+      'Return the branch name, the actual GitHub pull request URL, a concise explanation of the changes, and the verification results, separating commands you actually ran from checks you only reasoned through. A chat-only proposal, patch, or promise to create a PR does not complete this task.',
       'Do not merge the PR or commit directly to the base branch. If access or implementation is blocked, explain the concrete blocker and do not claim a branch or PR exists.',
     );
   } else {
@@ -128,7 +137,7 @@ export function preparePrompt(input: PromptInput): PreparedInput {
       context.length > 0
         ? 'Work from the explicit source context below. Do not claim to have inspected files that were not provided.'
         : 'No source files are attached to this message. Use the code quoted in the request or earlier in this conversation, and do not invent repository contents.',
-      'Return the result in this chat, preserving complete code blocks, repository-relative paths, and applicable diffs. Explain the reasoning.',
+      'Return the result in this chat with repository-relative paths and complete, untruncated code for every changed block. Anchor each edit to its function or type name with a few verbatim surrounding lines rather than hand-counted line numbers, and do not repeat unchanged whole files. Explain the reasoning.',
     );
     if (context.length > 0) {
       sections.push(

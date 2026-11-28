@@ -88,7 +88,7 @@ test('Gemini private URL-only is rejected; public prompts still state that the r
   assert.ok(publicInput.prompt.includes(repository.url));
   assert.match(publicInput.prompt, /You cannot read this repository/);
   assert.match(publicInput.prompt, /even though it is public/);
-  assert.match(publicInput.prompt, /handled separately by ChatGPT Pro/);
+  assert.match(publicInput.prompt, /a separate ChatGPT Pro workflow/);
   assert.ok(publicInput.prompt.includes('Return the result in this chat'));
 });
 
@@ -127,4 +127,29 @@ test('explicit context rejects traversal, credential aliases, binary and oversiz
       code: 'RESTRICTED_CONTEXT',
     });
   }
+});
+
+test('a Gemini continuation never tells Gemini to look things up on GitHub', () => {
+  const pr = {
+    url: 'https://github.com/example/project/pull/3',
+    number: 3,
+    headBranch: 'feat/x',
+    baseBranch: 'main',
+    repository: 'example/project',
+    verifiedAt: '2026-11-28T00:00:00.000Z',
+  };
+  const base = {
+    project: 'project',
+    repository: {...repository, visibility: 'public' as const},
+    question: 'Continue the review',
+    continuation: {pullRequests: [pr]},
+  };
+  const gemini = preparePrompt({...base, provider: 'gemini'}).prompt;
+  assert.doesNotMatch(
+    gemini,
+    /on GitHub before relying|Inspect it through GitHub/,
+  );
+  assert.match(gemini, /Reference only; do not fetch it/);
+  const chatgpt = preparePrompt({...base, provider: 'chatgpt'}).prompt;
+  assert.match(chatgpt, /Check branches, commits and PRs on GitHub/);
 });
