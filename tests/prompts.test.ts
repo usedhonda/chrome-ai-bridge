@@ -73,7 +73,7 @@ test('private Gemini preserves exact source excerpts and fences while ChatGPT on
   assert.equal(fencedText(manySpans), `\`\`\`text\n${manySpans}\n\`\`\``);
 });
 
-test('Gemini private URL-only is rejected but public URL-only remains usable', () => {
+test('Gemini private URL-only is rejected; public prompts still state that the repository is unreadable', () => {
   const input = {
     project: 'project',
     provider: 'gemini' as const,
@@ -86,7 +86,9 @@ test('Gemini private URL-only is rejected but public URL-only remains usable', (
     repository: {...repository, visibility: 'public'},
   });
   assert.ok(publicInput.prompt.includes(repository.url));
-  assert.ok(publicInput.prompt.includes('public repository URL'));
+  assert.match(publicInput.prompt, /You cannot read this repository/);
+  assert.match(publicInput.prompt, /even though it is public/);
+  assert.match(publicInput.prompt, /handled separately by ChatGPT Pro/);
   assert.ok(publicInput.prompt.includes('Return the result in this chat'));
 });
 

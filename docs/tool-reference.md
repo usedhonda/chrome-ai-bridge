@@ -42,7 +42,7 @@ Preparation persists the prompt and reserves the project/provider lane. `both` r
 
 These commands record observed browser events; they do not open pages or click buttons. The calling agent performs browser actions with the tools available in its session. Do not pre-record success or fabricate a mode label, tab handle, chat URL, or PR.
 
-Before `ready`, confirm that temporary-chat/history-off mode is disabled and the conversation can be saved. For ChatGPT, the selected mode must be Pro. For Gemini, select the Neon model and 思考レベル 高, and record both, such as `Neon, 思考レベル: 高`. A bare `High` does not identify the mode.
+Before `ready`, confirm that temporary-chat/history-off mode is disabled and the conversation can be saved. For ChatGPT, the selected mode must be Pro. For Gemini, select the Carbon model and 思考レベル 高, and record both, such as `Carbon, 思考レベル: 高`. A bare `High` does not identify the mode.
 
 `complete` verifies a ChatGPT PR against real GitHub metadata and records head/base information. Private verification needs locally authenticated `gh` or `GH_TOKEN` / `GITHUB_TOKEN`; this is separate from ChatGPT's GitHub connector. A failed verification leaves the run available for completion retry without resubmitting the prompt.
 

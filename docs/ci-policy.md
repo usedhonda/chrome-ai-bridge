@@ -6,7 +6,7 @@ The `Compile and run tests` workflow runs `npm test` (typecheck + build + `node:
 
 `Check code before submitting` runs `npm run check-format` (ESLint + Prettier) and `npm run docs` (active document links and command reference).
 
-CI output is not evidence that ChatGPT Pro or Gemini Neon was exercised live. Use the [live verification recipe](user/workflows.md#live-verification-recipe) in an authorized agent/browser session and record that outcome separately.
+CI output is not evidence that ChatGPT Pro or Gemini Carbon was exercised live. Use the [live verification recipe](user/workflows.md#live-verification-recipe) in an authorized agent/browser session and record that outcome separately.
 
 ## Release
 

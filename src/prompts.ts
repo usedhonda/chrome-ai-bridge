@@ -34,6 +34,19 @@ export interface Continuation {
   pullRequests: VerifiedPullRequest[];
 }
 
+/** Gemini keeps getting this wrong unless told up front, so state it before the task. */
+function geminiRole(repository: Repository): string[] {
+  return [
+    '',
+    '## Your role and limits in this workflow',
+    '- A coding agent (Claude Code or Codex) working in the local checkout is consulting you through this chat. It reads your answer and applies any changes itself.',
+    `- You cannot read this repository. You have no GitHub connection, and you should not try to fetch or browse it${repository.visibility === 'public' ? ', even though it is public' : ''}: the URL above only identifies it. The code you can rely on is what this conversation contains.`,
+    '- Do not ask for repository access and do not reply only that you cannot access it. Answer from the material provided. If something essential is missing, name the exact files, functions or line ranges needed, and still answer what you can.',
+    '- You do not implement anything: no branch, commit or pull request, and no offer or instructions to create one. Implementation pull requests are handled separately by ChatGPT Pro. Your deliverable is this chat answer.',
+    '- You cannot run the project. Distinguish checks you reasoned through from tests the agent should run.',
+  ];
+}
+
 function continuationSection(continuation: Continuation): string[] {
   const sections = [
     '',
@@ -90,6 +103,7 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     repository.baseBranch
       ? `Base branch: ${repository.baseBranch}`
       : 'Base branch: use the repository default branch.',
+    ...(provider === 'gemini' ? geminiRole(repository) : []),
     '',
     '## Requested work',
     input.question,
@@ -110,12 +124,11 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     );
   } else {
     sections.push(
-      'Think this through in depth. You do not have a connected GitHub account in this workflow.',
-      repository.visibility === 'private'
-        ? 'This repository is private. Work from the explicit source context below; the URL identifies the repository but does not grant access. Do not claim to have inspected files that were not provided.'
-        : 'Use the public repository URL to inspect the relevant code. If you cannot access it, identify the missing source context rather than inventing repository contents.',
-      'Return the result in this chat, preserving complete code blocks, repository-relative paths, and applicable diffs. Explain the reasoning and any verification that was actually performed; distinguish tests to run from tests you ran.',
-      'Do not claim to have created a remote branch, commit, or pull request. If more code is needed, name the specific files or excerpts needed in your chat response.',
+      'Think this through in depth.',
+      context.length > 0
+        ? 'Work from the explicit source context below. Do not claim to have inspected files that were not provided.'
+        : 'No source files are attached to this message. Use the code quoted in the request or earlier in this conversation, and do not invent repository contents.',
+      'Return the result in this chat, preserving complete code blocks, repository-relative paths, and applicable diffs. Explain the reasoning.',
     );
     if (context.length > 0) {
       sections.push(
