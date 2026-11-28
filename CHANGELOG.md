@@ -8,7 +8,7 @@ This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeD
 
 ### Added
 
-- `skills/ask-ai/references/coding-playbook.md`: coding know-how for calling agents, drafted by ChatGPT Pro and extended with Gemini Carbon's advice. It covers task routing, bounded Pro PR requests, Gemini context selection and answer shape, quick checks on Gemini code, review loops, new conversations and final verification.
+- `skills/ask-ai/references/coding-playbook.md`: coding know-how for calling agents, drafted by ChatGPT Pro and extended with Gemini Carbon's advice. It covers task routing, bounded Pro PR requests, Gemini context selection and answer shape, quick checks on Gemini code, a design-first loop (Gemini designs, the caller checks its assumptions, Pro implements the PR, Gemini audits the diff), review loops, new conversations and final verification.
 
 ### Changed
 

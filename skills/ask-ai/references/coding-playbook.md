@@ -3,23 +3,23 @@
 Use this with the [ask-ai lifecycle](../SKILL.md); it guides task writing, not state transitions.
 Treat the recommendations as workflow heuristics from CAB's observed failures and from ChatGPT Pro's and Gemini Carbon's own advice (2026-11-28), not model benchmarks.
 
-Read: [Routing](#choose-the-deliverable) · [Pro](#request-a-useful-pro-pr) · [Gemini](#give-gemini-a-self-contained-code-question) · [Checking Gemini code](#check-geminis-code-before-applying-it) · [Review loops](#run-a-review-loop) · [New conversations](#continue-or-start-a-new-conversation) · [Verification](#check-before-reporting) · [Anti-patterns](#avoid-these-traps).
+Read: [Routing](#choose-the-deliverable) · [Pro](#request-a-useful-pro-pr) · [Gemini](#give-gemini-a-self-contained-code-question) · [Checking Gemini code](#check-geminis-code-before-applying-it) · [Design → PR](#design-with-gemini-implement-with-pro) · [Review loops](#run-a-review-loop) · [New conversations](#continue-or-start-a-new-conversation) · [Verification](#check-before-reporting) · [Anti-patterns](#avoid-these-traps).
 
 ## Choose the deliverable
 
 - Honor the user's provider choice and [routing rules](routing-rules.md) first; assign work by access and required output, not assumed speed or intelligence.
 - Use ChatGPT Pro for repository work ending in a real PR; use Gemini Carbon with 思考レベル 高 for reasoning over supplied material ending in a chat answer.
 
-| Coding need                             | Assign a concrete job                                                                                                                                                                                           |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implementation or refactoring           | Ask Pro for one behavior change or compatibility-preserving refactor, with observable acceptance criteria.                                                                                                      |
-| Debugging                               | Ask Pro to trace the real entry point, reproduce the failure and fix it; ask Gemini to compare specific hypotheses when a trace and the relevant execution path fit in the prompt.                              |
-| Design review or second opinion         | Give Gemini the proposed interfaces, constraints and a concrete failure scenario; ask which decision fails and why. Use Pro for a repository-grounded design document PR only when that artifact is authorized. |
-| Test design                             | Ask Gemini for inputs, expected observations and cases that distinguish competing implementations; ask Pro to implement the justified tests with the change.                                                    |
-| Review of a PR                          | Give Gemini the actual diff plus surrounding code. Ask Pro for review-and-repair, or an explicitly requested review-report PR; do not invent edits to satisfy its PR contract.                                  |
-| Concurrency, state machines, algorithms | Gemini, given the full function, its invariants and a trace: it is strongest at walking failure interleavings over compact code.                                                                                |
-| Wide refactor or 10+ file migration     | Pro (or the calling agent locally): Gemini cannot see unattached callers or run the type checker.                                                                                                               |
-| Both providers                          | Give them distinct jobs: Pro implements, Gemini challenges the resulting diff, Pro repairs supported findings. Use independent parallel questions only when neither needs the other's result.                   |
+| Coding need                             | Assign a concrete job                                                                                                                                                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Implementation or refactoring           | Ask Pro for one behavior change or compatibility-preserving refactor, with observable acceptance criteria.                                                                                                               |
+| Debugging                               | Ask Pro to trace the real entry point, reproduce the failure and fix it; ask Gemini to compare specific hypotheses when a trace and the relevant execution path fit in the prompt.                                       |
+| Design review or second opinion         | Give Gemini the proposed interfaces, constraints and a concrete failure scenario; ask which decision fails and why. Use Pro for a repository-grounded design document PR only when that artifact is authorized.          |
+| Test design                             | Ask Gemini for inputs, expected observations and cases that distinguish competing implementations; ask Pro to implement the justified tests with the change.                                                             |
+| Review of a PR                          | Give Gemini the actual diff plus surrounding code. Ask Pro for review-and-repair, or an explicitly requested review-report PR; do not invent edits to satisfy its PR contract.                                           |
+| Concurrency, state machines, algorithms | Gemini, given the full function, its invariants and a trace: it is strongest at walking failure interleavings over compact code.                                                                                         |
+| Wide refactor or 10+ file migration     | Pro (or the calling agent locally): Gemini cannot see unattached callers or run the type checker.                                                                                                                        |
+| Both providers                          | Default to the design-first loop below: Gemini designs, the caller checks its assumptions, Pro implements the PR, Gemini audits the diff. Use independent parallel questions only when neither needs the other's result. |
 
 - Do not launch `both` to review a PR that does not exist yet. Use separate requests for the sequential implementation/review loop; keep the same stable project identity.
 - For advice-only work without write authorization, follow the routing rules rather than turning the question into an unsolicited PR.
@@ -68,6 +68,15 @@ For each supported finding give the exact interleaving, path/line, effect and sm
 Then propose a test with inputs and expected observations; label it as proposed, not executed.
 If the excerpts cannot settle this, name the missing function or contract and what it would decide.
 ```
+
+## Design with Gemini, implement with Pro
+
+Use this for any change that needs a design decision or has tricky edge cases. Skip step 1 for a small, well-specified change and go straight to Pro.
+
+1. **Gemini designs.** Send the relevant code (rings above) and ask for the approach: exact type and signature changes, the edge-case list, the tests that must exist, and every assumption about code it could not see.
+2. **The caller checks the assumptions** with `rg` and the type checker, and fixes names or signatures that do not match the checkout. Drop or rework anything that fails.
+3. **Pro implements.** Send the checked design as the task, with acceptance criteria and verification commands. Tell Pro it is a design to verify against the repository, not a patch to paste; Pro can read callers Gemini never saw and should report where the code disagrees. Because the exploration is already done, Pro spends its conversation on the change itself, which keeps it away from the length limit.
+4. **Gemini audits the diff** of Pro's PR against the invariants from step 1. Then run the review loop below for supported findings.
 
 ## Run a review loop
 
