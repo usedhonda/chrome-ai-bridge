@@ -1,6 +1,6 @@
 {
   "name": "chrome-ai-bridge",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "Project-aware ChatGPT Pro and Gemini Thinking workflows driven by the browser tools of Claude Code or Codex.",
   "type": "module",
   "bin": {
