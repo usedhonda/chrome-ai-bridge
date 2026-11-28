@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
+## [Unreleased]
+
+### Added
+
+- `skills/ask-ai/references/coding-playbook.md`: coding know-how for calling agents, drafted by ChatGPT Pro and extended with Gemini Carbon's advice. It covers task routing, bounded Pro PR requests, Gemini context selection and answer shape, quick checks on Gemini code, review loops, new conversations and final verification.
+
+### Changed
+
+- Gemini prompts: Gemini states its assumptions about unseen code, treats the newest copy of a file as authoritative, returns complete changed blocks anchored to function names instead of whole files or hand-counted hunks, and gives a self-contained answer without leaving work for the ChatGPT Pro workflow.
+- A Gemini continuation no longer tells Gemini to check GitHub. Earlier PRs are listed for reference only.
+- ChatGPT prompts ask Pro to push an early commit and open a draft PR at the first useful checkpoint on every request, and to separate the commands it ran from checks it only reasoned through.
+- The request template gains fields for runtime rules, facts already checked locally, the answer shape, and files changed since the last turn.
+
 ## [3.0.5] - 2026-11-28
 
 ### Changed

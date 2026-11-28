@@ -1,23 +1,25 @@
 # Coding playbook for the calling agent
 
 Use this with the [ask-ai lifecycle](../SKILL.md); it guides task writing, not state transitions.
-Treat the recommendations as workflow heuristics from CAB's observed failures, not model benchmarks; Gemini advice follows its excerpt-only role.
+Treat the recommendations as workflow heuristics from CAB's observed failures and from ChatGPT Pro's and Gemini Carbon's own advice (2026-11-28), not model benchmarks.
 
-Read: [Routing](#choose-the-deliverable) · [Pro](#request-a-useful-pro-pr) · [Gemini](#give-gemini-a-self-contained-code-question) · [Review loops](#run-a-review-loop) · [New conversations](#continue-or-start-a-new-conversation) · [Verification](#check-before-reporting) · [Anti-patterns](#avoid-these-traps).
+Read: [Routing](#choose-the-deliverable) · [Pro](#request-a-useful-pro-pr) · [Gemini](#give-gemini-a-self-contained-code-question) · [Checking Gemini code](#check-geminis-code-before-applying-it) · [Review loops](#run-a-review-loop) · [New conversations](#continue-or-start-a-new-conversation) · [Verification](#check-before-reporting) · [Anti-patterns](#avoid-these-traps).
 
 ## Choose the deliverable
 
 - Honor the user's provider choice and [routing rules](routing-rules.md) first; assign work by access and required output, not assumed speed or intelligence.
 - Use ChatGPT Pro for repository work ending in a real PR; use Gemini Carbon with 思考レベル 高 for reasoning over supplied material ending in a chat answer.
 
-| Coding need                     | Assign a concrete job                                                                                                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implementation or refactoring   | Ask Pro for one behavior change or compatibility-preserving refactor, with observable acceptance criteria.                                                                                                      |
-| Debugging                       | Ask Pro to trace the real entry point, reproduce the failure and fix it; ask Gemini to compare specific hypotheses when a trace and the relevant execution path fit in the prompt.                              |
-| Design review or second opinion | Give Gemini the proposed interfaces, constraints and a concrete failure scenario; ask which decision fails and why. Use Pro for a repository-grounded design document PR only when that artifact is authorized. |
-| Test design                     | Ask Gemini for inputs, expected observations and cases that distinguish competing implementations; ask Pro to implement the justified tests with the change.                                                    |
-| Review of a PR                  | Give Gemini the actual diff plus surrounding code. Ask Pro for review-and-repair, or an explicitly requested review-report PR; do not invent edits to satisfy its PR contract.                                  |
-| Both providers                  | Give them distinct jobs: Pro implements, Gemini challenges the resulting diff, Pro repairs supported findings. Use independent parallel questions only when neither needs the other's result.                   |
+| Coding need                             | Assign a concrete job                                                                                                                                                                                           |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implementation or refactoring           | Ask Pro for one behavior change or compatibility-preserving refactor, with observable acceptance criteria.                                                                                                      |
+| Debugging                               | Ask Pro to trace the real entry point, reproduce the failure and fix it; ask Gemini to compare specific hypotheses when a trace and the relevant execution path fit in the prompt.                              |
+| Design review or second opinion         | Give Gemini the proposed interfaces, constraints and a concrete failure scenario; ask which decision fails and why. Use Pro for a repository-grounded design document PR only when that artifact is authorized. |
+| Test design                             | Ask Gemini for inputs, expected observations and cases that distinguish competing implementations; ask Pro to implement the justified tests with the change.                                                    |
+| Review of a PR                          | Give Gemini the actual diff plus surrounding code. Ask Pro for review-and-repair, or an explicitly requested review-report PR; do not invent edits to satisfy its PR contract.                                  |
+| Concurrency, state machines, algorithms | Gemini, given the full function, its invariants and a trace: it is strongest at walking failure interleavings over compact code.                                                                                |
+| Wide refactor or 10+ file migration     | Pro (or the calling agent locally): Gemini cannot see unattached callers or run the type checker.                                                                                                               |
+| Both providers                          | Give them distinct jobs: Pro implements, Gemini challenges the resulting diff, Pro repairs supported findings. Use independent parallel questions only when neither needs the other's result.                   |
 
 - Do not launch `both` to review a PR that does not exist yet. Use separate requests for the sequential implementation/review loop; keep the same stable project identity.
 - For advice-only work without write authorization, follow the routing rules rather than turning the question into an unsolicited PR.
@@ -48,11 +50,13 @@ Report which criteria passed, any remaining work, and the final head SHA.
 ## Give Gemini a self-contained code question
 
 - Supply code for public repositories too: a GitHub or PR URL identifies the target but does not provide readable source. CAB already explains Gemini's role and limits; spend task text on the actual question.
-- Start with one execution path: the complete failing/changed function, immediate caller/callee, relevant types/invariants, and nearest test or trace. Add material to resolve named gaps; CAB's maximum size is not a target.
+- Start with one execution path, in rings: (0) the target file in full, (1) the types, error classes and validators it imports, (2) one or two non-trivial callers and the head of one existing test file so test code matches the runner. Put an `rg -n symbol` summary of other callers in the task text instead of attaching them all.
+- Aim for roughly 15–80 KB across 3–8 `--context` entries. Under ~200 lines Gemini guesses about unseen code; well past ~120 KB it starts summarizing instead of checking line by line. CAB's maximum size is not a target.
+- Order the task text as: deliverable and scope, runtime/compiler rules (Node version, ESM `.ts` imports, no runtime dependencies, target OSes), facts already checked locally, verbatim evidence, then numbered questions with the answer shape. Order `--context` as shared types first, then targets, then callers and tests.
 - Fetch the intended revision locally, then select complete blocks with `--context PATH[:START:END]` under `--root`; identify omissions. Context reads local files, not URLs. Do not attach context to a Pro-only request.
 - State the revision and any uncommitted changes. For PR review, supply base/head SHAs, the actual diff and surrounding code; do not pair a PR diff with unrelated current-main files.
 - Ask a falsifiable question: “can reconnect race with cancellation and send a canceled item?” Supply ordering assumptions and an observed trace; request a counterexample or reasoning that rules it out.
-- Request a compact answer structure: conclusion; findings ordered by severity with path/line, triggering condition and consequence; evidence versus assumptions; minimal patch when useful; proposed tests; exact missing material. Accept “no supported finding” rather than forcing a bug quota.
+- Request a compact answer structure: conclusion; findings ordered by severity with path and function, triggering condition and consequence; evidence versus assumptions; minimal patch when useful; proposed tests; exact missing material. Supplied excerpts carry no line numbers, so ask for edits anchored to the function name plus a few verbatim lines, not hand-counted diff hunks. Accept “no supported finding” rather than forcing a bug quota.
 - Refresh changed excerpts on follow-ups and name the revision they replace; private requests require explicit context every turn. Fill named gaps with the missing function/type, not another request to open the URL.
 
 Example question alongside the selected code:
@@ -82,6 +86,17 @@ If the excerpts cannot settle this, name the missing function or contract and wh
 - On an observed length limit, follow the skill's [length-limit recovery](../SKILL.md#会話の長さの上限): close the run according to its phase, verify actual GitHub progress, then prepare with the same project, a new request ID and `--new-chat`. Do not bypass uncertain-send reconciliation.
 - Rewrite a self-contained request with the current goal, scope, acceptance criteria, constraints, confirmed branch/commit/PR, remaining work and minimal checks. Use `--handoff-file` only with `--new-chat`; CAB does not copy the old request automatically.
 - Inspect the branch against its base. If it is still at base, request the first bounded implementation slice; if commits exist without a PR, continue those verified commits and create the requested PR. Do not treat prose as saved code. For Gemini, supply current excerpts again.
+
+## Check Gemini's code before applying it
+
+Each check takes seconds locally:
+
+- **Non-erasable TypeScript:** `enum`, parameter properties or missing `import type` pass `tsc` but fail under Node's type stripping. Run the type check and import the changed module once.
+- **Invented identifiers:** error codes, union members or helper options inferred from one file. `rg` each new identifier and run the type check.
+- **Broken caller contracts:** a tightened check or changed error type that an unseen caller relied on. `rg` every caller before changing public behavior.
+- **Stale file copies:** in a reused conversation Gemini patches the last copy it saw. Compare the file's SHA-256 with the one printed for its last attached copy, and resend it if they differ.
+- **Defensive creep:** scaffolding for impossible states or a new package in a zero-dependency repo. Check imports and `git diff --stat`; keep a branch only if it has a concrete failing input.
+- **OS-specific errno claims:** run a short `node -e` probe before baking an errno check into code.
 
 ## Check before reporting
 

@@ -121,10 +121,11 @@ export function preparePrompt(input: PromptInput): PreparedInput {
     '## Delivery requirements',
   ];
   if (provider === 'chatgpt') {
-    if (input.continuation)
-      sections.push(
-        'Conversations can reach a length limit before the work is done. Commit progress to the working branch early so that it survives if this conversation also stops.',
-      );
+    sections.push(
+      input.continuation
+        ? 'Conversations can reach a length limit before the work is done. Commit progress to the working branch early so that it survives if this conversation also stops.'
+        : 'Conversations can reach a length limit before the work is done. Push the first coherent commit to the working branch on GitHub early, and open the pull request as a draft at the first useful checkpoint when that fits the task, then finish the acceptance criteria. Batch later validated updates instead of pushing every small edit.',
+    );
     sections.push(
       'Use the existing GitHub connection to access this repository by URL, whether public or private.',
       'Implement the requested work on a new working branch in that repository, commit the changes, and open a real pull request against the base branch. For a follow-up on an existing task, update its working branch and PR when appropriate.',
