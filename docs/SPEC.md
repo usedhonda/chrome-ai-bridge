@@ -12,15 +12,15 @@ The standard entry points do not start the old daemon, install the CAB extension
 
 | Property                 | ChatGPT                                        | Gemini                                          |
 | ------------------------ | ---------------------------------------------- | ----------------------------------------------- |
-| Required mode            | Pro                                            | Neon model with 思考レベル 高 (High)            |
+| Required mode            | Pro                                            | Carbon model with 思考レベル 高 (High)          |
 | Initial page             | New page at `https://chatgpt.com/`             | New page at `https://gemini.google.com/app`     |
 | Subsequent navigation    | Saved conversation URL                         | Saved conversation URL                          |
-| Public repository input  | Repository URL                                 | Repository URL                                  |
+| Public repository input  | Repository URL                                 | URL for identity; selected code for code work   |
 | Private repository input | Repository URL; connector assumed              | Selected source/excerpts included in the prompt |
 | Output                   | Final answer plus actual GitHub branch / PR    | Final chat answer, including code or patch      |
 | Completion check         | Answer plus verified PR in expected repository | Nonempty final answer                           |
 
-Mode names are semantic requirements. Read the current UI and record its actual selected label. ChatGPT's plan name does not prove selected mode. For Gemini, the model (Neon) and the thinking level (高 / High) are separate controls; record both, for example `Neon, 思考レベル: 高`, not an ambiguous `High`. If the required mode is unavailable, preserve a blocker rather than silently choosing another model. Never pin a numbered model release.
+Mode names are semantic requirements. Read the current UI and record its actual selected label. ChatGPT's plan name does not prove selected mode. For Gemini, the model (Carbon) and the thinking level (高 / High) are separate controls; record both, for example `Carbon, 思考レベル: 高`, not an ambiguous `High`. If the required mode is unavailable, preserve a blocker rather than silently choosing another model. Never pin a numbered model release.
 
 ## Components and ownership
 
@@ -67,7 +67,7 @@ If the provider returns a final failure or missing-capability response, `fail` i
 
 ## Prompt and code context
 
-The prompt includes the requested task and provider-specific repository/output contract. ChatGPT receives repository URLs for both visibility classes and instructions to create a non-default branch and actual PR. Gemini receives a public URL or explicit private code, and instructions to answer in chat rather than claim remote repository writes.
+The prompt includes the requested task and provider-specific repository/output contract. ChatGPT receives repository URLs for both visibility classes and instructions to create a non-default branch and actual PR. Gemini's prompt starts with its role and limits: a coding agent is consulting it, it cannot read the repository even when public, it should answer from the supplied material and name anything missing, it does not implement (ChatGPT Pro handles PRs), and it cannot run the project. Selected code follows as explicit context.
 
 Private Gemini context is required for every preparation, including follow-ups. Each `--context` selects a file or a 1-based inclusive excerpt (`path:START:END`) under the supplied root. Preserve source formatting, include file identity, and reject invalid or oversized input rather than silently dropping code. Do not crawl the checkout or select files implicitly. For `both`, selected private code is included only in Gemini's prompt.
 
@@ -95,7 +95,7 @@ Legacy agent-scoped `sessions.json` is never silently reassigned to v3 projects.
 
 ## Validation boundaries
 
-Offline tests validate input handling, per-project/provider isolation, prompt policy, transitions, concurrency, persistence, and PR verifier behavior. They cannot establish that a live account has Pro/Neon, that its browser tools are connected, or that a provider completed a request.
+Offline tests validate input handling, per-project/provider isolation, prompt policy, transitions, concurrency, persistence, and PR verifier behavior. They cannot establish that a live account has Pro/Carbon, that its browser tools are connected, or that a provider completed a request.
 
 Use the [live verification recipe](user/workflows.md#live-verification-recipe) to check the browser boundary. Report observed behavior and any missing live coverage in the PR.
 

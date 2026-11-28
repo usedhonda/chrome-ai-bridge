@@ -151,17 +151,17 @@ export function validateMode(provider: Provider, label: string): string {
           normalized,
         )
       : provider === 'gemini' &&
-        /\bneon\b/i.test(normalized) &&
+        /\bcarbon\b/i.test(normalized) &&
         /(?:思考レベル|thinking(?:\s+level)?)\s*[:：]?\s*(?:高|high\b)|\bhigh\s+thinking\b/i.test(
           normalized,
         ) &&
-        !/\b(?:fast|quick|low|minimal|medium|standard|hydrogen|carbon)\b|高速|低|中|標準/i.test(
+        !/\b(?:fast|quick|low|minimal|medium|standard|hydrogen|neon)\b|高速|低|中|標準/i.test(
           normalized,
         ));
   if (!valid) {
     throw new WorkflowError(
       'MODE_REQUIRED',
-      `${provider === 'chatgpt' ? 'ChatGPT Pro' : 'Gemini Neon with 思考レベル: 高'} must be visibly selected; weaker modes cannot be used silently.`,
+      `${provider === 'chatgpt' ? 'ChatGPT Pro' : 'Gemini Carbon with 思考レベル: 高'} must be visibly selected; weaker modes cannot be used silently.`,
     );
   }
   return normalized;

@@ -46,7 +46,8 @@ async function fixture(t: {after: (callback: () => Promise<void>) => void}) {
 async function submit(workflow: Workflow, run: Run, url: string): Promise<Run> {
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: run.provider === 'chatgpt' ? 'GPT Pro' : 'Neon, 思考レベル: 高',
+    modeLabel:
+      run.provider === 'chatgpt' ? 'GPT Pro' : 'Carbon, 思考レベル: 高',
     newPage: run.requiresNewPage,
     tabId: 'tab-123',
   });
@@ -78,7 +79,7 @@ test('conversation identity persists across processes and follow-up failures', a
   await assert.rejects(
     restarted.ready(next.id, {
       url: 'https://gemini.google.com/app/other',
-      modeLabel: 'Neon, 思考レベル: 高',
+      modeLabel: 'Carbon, 思考レベル: 高',
     }),
     code('CONVERSATION_MISMATCH'),
   );
@@ -97,13 +98,13 @@ test('beginSend is single-use and unknown submissions cannot be canceled or retr
   await assert.rejects(
     workflow.ready(run.id, {
       url: run.openUrl,
-      modeLabel: 'Neon, 思考レベル: 高',
+      modeLabel: 'Carbon, 思考レベル: 高',
     }),
     code('NEW_PAGE_REQUIRED'),
   );
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Neon, 思考レベル: 高',
+    modeLabel: 'Carbon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -153,7 +154,7 @@ test('positive not-sent reconciliation recovers a pre-click crash without author
   const run = await workflow.prepare(input);
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Neon, 思考レベル: 高',
+    modeLabel: 'Carbon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -178,7 +179,7 @@ test('positive not-sent reconciliation recovers a pre-click crash without author
   );
   await workflow.ready(run.id, {
     url: run.openUrl,
-    modeLabel: 'Neon, 思考レベル: 高',
+    modeLabel: 'Carbon, 思考レベル: 高',
     newPage: true,
   });
   await workflow.beginSend(run.id);
@@ -348,25 +349,25 @@ test('URL and mode validation reject unrelated pages and credential-bearing URLs
   );
   assert.equal(validateMode('chatgpt', 'GPT-6 Pro'), 'GPT-6 Pro');
   assert.equal(
-    validateMode('gemini', 'Neon, 思考レベル: 高'),
-    'Neon, 思考レベル: 高',
+    validateMode('gemini', 'Carbon, 思考レベル: 高'),
+    'Carbon, 思考レベル: 高',
   );
   assert.equal(
-    validateMode('gemini', '4 Neon, Thinking level: High'),
-    '4 Neon, Thinking level: High',
+    validateMode('gemini', '4 Carbon, Thinking level: High'),
+    '4 Carbon, Thinking level: High',
   );
   for (const label of [
     'Fast',
     'Pro',
     'High',
-    'Neon',
+    'Carbon',
     'Thinking: High',
-    'Neon, 思考レベル: 標準',
-    'Neon, 思考レベル: 低',
+    'Carbon, 思考レベル: 標準',
+    'Carbon, 思考レベル: 低',
     'Hydrogen, 思考レベル: 高',
-    'Carbon, Thinking level: High',
+    'Neon, Thinking level: High',
     '自動モード, 思考レベル: 高',
-    'Neon unavailable, 思考レベル: 高',
+    'Carbon unavailable, 思考レベル: 高',
   ])
     assert.throws(() => validateMode('gemini', label));
   for (const label of [

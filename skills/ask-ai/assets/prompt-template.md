@@ -15,7 +15,7 @@ Describe the concrete result and why it is needed.
 
 ## Evidence
 
-Include observed errors, reproduction steps, and what has already been checked. Distinguish observations from assumptions. For private Gemini work, select the relevant source files and excerpts through `--context`; a private URL alone is not readable code context.
+Include observed errors, reproduction steps, and what has already been checked. Distinguish observations from assumptions. Gemini cannot read the repository even when it is public, so select the relevant source files and excerpts through `--context` for code questions (required for private repositories). CAB already tells Gemini its role and limits; do not repeat them here.
 
 ## Requested work
 

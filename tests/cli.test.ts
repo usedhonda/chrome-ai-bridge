@@ -137,7 +137,7 @@ test('private Gemini preserves source and final code across separate CLI process
       '--url',
       'https://gemini.google.com/app',
       '--mode',
-      'Neon, 思考レベル: 高',
+      'Carbon, 思考レベル: 高',
       '--new-page',
       '--tab',
       'provider-tab-42',

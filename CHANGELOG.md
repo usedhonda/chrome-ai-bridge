@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project began as a fork of [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) by Google LLC. Since v3 it is an independent implementation that shares no runtime code with upstream.
 
+## [Unreleased]
+
+### Changed
+
+- Gemini requests now require the Carbon model with 思考レベル 高, recorded as both, such as `Carbon, 思考レベル: 高`. Neon and Hydrogen are rejected.
+- Gemini prompts now open with its role and limits: a coding agent is consulting it, it cannot read the repository even when public, it should answer from the supplied code and name anything missing, it does not implement or offer PRs (ChatGPT Pro handles those), and it cannot run the project. Callers no longer need to repeat this in each request.
+
 ## [3.0.4] - 2026-11-26
 
 ### Changed

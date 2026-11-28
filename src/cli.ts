@@ -60,7 +60,7 @@ Preparing a task does not send it. CAB never drives a browser itself.
 Aliases: cab <provider> ... and cab ask <provider> ... both prepare browser work.
 Use --prompt-file - or --answer-file - for stdin. Files preserve code formatting.
 ChatGPT: selected Pro, connected GitHub URL, real same-repository branch + PR.
-Gemini: selected Neon with high thinking level, public URL or explicit private code, final chat answer.
+Gemini: selected Carbon with high thinking level, no repository access (selected code in the prompt), final chat answer.
 State: CAB_STATE_DIR, or $XDG_STATE_HOME/chrome-ai-bridge, or ~/.local/state/chrome-ai-bridge.
 Private PR verification: authenticated gh, GH_TOKEN or GITHUB_TOKEN (read access).
 `;
